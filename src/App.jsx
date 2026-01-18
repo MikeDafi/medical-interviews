@@ -1,74 +1,79 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
 
-  // Medical school logos (using placeholder approach with school names)
-  const topSchools = ['Harvard', 'Stanford', 'Johns Hopkins', 'UCSF', 'Penn']
-  const bottomSchools = ['Yale', 'Columbia', 'Duke', 'UCLA', 'Mayo']
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 50)
+    }
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   return (
     <div className="app">
-      {/* Background with Medical School Logos */}
+      {/* Background Image with Blur */}
       <div className="background-layer">
-        <div className="logo-bg-grid">
-          {[...Array(30)].map((_, i) => (
-            <div key={i} className="bg-logo-item">
-              {['Harvard', 'Stanford', 'Johns Hopkins', 'UCLA', 'Yale', 'Duke', 'Penn', 'Columbia', 'UCSF', 'Mayo'][i % 10]}
-            </div>
-          ))}
-        </div>
+        <img 
+          src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1920&q=80" 
+          alt="" 
+          className="bg-image"
+        />
         <div className="bg-overlay"></div>
       </div>
+
+      {/* Sticky Header */}
+      <header className={`header-fixed ${scrolled ? 'scrolled' : ''}`}>
+        <div className="header-inner">
+          <div className="logo">
+            <span className="logo-text">Medical One-on-One</span>
+          </div>
+          
+          <nav className="nav-menu">
+            <a href="#services" className="nav-link">FAQ</a>
+            <a href="#contact" className="nav-link">Contact Us</a>
+            <a href="#packages" className="nav-link">Packages</a>
+            <a href="#book" className="nav-btn">Book Now</a>
+          </nav>
+
+          <button 
+            className="mobile-menu-btn"
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+
+          {menuOpen && (
+            <div className="mobile-menu">
+              <a href="#services" onClick={() => setMenuOpen(false)}>FAQ</a>
+              <a href="#contact" onClick={() => setMenuOpen(false)}>Contact Us</a>
+              <a href="#packages" onClick={() => setMenuOpen(false)}>Packages</a>
+              <a href="#book" className="nav-btn-mobile" onClick={() => setMenuOpen(false)}>Book Now</a>
+            </div>
+          )}
+        </div>
+      </header>
 
       {/* Main Container with Border */}
       <div className="main-container">
         <div className="inner-border">
           
-          {/* Header */}
-          <header className="header">
-            <div className="logo">
-              <span className="logo-text">Medical One-on-One</span>
-            </div>
-            
-            <nav className="nav-menu">
-              <a href="#services" className="nav-link">FAQ</a>
-              <a href="#contact" className="nav-link">Contact Us</a>
-              <a href="#packages" className="nav-link">Packages</a>
-              <a href="#book" className="nav-btn">Book Now</a>
-            </nav>
-
-            <button 
-              className="mobile-menu-btn"
-              onClick={() => setMenuOpen(!menuOpen)}
-            >
-              <span></span>
-              <span></span>
-              <span></span>
-            </button>
-
-            {menuOpen && (
-              <div className="mobile-menu">
-                <a href="#services" onClick={() => setMenuOpen(false)}>FAQ</a>
-                <a href="#contact" onClick={() => setMenuOpen(false)}>Contact Us</a>
-                <a href="#packages" onClick={() => setMenuOpen(false)}>Packages</a>
-                <a href="#book" className="nav-btn-mobile" onClick={() => setMenuOpen(false)}>Book Now</a>
-              </div>
-            )}
-          </header>
-
           {/* Hero Section */}
           <section className="hero">
             <div className="hero-content">
               <div className="hero-left">
                 <h1 className="hero-title">
-                  Have Interviews?
+                  <span className="title-line-1">Interviews</span>
+                  <span className="title-line-2">.advice</span>
+                  <span className="title-line-3">one-on-one</span>
                 </h1>
-                <p className="hero-domain">MedicalSchoolCoaching.com</p>
-                <p className="hero-tagline">One-on-One</p>
                 <p className="hero-subtitle">
-                  Expert coaching and mock interviews to help you secure your spot at top medical schools.
+                  Expert coaching and mock interviews to help you secure your dream position in healthcare.
                 </p>
                 <button className="cta-btn">
                   Get Started
@@ -95,48 +100,19 @@ function App() {
               </div>
               
               <div className="hero-right">
-                <div className="hero-image-stack">
-                  {/* Top Row of School Logos */}
-                  <div className="school-logos-row">
-                    {topSchools.map((school, i) => (
-                      <div key={i} className="school-logo">
-                        <span>{school}</span>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {/* Zoom Call Image */}
-                  <div className="zoom-call-container">
-                    <img 
-                      src="https://images.unsplash.com/photo-1609619385002-f40f1df827b8?w=600&h=400&fit=crop" 
-                      alt="Medical interview coaching session" 
-                      className="zoom-call-image"
-                    />
-                    <div className="zoom-overlay">
-                      <div className="zoom-participant">
-                        <img src="https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=100&h=100&fit=crop" alt="Coach" />
-                      </div>
-                      <div className="zoom-participant active">
-                        <img src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100&h=100&fit=crop" alt="Student" />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Bottom Row of School Logos */}
-                  <div className="school-logos-row">
-                    {bottomSchools.map((school, i) => (
-                      <div key={i} className="school-logo">
-                        <span>{school}</span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="hero-image-container">
+                  <img 
+                    src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=600&h=600&fit=crop" 
+                    alt="Medical professional" 
+                    className="hero-image"
+                  />
                 </div>
               </div>
             </div>
           </section>
 
           {/* Services Cards Section */}
-          <section className="services-section" id="services">
+          <section className="services-section fade-section" id="services">
             <div className="services-wrapper">
               <button className="nav-arrow nav-prev">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -201,30 +177,30 @@ function App() {
               </button>
 
               <div className="services-text">
-                <h2>Expert Coaching for<br />Medical School Candidates</h2>
+                <h2>Expert Coaching for<br />Medical Professionals</h2>
                 <p>
-                  Our team of experienced admissions consultants and physicians 
+                  Our team of experienced healthcare recruiters and physicians 
                   provide personalized interview preparation to help you succeed 
-                  in your medical school journey.
+                  in your medical career journey.
                 </p>
               </div>
             </div>
           </section>
 
           {/* About Section */}
-          <section className="about-section">
+          <section className="about-section fade-section">
             <div className="about-content">
               <div className="about-left">
                 <h2>
                   Our team of experienced physicians and<br />
-                  admissions professionals provide<br />
+                  healthcare professionals provide<br />
                   personalized interview coaching.
                 </h2>
                 <p>
-                  With years of experience in medical school admissions and 
-                  residency interviews, we understand what it takes to stand out. 
-                  Our coaches have helped hundreds of candidates secure positions 
-                  at top medical institutions including Harvard, Stanford, and Johns Hopkins.
+                  With years of experience in medical recruitment and residency 
+                  interviews, we understand what it takes to stand out. Our 
+                  coaches have helped hundreds of candidates secure positions 
+                  at top medical institutions.
                 </p>
               </div>
               <div className="about-right">
@@ -243,7 +219,7 @@ function App() {
           </section>
 
           {/* Packages Section */}
-          <section className="packages-section" id="packages">
+          <section className="packages-section fade-section" id="packages">
             <div className="packages-content">
               <div className="package-mockups">
                 <div className="package-card-left">
@@ -255,7 +231,7 @@ function App() {
                     <p className="package-subtitle">Comprehensive preparation</p>
                     <div className="package-features">
                       <span>✓ Mock Interviews</span>
-                      <span>✓ Application Review</span>
+                      <span>✓ CV Review</span>
                       <span>✓ Question Bank</span>
                       <span>✓ Feedback Report</span>
                     </div>
@@ -290,10 +266,10 @@ function App() {
                       />
                     </div>
                     <div className="package-info">
-                      <h4>MMI Package</h4>
-                      <p>Complete preparation for Multiple Mini Interviews including 
-                      scenario practice, ethics questions, and communication skills. 
-                      Perfect for medical school applicants.</p>
+                      <h4>Residency Package</h4>
+                      <p>Complete preparation for residency interviews including 
+                      MMI practice, traditional interviews, and application review. 
+                      Perfect for medical students.</p>
                       <div className="package-footer">
                         <div className="package-price">
                           <small>Starting at</small>
@@ -316,8 +292,8 @@ function App() {
                 <h2>Flexible Packages</h2>
                 <p>
                   Choose from our range of interview preparation packages 
-                  designed for medical school applicants, residency candidates, 
-                  and fellowship seekers. Available on web and mobile platforms.
+                  designed for medical students, residents, and practicing 
+                  physicians. Available on web and mobile platforms.
                 </p>
                 <div className="platform-buttons">
                   <button className="platform-btn primary">
@@ -345,7 +321,7 @@ function App() {
           </section>
 
           {/* CTA Section */}
-          <section className="cta-section" id="book">
+          <section className="cta-section fade-section" id="book">
             <div className="cta-content">
               <div className="cta-text">
                 <span className="cta-label">LET'S TALK.</span>
@@ -356,12 +332,12 @@ function App() {
             <div className="cta-divider"></div>
             <p className="cta-description">
               We're a team of experienced medical professionals dedicated to helping 
-              you succeed in your medical school journey.
+              you succeed in your healthcare career journey.
             </p>
           </section>
 
           {/* Footer */}
-          <footer className="footer" id="contact">
+          <footer className="footer fade-section" id="contact">
             <div className="footer-content">
               <div className="footer-brand">
                 <span className="footer-logo">Medical One-on-One</span>
@@ -372,7 +348,7 @@ function App() {
                   <h4>Our Services</h4>
                   <ul>
                     <li><a href="#">Mock Interviews</a></li>
-                    <li><a href="#">Application Review</a></li>
+                    <li><a href="#">CV Review</a></li>
                     <li><a href="#">MMI Prep</a></li>
                     <li><a href="#">Career Coaching</a></li>
                   </ul>
@@ -390,7 +366,7 @@ function App() {
                 <div className="footer-column">
                   <h4>Contact</h4>
                   <ul>
-                    <li>support@medicalschoolcoaching.com</li>
+                    <li>support@medicaloneonone.com</li>
                     <li>1-800-MED-PREP</li>
                     <li>Mon-Fri: 9AM-6PM EST</li>
                   </ul>
