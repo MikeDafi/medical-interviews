@@ -3,7 +3,7 @@ export default function Footer() {
     <footer className="footer" id="contact">
       <div className="footer-content">
         <div className="footer-brand">
-          <span className="footer-logo">Medical One-on-One</span>
+          <span className="footer-logo">PreMedical 1-on-1</span>
           <p className="footer-tagline">Expert medical school interview preparation</p>
         </div>
         
@@ -30,16 +30,15 @@ export default function Footer() {
           <div className="footer-column">
             <h4>Contact</h4>
             <ul>
-              <li><a href="mailto:contact@medicaloneonone.com">contact@medicaloneonone.com</a></li>
+              <li><a href="mailto:premedical1on1@gmail.com">premedical1on1@gmail.com</a></li>
               <li>Response within 24 hours</li>
             </ul>
           </div>
         </div>
       </div>
       <div className="footer-bottom">
-        <p>© 2026 Medical One-on-One. All rights reserved.</p>
+        <p>© 2026 PreMedical 1-on-1. All rights reserved.</p>
       </div>
     </footer>
   )
 }
-

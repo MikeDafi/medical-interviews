@@ -6,11 +6,11 @@ export default function FAQ() {
     },
     {
       question: "What if the available times don't work for me?",
-      answer: "The calendar shows my general availability, but I know schedules can be tricky. Reach out via email and we can work out a time that fits both of us."
+      answer: "The calendar shows my general availability, but I know schedules can be tricky. Email me at premedical1on1@gmail.com and we can work out a time that fits both of us."
     },
     {
       question: "What if I want more than the 5-session package?",
-      answer: "Need more intensive prep? Just email me and we can put together a custom package based on what you need. Happy to work with you on pricing for larger commitments."
+      answer: "Need more intensive prep? Email me at premedical1on1@gmail.com and we can put together a custom package based on what you need. Happy to work with you on pricing for larger commitments."
     },
     {
       question: "How do I know if I'm beginner, intermediate, or advanced?",
