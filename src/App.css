@@ -15,15 +15,15 @@
 }
 
 body {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   min-height: 100vh;
   color: var(--dark-text);
   overflow-x: hidden;
 }
 
 h1, h2, h3, h4 {
-  font-family: 'Cormorant Garamond', serif;
-  font-weight: 600;
+  font-family: 'Outfit', 'Inter', sans-serif;
+  font-weight: 700;
 }
 
 a {
@@ -33,7 +33,7 @@ a {
 
 button {
   cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
 }
 
 img {
@@ -48,7 +48,7 @@ img {
   overflow: hidden;
 }
 
-/* Background Layer with Blur */
+/* Background Layer with School Logos */
 .background-layer {
   position: fixed;
   top: 0;
@@ -56,14 +56,33 @@ img {
   width: 100%;
   height: 100%;
   z-index: -2;
+  background: linear-gradient(135deg, #fef7f0 0%, #fde8dc 50%, #f5d0c5 100%);
 }
 
-.bg-image {
+.logo-bg-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  filter: blur(25px);
-  transform: scale(1.1);
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  gap: 40px;
+  padding: 40px;
+  opacity: 0.08;
+}
+
+.bg-logo-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Outfit', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--dark-text);
+  text-transform: uppercase;
+  letter-spacing: 2px;
 }
 
 .bg-overlay {
@@ -74,10 +93,10 @@ img {
   height: 100%;
   background: linear-gradient(
     135deg,
-    rgba(254, 243, 235, 0.85) 0%,
-    rgba(255, 228, 210, 0.8) 30%,
-    rgba(255, 210, 190, 0.75) 60%,
-    rgba(255, 195, 175, 0.8) 100%
+    rgba(254, 243, 235, 0.92) 0%,
+    rgba(255, 228, 210, 0.88) 30%,
+    rgba(255, 210, 190, 0.85) 60%,
+    rgba(255, 195, 175, 0.88) 100%
   );
 }
 
@@ -90,15 +109,15 @@ img {
 }
 
 .inner-border {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 32px;
   min-height: calc(100vh - 40px);
   padding: 24px 40px;
   box-shadow: 
     0 8px 32px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 /* Header */
@@ -116,10 +135,11 @@ img {
 }
 
 .logo-text {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 24px;
-  font-weight: 600;
+  font-family: 'Outfit', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
   color: var(--dark-text);
+  letter-spacing: -0.5px;
 }
 
 .nav-menu {
@@ -146,7 +166,7 @@ img {
   padding: 12px 24px;
   border-radius: 50px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   transition: all 0.3s ease;
 }
 
@@ -192,6 +212,7 @@ img {
   padding: 8px 16px;
   border-radius: 8px;
   transition: background 0.3s ease;
+  font-weight: 500;
 }
 
 .mobile-menu a:hover {
@@ -211,18 +232,36 @@ img {
 
 .hero-content {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 40px;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 60px;
   align-items: center;
 }
 
 .hero-left {
-  max-width: 500px;
+  max-width: 480px;
 }
 
 .hero-title {
-  font-size: 52px;
-  line-height: 1.1;
+  font-size: 56px;
+  line-height: 1.05;
+  color: var(--dark-text);
+  margin-bottom: 8px;
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+
+.hero-domain {
+  font-family: 'Outfit', sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--primary-teal);
+  margin-bottom: 4px;
+}
+
+.hero-tagline {
+  font-family: 'Outfit', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
   color: var(--dark-text);
   margin-bottom: 20px;
 }
@@ -244,7 +283,7 @@ img {
   padding: 16px 28px;
   border-radius: 50px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   margin-bottom: 40px;
   transition: all 0.3s ease;
 }
@@ -284,24 +323,93 @@ img {
   filter: grayscale(1) brightness(2);
 }
 
+/* Hero Right - Image Stack */
 .hero-right {
   position: relative;
   display: flex;
   justify-content: center;
 }
 
-.hero-image-container {
-  position: relative;
-  width: 380px;
-  height: 380px;
+.hero-image-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 520px;
 }
 
-.hero-image {
+/* School Logos Row */
+.school-logos-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px;
+}
+
+.school-logo {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.school-logo:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+}
+
+.school-logo span {
+  font-family: 'Outfit', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dark-text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Zoom Call Container */
+.zoom-call-container {
+  position: relative;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.15);
+  border: 3px solid rgba(255, 255, 255, 0.8);
+}
+
+.zoom-call-image {
+  width: 100%;
+  height: 280px;
+  object-fit: cover;
+}
+
+.zoom-overlay {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
+}
+
+.zoom-participant {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid white;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.zoom-participant.active {
+  border-color: #22c55e;
+}
+
+.zoom-participant img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 50%;
-  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.2);
 }
 
 /* Services Section */
@@ -393,7 +501,7 @@ img {
 }
 
 .service-card-title {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 16px;
   font-weight: 600;
   color: var(--dark-text);
@@ -413,9 +521,9 @@ img {
 }
 
 .service-price {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--primary-red);
 }
 
@@ -508,8 +616,9 @@ img {
   padding: 14px 16px;
   border-radius: 50%;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   box-shadow: 0 8px 25px rgba(139, 26, 50, 0.3);
+  font-family: 'Outfit', sans-serif;
 }
 
 /* Packages Section */
@@ -562,8 +671,9 @@ img {
 }
 
 .package-screen h4 {
+  font-family: 'Outfit', sans-serif;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--dark-text);
   margin-bottom: 4px;
 }
@@ -584,6 +694,7 @@ img {
 .package-features span {
   font-size: 10px;
   color: var(--primary-teal);
+  font-weight: 500;
 }
 
 .package-items {
@@ -608,8 +719,9 @@ img {
 .package-item span {
   display: block;
   font-size: 9px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--dark-text);
+  font-family: 'Outfit', sans-serif;
 }
 
 .package-item small {
@@ -622,6 +734,7 @@ img {
 .package-item strong {
   font-size: 10px;
   color: var(--primary-teal);
+  font-weight: 700;
 }
 
 /* Package Card Right */
@@ -665,8 +778,9 @@ img {
 }
 
 .package-info h4 {
+  font-family: 'Outfit', sans-serif;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 8px;
 }
 
@@ -692,6 +806,8 @@ img {
 .package-price strong {
   font-size: 13px;
   color: var(--dark-text);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
 }
 
 .book-now-btn {
@@ -701,6 +817,7 @@ img {
   padding: 8px 12px;
   border-radius: 20px;
   font-size: 9px;
+  font-weight: 600;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -726,6 +843,7 @@ img {
   padding: 5px 8px;
   border-radius: 10px;
   font-size: 8px;
+  font-weight: 600;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
@@ -786,7 +904,8 @@ img {
 
 .platform-text span {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
+  font-family: 'Outfit', sans-serif;
 }
 
 /* CTA Section */
@@ -807,6 +926,7 @@ img {
   letter-spacing: 1px;
   display: block;
   margin-bottom: 8px;
+  font-weight: 600;
 }
 
 .cta-content h2 {
@@ -821,7 +941,7 @@ img {
   padding: 16px 32px;
   border-radius: 50px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   transition: all 0.3s ease;
 }
 
@@ -858,9 +978,9 @@ img {
 }
 
 .footer-logo {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 22px;
-  font-weight: 600;
+  font-family: 'Outfit', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
   color: var(--primary-teal);
   display: block;
 }
@@ -871,9 +991,9 @@ img {
 }
 
 .footer-column h4 {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--dark-text);
   margin-bottom: 16px;
 }
@@ -938,17 +1058,21 @@ img {
     order: 1;
   }
 
+  .hero-image-stack {
+    max-width: 100%;
+  }
+
   .category-icons {
     justify-content: center;
   }
 
   .hero-title {
-    font-size: 40px;
+    font-size: 42px;
   }
 
-  .hero-image-container {
-    width: 300px;
-    height: 300px;
+  .school-logos-row {
+    flex-wrap: wrap;
+    justify-content: center;
   }
 
   .services-wrapper {
@@ -1024,12 +1148,23 @@ img {
   }
 
   .hero-title {
-    font-size: 32px;
+    font-size: 36px;
   }
 
-  .hero-image-container {
-    width: 240px;
-    height: 240px;
+  .hero-tagline {
+    font-size: 24px;
+  }
+
+  .zoom-call-image {
+    height: 200px;
+  }
+
+  .school-logo {
+    padding: 8px 10px;
+  }
+
+  .school-logo span {
+    font-size: 9px;
   }
 
   .service-card {

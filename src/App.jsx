@@ -4,15 +4,21 @@ import './App.css'
 function App() {
   const [menuOpen, setMenuOpen] = useState(false)
 
+  // Medical school logos (using placeholder approach with school names)
+  const topSchools = ['Harvard', 'Stanford', 'Johns Hopkins', 'UCSF', 'Penn']
+  const bottomSchools = ['Yale', 'Columbia', 'Duke', 'UCLA', 'Mayo']
+
   return (
     <div className="app">
-      {/* Background Image with Blur */}
+      {/* Background with Medical School Logos */}
       <div className="background-layer">
-        <img 
-          src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1920&q=80" 
-          alt="" 
-          className="bg-image"
-        />
+        <div className="logo-bg-grid">
+          {[...Array(30)].map((_, i) => (
+            <div key={i} className="bg-logo-item">
+              {['Harvard', 'Stanford', 'Johns Hopkins', 'UCLA', 'Yale', 'Duke', 'Penn', 'Columbia', 'UCSF', 'Mayo'][i % 10]}
+            </div>
+          ))}
+        </div>
         <div className="bg-overlay"></div>
       </div>
 
@@ -57,12 +63,12 @@ function App() {
             <div className="hero-content">
               <div className="hero-left">
                 <h1 className="hero-title">
-                  Ace Your<br />
-                  Medical<br />
-                  Interview
+                  Have Interviews?
                 </h1>
+                <p className="hero-domain">MedicalSchoolCoaching.com</p>
+                <p className="hero-tagline">One-on-One</p>
                 <p className="hero-subtitle">
-                  Expert coaching and mock interviews to help you secure your dream position in healthcare.
+                  Expert coaching and mock interviews to help you secure your spot at top medical schools.
                 </p>
                 <button className="cta-btn">
                   Get Started
@@ -89,12 +95,41 @@ function App() {
               </div>
               
               <div className="hero-right">
-                <div className="hero-image-container">
-                  <img 
-                    src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=600&h=600&fit=crop" 
-                    alt="Medical professional" 
-                    className="hero-image"
-                  />
+                <div className="hero-image-stack">
+                  {/* Top Row of School Logos */}
+                  <div className="school-logos-row">
+                    {topSchools.map((school, i) => (
+                      <div key={i} className="school-logo">
+                        <span>{school}</span>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Zoom Call Image */}
+                  <div className="zoom-call-container">
+                    <img 
+                      src="https://images.unsplash.com/photo-1609619385002-f40f1df827b8?w=600&h=400&fit=crop" 
+                      alt="Medical interview coaching session" 
+                      className="zoom-call-image"
+                    />
+                    <div className="zoom-overlay">
+                      <div className="zoom-participant">
+                        <img src="https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=100&h=100&fit=crop" alt="Coach" />
+                      </div>
+                      <div className="zoom-participant active">
+                        <img src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100&h=100&fit=crop" alt="Student" />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Bottom Row of School Logos */}
+                  <div className="school-logos-row">
+                    {bottomSchools.map((school, i) => (
+                      <div key={i} className="school-logo">
+                        <span>{school}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -166,11 +201,11 @@ function App() {
               </button>
 
               <div className="services-text">
-                <h2>Expert Coaching for<br />Medical Professionals</h2>
+                <h2>Expert Coaching for<br />Medical School Candidates</h2>
                 <p>
-                  Our team of experienced healthcare recruiters and physicians 
+                  Our team of experienced admissions consultants and physicians 
                   provide personalized interview preparation to help you succeed 
-                  in your medical career journey.
+                  in your medical school journey.
                 </p>
               </div>
             </div>
@@ -182,14 +217,14 @@ function App() {
               <div className="about-left">
                 <h2>
                   Our team of experienced physicians and<br />
-                  healthcare professionals provide<br />
+                  admissions professionals provide<br />
                   personalized interview coaching.
                 </h2>
                 <p>
-                  With years of experience in medical recruitment and residency 
-                  interviews, we understand what it takes to stand out. Our 
-                  coaches have helped hundreds of candidates secure positions 
-                  at top medical institutions.
+                  With years of experience in medical school admissions and 
+                  residency interviews, we understand what it takes to stand out. 
+                  Our coaches have helped hundreds of candidates secure positions 
+                  at top medical institutions including Harvard, Stanford, and Johns Hopkins.
                 </p>
               </div>
               <div className="about-right">
@@ -220,7 +255,7 @@ function App() {
                     <p className="package-subtitle">Comprehensive preparation</p>
                     <div className="package-features">
                       <span>✓ Mock Interviews</span>
-                      <span>✓ CV Review</span>
+                      <span>✓ Application Review</span>
                       <span>✓ Question Bank</span>
                       <span>✓ Feedback Report</span>
                     </div>
@@ -255,10 +290,10 @@ function App() {
                       />
                     </div>
                     <div className="package-info">
-                      <h4>Residency Package</h4>
-                      <p>Complete preparation for residency interviews including 
-                      MMI practice, traditional interviews, and application review. 
-                      Perfect for medical students.</p>
+                      <h4>MMI Package</h4>
+                      <p>Complete preparation for Multiple Mini Interviews including 
+                      scenario practice, ethics questions, and communication skills. 
+                      Perfect for medical school applicants.</p>
                       <div className="package-footer">
                         <div className="package-price">
                           <small>Starting at</small>
@@ -281,8 +316,8 @@ function App() {
                 <h2>Flexible Packages</h2>
                 <p>
                   Choose from our range of interview preparation packages 
-                  designed for medical students, residents, and practicing 
-                  physicians. Available on web and mobile platforms.
+                  designed for medical school applicants, residency candidates, 
+                  and fellowship seekers. Available on web and mobile platforms.
                 </p>
                 <div className="platform-buttons">
                   <button className="platform-btn primary">
@@ -321,7 +356,7 @@ function App() {
             <div className="cta-divider"></div>
             <p className="cta-description">
               We're a team of experienced medical professionals dedicated to helping 
-              you succeed in your healthcare career journey.
+              you succeed in your medical school journey.
             </p>
           </section>
 
@@ -337,7 +372,7 @@ function App() {
                   <h4>Our Services</h4>
                   <ul>
                     <li><a href="#">Mock Interviews</a></li>
-                    <li><a href="#">CV Review</a></li>
+                    <li><a href="#">Application Review</a></li>
                     <li><a href="#">MMI Prep</a></li>
                     <li><a href="#">Career Coaching</a></li>
                   </ul>
@@ -355,7 +390,7 @@ function App() {
                 <div className="footer-column">
                   <h4>Contact</h4>
                   <ul>
-                    <li>support@medicaloneonone.com</li>
+                    <li>support@medicalschoolcoaching.com</li>
                     <li>1-800-MED-PREP</li>
                     <li>Mon-Fri: 9AM-6PM EST</li>
                   </ul>
