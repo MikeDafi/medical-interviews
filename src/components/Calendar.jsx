@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import RecentBookings from './RecentBookings'
 
 export default function Calendar() {
   const [selectedDate, setSelectedDate] = useState(null)
@@ -150,7 +151,8 @@ export default function Calendar() {
           )}
         </div>
       </div>
+
+      <RecentBookings />
     </section>
   )
 }
-

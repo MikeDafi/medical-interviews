@@ -11,6 +11,7 @@ import Experiences from './components/Experiences'
 import FAQ from './components/FAQ'
 import Calendar from './components/Calendar'
 import Footer from './components/Footer'
+import RecentBookingNotification from './components/RecentBookingNotification'
 
 function App() {
   return (
@@ -46,6 +47,7 @@ function App() {
           </div>
         </div>
       </div>
+      <RecentBookingNotification />
     </AuthProvider>
   )
 }
