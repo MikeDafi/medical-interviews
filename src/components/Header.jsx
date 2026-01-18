@@ -28,7 +28,7 @@ export default function Header() {
             {user ? (
               <div className="user-menu">
                 <img 
-                  src={user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${user.email}`} 
+                  src={user.picture || `https://ui-avatars.com/api/?name=${user.name || user.email}`} 
                   alt="Profile" 
                   className="user-avatar"
                 />

@@ -3,8 +3,9 @@ import { useAuth } from '../context/AuthContext'
 export default function Login({ onClose }) {
   const { signInWithGoogle, loading } = useAuth()
 
-  const handleGoogleLogin = async () => {
-    await signInWithGoogle()
+  const handleGoogleLogin = () => {
+    signInWithGoogle()
+    onClose()
   }
 
   return (
@@ -42,4 +43,3 @@ export default function Login({ onClose }) {
     </div>
   )
 }
-
