@@ -6,12 +6,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { token } = req.body;
+    const { userData } = req.body;
     
-    // Decode the Google JWT token
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-    
-    const { sub: googleId, email, name, picture } = payload;
+    if (!userData || !userData.email) {
+      return res.status(400).json({ error: 'Invalid user data' });
+    }
+
+    const { id: googleId, email, name, picture } = userData;
 
     // Upsert user
     const result = await sql`
@@ -32,4 +33,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: error.message });
   }
 }
-

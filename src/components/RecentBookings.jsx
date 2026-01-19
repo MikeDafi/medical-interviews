@@ -15,14 +15,8 @@ export default function RecentBookings() {
         setBookings(data.bookings || [])
       }
     } catch (error) {
-      // Demo data for development
-      setBookings([
-        { id: 1, first_name: 'Sarah', package_name: 'Package of 3', created_at: new Date(Date.now() - 3600000).toISOString() },
-        { id: 2, first_name: 'James', package_name: '1 Hour Session', created_at: new Date(Date.now() - 7200000).toISOString() },
-        { id: 3, first_name: 'Emily', package_name: 'Package of 5', created_at: new Date(Date.now() - 18000000).toISOString() },
-        { id: 4, first_name: 'Michael', package_name: '30 Min Trial', created_at: new Date(Date.now() - 36000000).toISOString() },
-        { id: 5, first_name: 'Priya', package_name: 'Package of 3', created_at: new Date(Date.now() - 86400000).toISOString() },
-      ])
+      // No demo data - only show real bookings from DB
+      console.log('No recent bookings to display')
     }
   }
 
@@ -39,6 +33,7 @@ export default function RecentBookings() {
     return `${diffDays}d ago`
   }
 
+  // Don't render anything if no real bookings exist
   if (bookings.length === 0) return null
 
   return (
@@ -61,4 +56,3 @@ export default function RecentBookings() {
     </div>
   )
 }
-

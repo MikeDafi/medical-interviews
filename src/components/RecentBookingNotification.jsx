@@ -3,50 +3,27 @@ import { useState, useEffect } from 'react'
 export default function RecentBookingNotification() {
   const [notification, setNotification] = useState(null)
   const [isVisible, setIsVisible] = useState(false)
-  const [bookings, setBookings] = useState([])
 
   useEffect(() => {
-    fetchRecentBookings()
+    fetchRecentBooking()
   }, [])
 
-  useEffect(() => {
-    if (bookings.length > 0) {
-      showRandomNotification()
-      const interval = setInterval(showRandomNotification, 15000) // Show every 15 seconds
-      return () => clearInterval(interval)
-    }
-  }, [bookings])
-
-  const fetchRecentBookings = async () => {
+  const fetchRecentBooking = async () => {
     try {
       const response = await fetch('/api/bookings/recent')
       if (response.ok) {
         const data = await response.json()
-        setBookings(data.bookings || [])
+        if (data.bookings && data.bookings.length > 0) {
+          // Only show the most recent booking
+          setNotification(data.bookings[0])
+          // Show notification after a short delay
+          setTimeout(() => setIsVisible(true), 3000)
+        }
       }
     } catch (error) {
-      // If API fails, use demo data for development
-      setBookings([
-        { id: 1, first_name: 'Sarah', package_name: 'Package of 3', created_at: new Date(Date.now() - 3600000).toISOString() },
-        { id: 2, first_name: 'James', package_name: '1 Hour Session', created_at: new Date(Date.now() - 7200000).toISOString() },
-        { id: 3, first_name: 'Emily', package_name: 'Package of 5', created_at: new Date(Date.now() - 18000000).toISOString() },
-        { id: 4, first_name: 'Michael', package_name: '30 Min Trial', created_at: new Date(Date.now() - 36000000).toISOString() },
-        { id: 5, first_name: 'Priya', package_name: 'Package of 3', created_at: new Date(Date.now() - 86400000).toISOString() },
-      ])
+      // No demo data - only show real bookings from DB
+      console.log('No recent bookings to display')
     }
-  }
-
-  const showRandomNotification = () => {
-    if (bookings.length === 0) return
-    
-    const randomBooking = bookings[Math.floor(Math.random() * bookings.length)]
-    setNotification(randomBooking)
-    setIsVisible(true)
-
-    // Hide after 5 seconds
-    setTimeout(() => {
-      setIsVisible(false)
-    }, 5000)
   }
 
   const getTimeAgo = (dateString) => {
@@ -90,4 +67,3 @@ export default function RecentBookingNotification() {
     </div>
   )
 }
-

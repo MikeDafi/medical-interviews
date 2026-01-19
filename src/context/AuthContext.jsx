@@ -4,7 +4,6 @@ const AuthContext = createContext({})
 
 export const useAuth = () => useContext(AuthContext)
 
-// Google OAuth configuration
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
 export function AuthProvider({ children }) {
@@ -19,67 +18,68 @@ export function AuthProvider({ children }) {
     }
     setLoading(false)
 
-    // Load Google Identity Services script
-    if (GOOGLE_CLIENT_ID) {
-      const script = document.createElement('script')
-      script.src = 'https://accounts.google.com/gsi/client'
-      script.async = true
-      script.defer = true
-      document.body.appendChild(script)
+    // Handle OAuth callback
+    const params = new URLSearchParams(window.location.hash.substring(1))
+    const accessToken = params.get('access_token')
+    if (accessToken) {
+      fetchGoogleUserInfo(accessToken)
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname)
     }
   }, [])
 
+  const fetchGoogleUserInfo = async (accessToken) => {
+    try {
+      const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      })
+      const data = await response.json()
+      const userData = {
+        id: data.id,
+        email: data.email,
+        name: data.name,
+        picture: data.picture
+      }
+      setUser(userData)
+      localStorage.setItem('user', JSON.stringify(userData))
+      
+      // Save to backend
+      try {
+        await fetch('/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userData })
+        })
+      } catch (e) {
+        console.log('Backend save pending')
+      }
+    } catch (error) {
+      console.error('Error fetching user info:', error)
+    }
+  }
+
   const signInWithGoogle = () => {
     if (!GOOGLE_CLIENT_ID) {
-      console.log('Google OAuth not configured - demo mode')
-      // Demo mode for development
-      const demoUser = {
-        id: 'demo-user',
-        email: 'demo@example.com',
-        name: 'Demo User',
-        picture: 'https://ui-avatars.com/api/?name=Demo+User'
-      }
-      setUser(demoUser)
-      localStorage.setItem('user', JSON.stringify(demoUser))
+      alert('Google Sign In is not configured yet.')
       return
     }
 
-    // Initialize Google Sign-In
-    window.google?.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: handleGoogleResponse
-    })
-    window.google?.accounts.id.prompt()
-  }
-
-  const handleGoogleResponse = async (response) => {
-    // Decode JWT token from Google
-    const payload = JSON.parse(atob(response.credential.split('.')[1]))
-    const userData = {
-      id: payload.sub,
-      email: payload.email,
-      name: payload.name,
-      picture: payload.picture
-    }
-    setUser(userData)
-    localStorage.setItem('user', JSON.stringify(userData))
+    const redirectUri = window.location.origin
+    const scope = 'email profile'
     
-    // Send to backend to create/update user in database
-    try {
-      await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: response.credential })
-      })
-    } catch (error) {
-      console.log('Backend auth not configured yet')
-    }
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${GOOGLE_CLIENT_ID}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&response_type=token` +
+      `&scope=${encodeURIComponent(scope)}` +
+      `&prompt=select_account`
+
+    window.location.href = authUrl
   }
 
   const signOut = () => {
     setUser(null)
     localStorage.removeItem('user')
-    window.google?.accounts.id.disableAutoSelect()
   }
 
   const value = {
