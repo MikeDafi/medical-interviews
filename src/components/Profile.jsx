@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { calculateSessionCredits, formatDate } from '../utils'
 
 export default function Profile({ onClose }) {
   const { user, signOut } = useAuth()
   const [activeTab, setActiveTab] = useState('overview')
   const [profileData, setProfileData] = useState(null)
-  const [bookings, setBookings] = useState({ upcoming: [], past: [] })
   const [resources, setResources] = useState([])
   const [loading, setLoading] = useState(true)
   const [newResource, setNewResource] = useState({ title: '', url: '' })
@@ -36,28 +36,15 @@ export default function Profile({ onClose }) {
       const response = await fetch(`/api/profile?userId=${user.id}&email=${encodeURIComponent(user.email)}`)
       if (response.ok) {
         const data = await response.json()
-        // Purchases are now JSON on the user object
         const purchases = data.profile?.purchases || []
-        
-        let trial = 0
-        let regular = 0
-        
-        purchases.forEach(p => {
-          const remaining = (p.sessions_total || 0) - (p.sessions_used || 0)
-          if (p.type === 'trial' || p.package_id === 'trial') {
-            trial += remaining
-          } else {
-            regular += remaining
-          }
-        })
-        
-        setSessionCredits({ trial, regular, loading: false })
+        const credits = calculateSessionCredits(purchases)
+        setSessionCredits({ ...credits, loading: false })
         setPurchasedPackages(purchases)
       } else {
         setSessionCredits({ trial: 0, regular: 0, loading: false })
       }
     } catch (error) {
-      console.log('Could not fetch session data:', error)
+      console.error('Could not fetch session data:', error)
       setSessionCredits({ trial: 0, regular: 0, loading: false })
     }
   }
@@ -93,11 +80,7 @@ export default function Profile({ onClose }) {
     setLoading(false)
   }
 
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('en-US', { 
-      weekday: 'short', month: 'short', day: 'numeric' 
-    })
-  }
+  // formatDate imported from utils
 
   const handleBookNow = () => {
     onClose()
@@ -106,76 +89,37 @@ export default function Profile({ onClose }) {
     }, 100)
   }
 
-  const handleAddResource = async () => {
+  const handleAddResource = () => {
     if (!newResource.title || !newResource.url) return
     
     const newRes = { ...newResource, id: Date.now(), type: 'user' }
     const updatedResources = [...resources, newRes]
     setResources(updatedResources)
     
-    // Save to localStorage (only user resources)
+    // Save to localStorage
     const localProfile = JSON.parse(localStorage.getItem('profileData') || '{}')
-    localProfile.resources = updatedResources.filter(r => r.type === 'user')
+    localProfile.resources = updatedResources
     localStorage.setItem('profileData', JSON.stringify(localProfile))
-    
-    // Try to save to API
-    try {
-      await fetch('/api/resources', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.id,
-          title: newResource.title,
-          url: newResource.url,
-          resourceType: 'user'
-        })
-      })
-    } catch (e) {
-      console.log('Saved locally')
-    }
     
     setNewResource({ title: '', url: '' })
     setShowAddResource(false)
   }
 
-  const handleDeleteResource = async (resourceId) => {
+  const handleDeleteResource = (resourceId) => {
     const updatedResources = resources.filter(r => r.id !== resourceId)
     setResources(updatedResources)
     
     // Update localStorage
     const localProfile = JSON.parse(localStorage.getItem('profileData') || '{}')
-    localProfile.resources = updatedResources.filter(r => r.type === 'user')
+    localProfile.resources = updatedResources
     localStorage.setItem('profileData', JSON.stringify(localProfile))
-    
-    // Try to delete from API
-    try {
-      await fetch(`/api/resources?id=${resourceId}`, {
-        method: 'DELETE'
-      })
-    } catch (e) {
-      console.log('Deleted locally')
-    }
   }
 
-  // Coach-provided resources (loaded from API/database)
-  const [coachResources, setCoachResources] = useState([])
-
-  useEffect(() => {
-    // Fetch coach resources
-    const fetchCoachResources = async () => {
-      try {
-        const response = await fetch('/api/resources?type=coach')
-        if (response.ok) {
-          const data = await response.json()
-          setCoachResources(data.resources || [])
-        }
-      } catch (e) {
-        // No coach resources available yet
-        console.log('No coach resources')
-      }
-    }
-    fetchCoachResources()
-  }, [])
+  // Coach-provided resources (static for now)
+  const coachResources = [
+    { id: 'coach-1', title: 'MMI Interview Guide', url: 'https://example.com/mmi-guide', type: 'coach' },
+    { id: 'coach-2', title: 'Common Interview Questions', url: 'https://example.com/questions', type: 'coach' }
+  ]
 
   const handleAddSchool = () => {
     if (!newSchool.name) return

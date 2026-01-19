@@ -51,8 +51,7 @@ export async function verifyAuth(req, options = {}) {
     }
 
     return { authenticated: true, user: dbUser, error: null };
-  } catch (error) {
-    console.error('Auth verification error:', error);
+  } catch {
     return { authenticated: false, user: null, error: 'Authentication failed' };
   }
 }

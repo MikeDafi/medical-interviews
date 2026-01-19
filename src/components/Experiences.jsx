@@ -3,43 +3,43 @@ export default function Experiences() {
     {
       name: "Sarah M.",
       school: "Accepted to Northwestern",
-      image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=600&fit=crop",
+      image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=600&fit=crop&crop=face",
       review: "Ashley completely transformed my interview skills. After 3 sessions, I went from freezing up to confidently handling any question thrown at me."
     },
     {
       name: "James L.",
       school: "Accepted to UCLA",
-      image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=600&fit=crop",
+      image: "https://images.unsplash.com/photo-1552058544-f2b08422138a?w=400&h=600&fit=crop&crop=face",
       review: "The MMI practice was incredibly realistic. I felt like I had already done my interview by the time the real one came around."
     },
     {
       name: "Priya K.",
       school: "Accepted to Duke",
-      image: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=600&fit=crop",
+      image: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=400&h=600&fit=crop&crop=face",
       review: "Honest feedback that actually helped. Ashley doesn't sugarcoat things, and that's exactly what I needed to improve."
     },
     {
       name: "Michael T.",
       school: "Accepted to Emory",
-      image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=600&fit=crop",
+      image: "https://images.unsplash.com/photo-1463453091185-61582044d556?w=400&h=600&fit=crop&crop=face",
       review: "Worth every penny. The take-home questions helped me practice on my own time and the recordings let me see exactly where I needed work."
     },
     {
       name: "Emily R.",
       school: "Accepted to UChicago",
-      image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=600&fit=crop",
+      image: "https://images.unsplash.com/photo-1489424731084-a5d8b219a5bb?w=400&h=600&fit=crop&crop=face",
       review: "I was so nervous about interviews. After working with Ashley, I actually looked forward to them. She has a gift for making you feel prepared."
     },
     {
       name: "David C.",
       school: "Accepted to WashU",
-      image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&h=600&fit=crop",
+      image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=600&fit=crop&crop=face",
       review: "The structured approach from beginner to advanced really helped build my confidence gradually. By session 5, I was crushing it."
     },
     {
       name: "Amanda H.",
       school: "Accepted to Michigan",
-      image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=600&fit=crop",
+      image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=600&fit=crop&crop=face",
       review: "Ashley's been on both sides of the table, and it shows. Her insights into what interviewers are really looking for were game-changing."
     }
   ]

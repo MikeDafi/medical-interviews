@@ -99,8 +99,7 @@ export default async function handler(req, res) {
       };
 
       return res.status(200).json({ profile: safeProfile });
-    } catch (error) {
-      console.error('Error fetching profile:', error);
+    } catch {
       return res.status(500).json({ error: 'Failed to fetch profile' });
     }
   }
@@ -127,8 +126,7 @@ export default async function handler(req, res) {
 
       await sql`DELETE FROM users WHERE google_id = ${userId} AND email = ${confirmEmail}`;
       return res.status(200).json({ success: true });
-    } catch (error) {
-      console.error('Error deleting profile:', error);
+    } catch {
       return res.status(500).json({ error: 'Failed to delete profile' });
     }
   }

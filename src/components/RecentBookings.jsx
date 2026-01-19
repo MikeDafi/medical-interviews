@@ -1,84 +1,64 @@
 import { useState, useEffect } from 'react'
+import { getTimeAgo } from '../utils'
 
-// Empty default - will be populated from API
-const demoBookings = []
-
-const CACHE_KEY = 'recentBookings'
+const CACHE_KEY = 'recentPurchases'
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
 export default function RecentBookings() {
-  const [bookings, setBookings] = useState(() => {
-    // Try to load from cache first
+  const [purchases, setPurchases] = useState(() => {
     try {
       const cached = localStorage.getItem(CACHE_KEY)
       if (cached) {
         const { data, timestamp } = JSON.parse(cached)
-        if (Date.now() - timestamp < CACHE_DURATION && data.length > 0) {
+        if (Date.now() - timestamp < CACHE_DURATION && data?.length > 0) {
           return data
         }
       }
-    } catch (e) {
+    } catch {
       // Ignore cache errors
     }
-    return demoBookings
+    return []
   })
 
   useEffect(() => {
-    fetchRecentBookings()
-    
-    // Refresh every 5 minutes
-    const interval = setInterval(fetchRecentBookings, CACHE_DURATION)
+    fetchRecentPurchases()
+    const interval = setInterval(fetchRecentPurchases, CACHE_DURATION)
     return () => clearInterval(interval)
   }, [])
 
-  const fetchRecentBookings = async () => {
+  const fetchRecentPurchases = async () => {
     try {
-      const response = await fetch('/api/bookings/recent')
+      const response = await fetch('/api/purchases/recent')
       if (response.ok) {
         const data = await response.json()
-        if (data.bookings && data.bookings.length > 0) {
-          setBookings(data.bookings)
-          // Cache the results
+        if (data.purchases?.length > 0) {
+          setPurchases(data.purchases)
           localStorage.setItem(CACHE_KEY, JSON.stringify({
-            data: data.bookings,
+            data: data.purchases,
             timestamp: Date.now()
           }))
         }
       }
-    } catch (error) {
-      console.log('Using cached/demo bookings')
+    } catch {
+      // Use cached data
     }
   }
 
-  const getTimeAgo = (dateString) => {
-    const now = new Date()
-    const date = new Date(dateString)
-    const diffMs = now - date
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
-
-    if (diffMins < 60) return `${diffMins}m ago`
-    if (diffHours < 24) return `${diffHours}h ago`
-    return `${diffDays}d ago`
-  }
-
-  // Always show recent bookings (demo or real)
-  if (bookings.length === 0) return null
+  if (purchases.length === 0) return null
 
   return (
     <div className="recent-bookings">
       <h4>Recent Bookings</h4>
       <div className="recent-bookings-scroll">
-        {bookings.map((booking) => (
-          <div className="recent-booking-card" key={booking.id}>
+        {purchases.map((purchase) => (
+          <div className="recent-booking-card" key={purchase.id}>
             <div className="recent-booking-avatar">
-              {booking.first_name?.charAt(0) || 'U'}
+              {purchase.first_name?.charAt(0) || 'U'}
             </div>
             <div className="recent-booking-info">
-              <span className="recent-booking-name">{booking.first_name}</span>
-              <span className="recent-booking-package">{booking.package_name}</span>
-              <span className="recent-booking-time">{getTimeAgo(booking.created_at)}</span>
+              <span className="recent-booking-name">{purchase.first_name}</span>
+              <span className="recent-booking-package">{purchase.package_name}</span>
+              <span className="recent-booking-time">{getTimeAgo(purchase.created_at)}</span>
             </div>
           </div>
         ))}
@@ -86,3 +66,4 @@ export default function RecentBookings() {
     </div>
   )
 }
+

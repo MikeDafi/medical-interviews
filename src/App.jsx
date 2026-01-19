@@ -53,7 +53,6 @@ function HomePage() {
         </div>
       </div>
 
-      <RecentBookingNotification />
       <PaymentStatus />
     </>
   )

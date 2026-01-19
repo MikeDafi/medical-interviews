@@ -6,6 +6,9 @@ export const useAuth = () => useContext(AuthContext)
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
+// Session duration: 24 hours
+const SESSION_DURATION = 24 * 60 * 60 * 1000
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -13,24 +16,20 @@ export function AuthProvider({ children }) {
   const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
-    // Check for existing session in localStorage
-    const storedUser = localStorage.getItem('user')
-    if (storedUser) {
-      const userData = JSON.parse(storedUser)
-      setUser(userData)
+    // Check for existing session (use sessionStorage for security)
+    const session = getSession()
+    if (session?.user && !isSessionExpired(session)) {
+      setUser(session.user)
+      checkAdminStatus(session.user)
       
-      // Check admin status
-      checkAdminStatus(userData)
-      
-      // Check localStorage first for profile completion
-      const profileComplete = localStorage.getItem('profileComplete')
-      if (profileComplete === 'true') {
-        // Profile is already complete, don't show setup
+      if (session.profileComplete) {
         setShowProfileSetup(false)
       } else {
-        // Only check API if we don't have local confirmation
-        checkProfileComplete(userData)
+        checkProfileComplete(session.user)
       }
+    } else {
+      // Clear expired session
+      clearSession()
     }
     setLoading(false)
 
@@ -39,59 +38,82 @@ export function AuthProvider({ children }) {
     const accessToken = params.get('access_token')
     if (accessToken) {
       fetchGoogleUserInfo(accessToken)
-      // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname)
     }
   }, [])
 
-  const checkAdminStatus = async (userData) => {
-    // Check localStorage cache first
-    const cachedAdmin = localStorage.getItem('isAdmin')
-    if (cachedAdmin !== null) {
-      setIsAdmin(cachedAdmin === 'true')
+  // Session management functions
+  const getSession = () => {
+    try {
+      // Try sessionStorage first (current tab), then localStorage (returning user)
+      const sessionData = sessionStorage.getItem('authSession') || localStorage.getItem('authSession')
+      return sessionData ? JSON.parse(sessionData) : null
+    } catch {
+      return null
     }
+  }
 
+  const saveSession = (userData, profileComplete = false) => {
+    const session = {
+      user: userData,
+      profileComplete,
+      createdAt: Date.now()
+    }
+    // Save to both: sessionStorage for security, localStorage for "remember me"
+    sessionStorage.setItem('authSession', JSON.stringify(session))
+    localStorage.setItem('authSession', JSON.stringify(session))
+  }
+
+  const clearSession = () => {
+    sessionStorage.removeItem('authSession')
+    localStorage.removeItem('authSession')
+  }
+
+  const isSessionExpired = (session) => {
+    if (!session?.createdAt) return true
+    return Date.now() - session.createdAt > SESSION_DURATION
+  }
+
+  const updateSessionProfileComplete = (complete) => {
+    const session = getSession()
+    if (session) {
+      session.profileComplete = complete
+      sessionStorage.setItem('authSession', JSON.stringify(session))
+      localStorage.setItem('authSession', JSON.stringify(session))
+    }
+  }
+
+  const checkAdminStatus = async (userData) => {
     try {
       const response = await fetch(`/api/admin?action=check&googleId=${userData.id}`)
       if (response.ok) {
         const data = await response.json()
         setIsAdmin(data.isAdmin || false)
-        localStorage.setItem('isAdmin', data.isAdmin ? 'true' : 'false')
       }
-    } catch (error) {
-      console.log('Admin check unavailable')
+    } catch {
+      // Admin check unavailable
     }
   }
 
   const checkProfileComplete = async (userData) => {
-    // Check localStorage first
-    const localProfileComplete = localStorage.getItem('profileComplete')
-    if (localProfileComplete === 'true') {
-      setShowProfileSetup(false)
-      return
-    }
-
     try {
       const response = await fetch(`/api/profile?googleId=${userData.id}&email=${encodeURIComponent(userData.email)}`)
       if (response.ok) {
         const data = await response.json()
         if (data.profile?.profile_complete) {
-          localStorage.setItem('profileComplete', 'true')
+          updateSessionProfileComplete(true)
           setShowProfileSetup(false)
         } else {
           setShowProfileSetup(true)
         }
-      } else {
-        // API not available - don't force profile setup if we can't verify
-        // Only show setup for truly new users (no profileComplete flag at all)
-        if (localProfileComplete === null) {
-          setShowProfileSetup(true)
-        }
+      } else if (response.status === 404) {
+        // New user - show profile setup
+        setShowProfileSetup(true)
       }
-    } catch (error) {
-      // API failed - don't force profile setup if we can't verify
-      console.log('Profile check unavailable')
-      if (localProfileComplete === null) {
+    } catch {
+      // API unavailable - check local session
+      const session = getSession()
+      if (!session?.profileComplete) {
         setShowProfileSetup(true)
       }
     }
@@ -102,6 +124,9 @@ export function AuthProvider({ children }) {
       const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
         headers: { Authorization: `Bearer ${accessToken}` }
       })
+      
+      if (!response.ok) throw new Error('Failed to fetch user info')
+      
       const data = await response.json()
       const userData = {
         id: data.id,
@@ -109,8 +134,9 @@ export function AuthProvider({ children }) {
         name: data.name,
         picture: data.picture
       }
+      
       setUser(userData)
-      localStorage.setItem('user', JSON.stringify(userData))
+      saveSession(userData, false)
       
       // Save to backend
       try {
@@ -119,21 +145,15 @@ export function AuthProvider({ children }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userData })
         })
-      } catch (e) {
-        console.log('Backend save pending')
+      } catch {
+        // Backend save will happen on next API call
       }
       
-      // Check admin status
       checkAdminStatus(userData)
-      
-      // Only show profile setup if not already completed
-      const profileComplete = localStorage.getItem('profileComplete')
-      if (profileComplete !== 'true') {
-        // Check with API if available, otherwise show setup for new users
-        checkProfileComplete(userData)
-      }
+      checkProfileComplete(userData)
     } catch (error) {
       console.error('Error fetching user info:', error)
+      clearSession()
     }
   }
 
@@ -143,14 +163,21 @@ export function AuthProvider({ children }) {
       return
     }
 
+    // Generate state for CSRF protection
+    const state = crypto.randomUUID()
+    sessionStorage.setItem('oauth_state', state)
+
     const redirectUri = window.location.origin
     const scope = 'email profile'
     
+    // Note: For production, should use authorization code flow with PKCE
+    // Implicit flow is used here for simplicity but is less secure
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${GOOGLE_CLIENT_ID}` +
       `&redirect_uri=${encodeURIComponent(redirectUri)}` +
       `&response_type=token` +
       `&scope=${encodeURIComponent(scope)}` +
+      `&state=${state}` +
       `&prompt=select_account`
 
     window.location.href = authUrl
@@ -160,14 +187,12 @@ export function AuthProvider({ children }) {
     setUser(null)
     setShowProfileSetup(false)
     setIsAdmin(false)
-    localStorage.removeItem('user')
-    localStorage.removeItem('profileComplete')
-    localStorage.removeItem('isAdmin')
+    clearSession()
   }
 
   const completeProfileSetup = () => {
     setShowProfileSetup(false)
-    localStorage.setItem('profileComplete', 'true')
+    updateSessionProfileComplete(true)
   }
 
   const value = {

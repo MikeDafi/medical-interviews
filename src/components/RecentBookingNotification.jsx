@@ -1,72 +1,63 @@
 import { useState, useEffect } from 'react'
+import { getTimeAgo } from '../utils'
 
-const CACHE_KEY = 'recentBookings'
+const CACHE_KEY = 'recentPurchases'
+const NOTIFICATION_DELAY = 3000 // 3 seconds after page load
 
 export default function RecentBookingNotification() {
   const [notification, setNotification] = useState(null)
   const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {
-    // Small delay to let the page load, then check cache first
     const timer = setTimeout(() => {
       // Try cache first
       try {
         const cached = localStorage.getItem(CACHE_KEY)
         if (cached) {
           const { data } = JSON.parse(cached)
-          if (data && data.length > 0) {
+          if (data?.length > 0) {
             setNotification(data[0])
             setIsVisible(true)
             return
           }
         }
-      } catch (e) {
-        // Ignore cache errors
+      } catch {
+        // Ignore
       }
-      // Only fetch if no cache
-      fetchRecentBooking()
-    }, 3000)
+      fetchRecentPurchase()
+    }, NOTIFICATION_DELAY)
     
     return () => clearTimeout(timer)
   }, [])
 
-  const fetchRecentBooking = async () => {
+  const fetchRecentPurchase = async () => {
     try {
-      const response = await fetch('/api/bookings/recent')
+      const response = await fetch('/api/purchases/recent')
       if (response.ok) {
         const data = await response.json()
-        if (data.bookings && data.bookings.length > 0) {
-          // Only show the most recent booking
-          setNotification(data.bookings[0])
+        if (data.purchases?.length > 0) {
+          setNotification(data.purchases[0])
           setIsVisible(true)
-          // Cache the results (shared with RecentBookings)
+          // Cache for RecentBookings component
           localStorage.setItem(CACHE_KEY, JSON.stringify({
-            data: data.bookings,
+            data: data.purchases,
             timestamp: Date.now()
           }))
         }
       }
-    } catch (error) {
-      console.log('No recent bookings to display')
+    } catch {
+      // No notification to display
     }
-  }
-
-  const getTimeAgo = (dateString) => {
-    const now = new Date()
-    const date = new Date(dateString)
-    const diffMs = now - date
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
-
-    if (diffMins < 60) return `${diffMins} min ago`
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
-    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
   }
 
   const handleClick = () => {
     setIsVisible(false)
     document.getElementById('book')?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  const handleClose = (e) => {
+    e.stopPropagation()
+    setIsVisible(false)
   }
 
   if (!notification || !isVisible) return null
@@ -84,7 +75,7 @@ export default function RecentBookingNotification() {
           {notification.package_name} • {getTimeAgo(notification.created_at)}
         </p>
       </div>
-      <button className="notification-close" onClick={(e) => { e.stopPropagation(); setIsVisible(false); }}>
+      <button className="notification-close" onClick={handleClose}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M18 6L6 18M6 6l12 12"/>
         </svg>
@@ -92,3 +83,4 @@ export default function RecentBookingNotification() {
     </div>
   )
 }
+
