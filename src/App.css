@@ -446,7 +446,8 @@ img {
 .section-header.marketing-header h2,
 .features-section .section-header h2,
 .faq-section .section-header h2,
-.structure-section .section-header h2 {
+.structure-section .section-header h2,
+.calendar-section .section-header h2 {
   font-family: var(--marketing-font);
   font-weight: 700;
 }
