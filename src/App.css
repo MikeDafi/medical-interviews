@@ -4003,11 +4003,96 @@ img {
 
 .admin-schools-list,
 .admin-bookings-list,
-.admin-resources-list {
+.admin-resources-list,
+.admin-packages-list {
   list-style: none;
   padding: 0;
   margin: 0;
   font-size: 14px;
+}
+
+.admin-package-item {
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: #fafafa;
+}
+
+.package-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.package-type {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.package-type.trial {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.package-type.regular {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.package-sessions {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.package-status {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: capitalize;
+}
+
+.package-status.active {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.package-status.cancelled {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.package-status.expired {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.package-meta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.admin-cancel-package-btn {
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.admin-cancel-package-btn:hover {
+  background: #fecaca;
+  border-color: #fca5a5;
 }
 
 .admin-schools-list li,

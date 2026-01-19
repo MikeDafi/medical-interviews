@@ -1,13 +1,7 @@
 import { useState, useEffect } from 'react'
 
-// Fallback demo bookings only used if DB is empty AND no cache
-const demoBookings = [
-  { id: 1, first_name: 'Sarah', package_name: '1 Hour Session', created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() },
-  { id: 2, first_name: 'Michael', package_name: 'Package of 3', created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString() },
-  { id: 3, first_name: 'Emily', package_name: '30 Min Trial', created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString() },
-  { id: 4, first_name: 'James', package_name: 'Package of 5', created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
-  { id: 5, first_name: 'Priya', package_name: '1 Hour Session', created_at: new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString() },
-]
+// Empty default - will be populated from API
+const demoBookings = []
 
 const CACHE_KEY = 'recentBookings'
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes

@@ -23,10 +23,17 @@ export default function Admin() {
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/admin?sortBy=${sortBy}&sortOrder=${sortOrder}`)
+      // SECURITY: Pass user's Google ID for server-side auth verification
+      const response = await fetch(`/api/admin?sortBy=${sortBy}&sortOrder=${sortOrder}&googleId=${user?.id || ''}`, {
+        headers: {
+          'Authorization': `Bearer ${user?.id || ''}`
+        }
+      })
       if (response.ok) {
         const data = await response.json()
         setUsers(data.users || [])
+      } else if (response.status === 403) {
+        console.error('Admin access denied')
       }
     } catch (error) {
       console.error('Error fetching users:', error)
@@ -53,9 +60,12 @@ export default function Admin() {
     if (!newResource.title || !newResource.url) return
 
     try {
-      const response = await fetch('/api/admin?action=resources', {
+      const response = await fetch(`/api/admin?action=resources&googleId=${user?.id || ''}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.id || ''}`
+        },
         body: JSON.stringify({
           userId,
           ...newResource,
@@ -77,8 +87,11 @@ export default function Admin() {
     if (!confirm('Remove this resource?')) return
 
     try {
-      const response = await fetch(`/api/admin?action=resources&userId=${expandedUser}&resourceId=${resourceId}`, {
-        method: 'DELETE'
+      const response = await fetch(`/api/admin?action=resources&userId=${expandedUser}&resourceId=${resourceId}&googleId=${user?.id || ''}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${user?.id || ''}`
+        }
       })
 
       if (response.ok) {
@@ -86,6 +99,27 @@ export default function Admin() {
       }
     } catch (error) {
       console.error('Error removing resource:', error)
+    }
+  }
+
+  const handleCancelPackage = async (userId, packageId) => {
+    if (!confirm('Cancel this package? This will remove the remaining sessions.')) return
+
+    try {
+      const response = await fetch(`/api/admin?action=cancelPackage&googleId=${user?.id || ''}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.id || ''}`
+        },
+        body: JSON.stringify({ userId, packageId })
+      })
+
+      if (response.ok) {
+        fetchUsers()
+      }
+    } catch (error) {
+      console.error('Error cancelling package:', error)
     }
   }
 
@@ -294,21 +328,41 @@ export default function Admin() {
                           )}
                         </div>
 
-                        {/* Recent Bookings */}
+                        {/* Packages / Sessions */}
                         <div className="admin-expanded-section">
-                          <h4>Recent Bookings</h4>
-                          {u.recent_bookings?.length > 0 ? (
-                            <ul className="admin-bookings-list">
-                              {u.recent_bookings.map((booking, i) => (
-                                <li key={i}>
-                                  <span className="booking-date">{formatDate(booking.booking_date)}</span>
-                                  <span className="booking-time">{booking.booking_time}</span>
-                                  <span className={`booking-status ${booking.status}`}>{booking.status}</span>
+                          <h4>Packages ({u.purchases?.length || 0})</h4>
+                          {u.purchases?.length > 0 ? (
+                            <ul className="admin-packages-list">
+                              {u.purchases.map((pkg, i) => (
+                                <li key={i} className="admin-package-item">
+                                  <div className="package-info">
+                                    <span className={`package-type ${pkg.type === 'trial' ? 'trial' : 'regular'}`}>
+                                      {pkg.type === 'trial' ? 'Trial' : 'Regular'}
+                                    </span>
+                                    <span className="package-sessions">
+                                      {(pkg.sessions_total || 0) - (pkg.sessions_used || 0)} / {pkg.sessions_total || 0} sessions left
+                                    </span>
+                                    <span className={`package-status ${pkg.status}`}>{pkg.status}</span>
+                                  </div>
+                                  <div className="package-meta">
+                                    <span className="package-date">Purchased: {formatDate(pkg.purchase_date)}</span>
+                                  </div>
+                                  {pkg.status === 'active' && (
+                                    <button 
+                                      className="admin-cancel-package-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleCancelPackage(u.id, pkg.id)
+                                      }}
+                                    >
+                                      Cancel
+                                    </button>
+                                  )}
                                 </li>
                               ))}
                             </ul>
                           ) : (
-                            <p className="admin-empty">No bookings yet</p>
+                            <p className="admin-empty">No packages purchased</p>
                           )}
                         </div>
 

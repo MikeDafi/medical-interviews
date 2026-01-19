@@ -35,12 +35,12 @@ const PACKAGES = {
   }
 };
 
-// SECURITY: Whitelist of allowed origins
+// SECURITY: Whitelist of allowed origins (HTTPS for production)
 const ALLOWED_ORIGINS = [
-  'http://localhost:3000',
-  'http://localhost:5173',
+  'http://localhost:3000',      // Local dev only
+  'http://localhost:5173',      // Local dev only
   'https://premedical1on1.vercel.app',
-  // Add your production domain here
+  'https://www.premedical1on1.com', // Add your production domain here
 ];
 
 export default async function handler(req, res) {
