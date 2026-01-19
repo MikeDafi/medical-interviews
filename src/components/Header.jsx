@@ -19,7 +19,7 @@ export default function Header() {
     <>
       <header className="header-bar">
         <div className="header-inner">
-          <span className="logo-text">Medical One-on-One</span>
+          <span className="logo-text">PreMedical 1-on-1</span>
           <nav className="nav-menu">
             <a href="#packages" className="nav-link">Packages</a>
             <a href="#about" className="nav-link">About</a>
