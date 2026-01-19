@@ -85,8 +85,7 @@ export default async function handler(req, res) {
         profile_complete: user.profile_complete
       }
     });
-  } catch (error) {
-    console.error('Auth error:', error);
+  } catch {
     return res.status(500).json({ error: 'Authentication failed' });
   }
 }

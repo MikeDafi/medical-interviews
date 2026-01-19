@@ -57,7 +57,6 @@ export default async function handler(req, res) {
 
   // SECURITY: Validate Stripe key is configured
   if (!process.env.STRIPE_SECRET_KEY) {
-    console.error('STRIPE_SECRET_KEY not configured');
     return res.status(500).json({ error: 'Payment not configured' });
   }
 
@@ -118,9 +117,7 @@ export default async function handler(req, res) {
       sessionId: session.id,
       url: session.url 
     });
-  } catch (error) {
-    console.error('Stripe error:', error);
-    // SECURITY: Don't leak error details
+  } catch {
     res.status(500).json({ error: 'Payment initialization failed' });
   }
 }

@@ -13,6 +13,8 @@ export default function Admin() {
   const [searchTerm, setSearchTerm] = useState('')
   const [newResource, setNewResource] = useState({ title: '', url: '', description: '', type: 'article' })
   const [addingResourceFor, setAddingResourceFor] = useState(null)
+  const [addingSessionFor, setAddingSessionFor] = useState(null)
+  const [newSession, setNewSession] = useState({ type: 'regular', sessions: 1 })
 
   useEffect(() => {
     if (!authLoading && isAdmin) {
@@ -120,6 +122,33 @@ export default function Admin() {
       }
     } catch (error) {
       console.error('Error cancelling package:', error)
+    }
+  }
+
+  const handleAddSession = async (userId) => {
+    if (!newSession.sessions || newSession.sessions < 1) return
+
+    try {
+      const response = await fetch(`/api/admin?action=addSession&googleId=${user?.id || ''}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.id || ''}`
+        },
+        body: JSON.stringify({
+          userId,
+          type: newSession.type,
+          sessions: parseInt(newSession.sessions)
+        })
+      })
+
+      if (response.ok) {
+        setNewSession({ type: 'regular', sessions: 1 })
+        setAddingSessionFor(null)
+        fetchUsers()
+      }
+    } catch (error) {
+      console.error('Error adding session:', error)
     }
   }
 
@@ -330,7 +359,43 @@ export default function Admin() {
 
                         {/* Packages / Sessions */}
                         <div className="admin-expanded-section">
-                          <h4>Packages ({u.purchases?.length || 0})</h4>
+                          <div className="admin-section-header">
+                            <h4>Packages ({u.purchases?.length || 0})</h4>
+                            <button 
+                              className="admin-add-resource-btn"
+                              onClick={() => setAddingSessionFor(addingSessionFor === u.id ? null : u.id)}
+                            >
+                              {addingSessionFor === u.id ? 'Cancel' : '+ Add Session'}
+                            </button>
+                          </div>
+
+                          {/* Add Session Form */}
+                          {addingSessionFor === u.id && (
+                            <div className="admin-add-session-form">
+                              <select
+                                value={newSession.type}
+                                onChange={e => setNewSession({ ...newSession, type: e.target.value })}
+                              >
+                                <option value="trial">Trial</option>
+                                <option value="regular">Regular</option>
+                              </select>
+                              <input
+                                type="number"
+                                min="1"
+                                max="10"
+                                placeholder="# Sessions"
+                                value={newSession.sessions}
+                                onChange={e => setNewSession({ ...newSession, sessions: e.target.value })}
+                              />
+                              <button 
+                                className="admin-save-resource-btn"
+                                onClick={() => handleAddSession(u.id)}
+                              >
+                                Add Sessions
+                              </button>
+                            </div>
+                          )}
+
                           {u.purchases?.length > 0 ? (
                             <ul className="admin-packages-list">
                               {u.purchases.map((pkg, i) => (

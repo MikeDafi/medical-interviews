@@ -51,8 +51,7 @@ export default async function handler(req, res) {
           WHERE id = ${parseInt(userId)}
         `;
         return res.status(201).json({ success: true, message: 'Resource added' });
-      } catch (error) {
-        console.error('Error adding resource:', error);
+      } catch {
         return res.status(500).json({ error: 'Failed to add resource' });
       }
     }
@@ -72,8 +71,7 @@ export default async function handler(req, res) {
           await sql`UPDATE users SET resources = ${JSON.stringify(filteredResources)}::jsonb WHERE id = ${parseInt(userId)}`;
         }
         return res.status(200).json({ success: true, message: 'Resource removed' });
-      } catch (error) {
-        console.error('Error removing resource:', error);
+      } catch {
         return res.status(500).json({ error: 'Failed to remove resource' });
       }
     }
@@ -106,9 +104,54 @@ export default async function handler(req, res) {
         await sql`UPDATE users SET purchases = ${JSON.stringify(updatedPurchases)}::jsonb WHERE id = ${parseInt(userId)}`;
       }
       return res.status(200).json({ success: true, message: 'Package cancelled' });
-    } catch (error) {
-      console.error('Error cancelling package:', error);
+    } catch {
       return res.status(500).json({ error: 'Failed to cancel package' });
+    }
+  }
+
+  // Add sessions to a user (admin granted)
+  if (action === 'addSession') {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    const { userId, type, sessions } = req.body;
+
+    if (!userId || !type || !sessions) {
+      return res.status(400).json({ error: 'userId, type, and sessions required' });
+    }
+
+    const validTypes = ['trial', 'regular'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: 'Invalid session type' });
+    }
+
+    const sessionCount = parseInt(sessions);
+    if (isNaN(sessionCount) || sessionCount < 1 || sessionCount > 10) {
+      return res.status(400).json({ error: 'Sessions must be between 1 and 10' });
+    }
+
+    try {
+      const newPackage = {
+        id: `admin_${Date.now()}`,
+        type: type,
+        status: 'active',
+        package_id: type === 'trial' ? 'trial' : 'regular',
+        purchase_date: new Date().toISOString(),
+        sessions_total: sessionCount,
+        sessions_used: 0,
+        added_by_admin: true
+      };
+
+      await sql`
+        UPDATE users 
+        SET purchases = COALESCE(purchases, '[]'::jsonb) || ${JSON.stringify(newPackage)}::jsonb
+        WHERE id = ${parseInt(userId)}
+      `;
+      
+      return res.status(201).json({ success: true, message: `Added ${sessionCount} ${type} session(s)` });
+    } catch {
+      return res.status(500).json({ error: 'Failed to add session' });
     }
   }
 
@@ -184,8 +227,7 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({ users: usersWithDetails });
-  } catch (error) {
-    console.error('Error fetching users:', error);
+  } catch {
     return res.status(500).json({ error: 'Failed to fetch users' });
   }
 }

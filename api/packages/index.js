@@ -21,9 +21,7 @@ export default async function handler(req, res) {
       ORDER BY price
     `;
     return res.status(200).json({ packages: result.rows });
-  } catch (error) {
-    console.error('Error fetching packages:', error);
-    // SECURITY: Don't leak error details
+  } catch {
     return res.status(500).json({ error: 'Failed to fetch packages' });
   }
 }

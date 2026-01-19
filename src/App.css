@@ -4193,7 +4193,8 @@ img {
   background: #248f8f;
 }
 
-.admin-add-resource-form {
+.admin-add-resource-form,
+.admin-add-session-form {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
@@ -4203,8 +4204,14 @@ img {
   border-radius: 8px;
 }
 
+.admin-add-session-form {
+  grid-template-columns: 1fr 1fr auto;
+}
+
 .admin-add-resource-form input,
-.admin-add-resource-form select {
+.admin-add-resource-form select,
+.admin-add-session-form input,
+.admin-add-session-form select {
   padding: 10px 12px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -4212,7 +4219,9 @@ img {
 }
 
 .admin-add-resource-form input:focus,
-.admin-add-resource-form select:focus {
+.admin-add-resource-form select:focus,
+.admin-add-session-form input:focus,
+.admin-add-session-form select:focus {
   outline: none;
   border-color: #2da7a7;
 }
