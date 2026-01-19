@@ -9,12 +9,16 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showProfileSetup, setShowProfileSetup] = useState(false)
 
   useEffect(() => {
     // Check for existing session in localStorage
     const storedUser = localStorage.getItem('user')
     if (storedUser) {
-      setUser(JSON.parse(storedUser))
+      const userData = JSON.parse(storedUser)
+      setUser(userData)
+      // Check if profile is complete
+      checkProfileComplete(userData)
     }
     setLoading(false)
 
@@ -27,6 +31,21 @@ export function AuthProvider({ children }) {
       window.history.replaceState({}, document.title, window.location.pathname)
     }
   }, [])
+
+  const checkProfileComplete = async (userData) => {
+    try {
+      const response = await fetch(`/api/profile?googleId=${userData.id}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (!data.profile?.profile_complete) {
+          setShowProfileSetup(true)
+        }
+      }
+    } catch (error) {
+      // Profile check failed, show setup for new users
+      setShowProfileSetup(true)
+    }
+  }
 
   const fetchGoogleUserInfo = async (accessToken) => {
     try {
@@ -50,8 +69,11 @@ export function AuthProvider({ children }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userData })
         })
+        // Show profile setup for new users
+        setShowProfileSetup(true)
       } catch (e) {
         console.log('Backend save pending')
+        setShowProfileSetup(true)
       }
     } catch (error) {
       console.error('Error fetching user info:', error)
@@ -79,14 +101,21 @@ export function AuthProvider({ children }) {
 
   const signOut = () => {
     setUser(null)
+    setShowProfileSetup(false)
     localStorage.removeItem('user')
+  }
+
+  const completeProfileSetup = () => {
+    setShowProfileSetup(false)
   }
 
   const value = {
     user,
     loading,
     signInWithGoogle,
-    signOut
+    signOut,
+    showProfileSetup,
+    completeProfileSetup
   }
 
   return (

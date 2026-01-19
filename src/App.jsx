@@ -1,6 +1,6 @@
 import './App.css'
 import { Analytics } from '@vercel/analytics/react'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import Header from './components/Header'
 import Hero from './components/Hero'
 import SampleQuestion from './components/SampleQuestion'
@@ -13,10 +13,13 @@ import FAQ from './components/FAQ'
 import Calendar from './components/Calendar'
 import Footer from './components/Footer'
 import RecentBookingNotification from './components/RecentBookingNotification'
+import ProfileSetup from './components/ProfileSetup'
 
-function App() {
+function AppContent() {
+  const { user, showProfileSetup, completeProfileSetup } = useAuth()
+
   return (
-    <AuthProvider>
+    <>
       <div className="app">
         {/* Background Image with Blur */}
         <div className="background-layer">
@@ -48,8 +51,21 @@ function App() {
           </div>
         </div>
       </div>
+
       <RecentBookingNotification />
       <Analytics />
+      
+      {user && showProfileSetup && (
+        <ProfileSetup user={user} onComplete={completeProfileSetup} />
+      )}
+    </>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
     </AuthProvider>
   )
 }

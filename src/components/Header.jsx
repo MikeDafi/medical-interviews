@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import Login from './Login'
+import Profile from './Profile'
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
   const { user, signOut } = useAuth()
 
   const handleAuthClick = () => {
@@ -27,11 +29,13 @@ export default function Header() {
             <a href="#book" className="nav-link">Contact</a>
             {user ? (
               <div className="user-menu">
-                <img 
-                  src={user.picture || `https://ui-avatars.com/api/?name=${user.name || user.email}`} 
-                  alt="Profile" 
-                  className="user-avatar"
-                />
+                <button className="user-avatar-btn" onClick={() => setShowProfile(true)}>
+                  <img 
+                    src={user.picture || `https://ui-avatars.com/api/?name=${user.name || user.email}`} 
+                    alt="Profile" 
+                    className="user-avatar"
+                  />
+                </button>
                 <button onClick={handleAuthClick} className="nav-btn logout-btn">
                   Sign Out
                 </button>
@@ -60,9 +64,14 @@ export default function Header() {
               <a href="#faq" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
               <a href="#book" onClick={() => setMobileMenuOpen(false)}>Contact</a>
               {user ? (
-                <button onClick={() => { handleAuthClick(); setMobileMenuOpen(false); }} className="nav-btn-mobile logout-btn">
-                  Sign Out
-                </button>
+                <>
+                  <button onClick={() => { setShowProfile(true); setMobileMenuOpen(false); }} className="nav-btn-mobile">
+                    My Profile
+                  </button>
+                  <button onClick={() => { handleAuthClick(); setMobileMenuOpen(false); }} className="nav-btn-mobile logout-btn">
+                    Sign Out
+                  </button>
+                </>
               ) : (
                 <button onClick={() => { setShowLogin(true); setMobileMenuOpen(false); }} className="nav-btn-mobile">
                   Sign In
@@ -74,6 +83,7 @@ export default function Header() {
       </header>
       
       {showLogin && <Login onClose={() => setShowLogin(false)} />}
+      {showProfile && <Profile onClose={() => setShowProfile(false)} />}
     </>
   )
 }
