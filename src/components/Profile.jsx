@@ -231,10 +231,16 @@ export default function Profile({ onClose }) {
     if (deleteConfirmText !== 'DELETE') return
     
     try {
-      // Try to delete from API
-      await fetch(`/api/profile?userId=${user.id}`, {
-        method: 'DELETE'
-      }).catch(() => {})
+      // SECURITY: Include email confirmation for deletion
+      const response = await fetch(
+        `/api/profile?userId=${user.id}&confirmEmail=${encodeURIComponent(user.email)}`, 
+        { method: 'DELETE' }
+      )
+      if (!response.ok) {
+        const data = await response.json()
+        alert(data.error || 'Failed to delete account')
+        return
+      }
     } catch (e) {
       console.log('API delete failed, continuing with local cleanup')
     }

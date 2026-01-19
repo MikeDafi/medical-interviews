@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // Manage resources
+  // Manage resources for a user
   if (action === 'resources') {
     if (req.method === 'POST') {
       const { userId, title, url, description, type } = req.body
@@ -44,9 +44,19 @@ export default async function handler(req, res) {
       }
 
       try {
+        // Add resource to user's resources JSONB array
         await sql`
-          INSERT INTO resources (user_id, title, url, description, resource_type, is_global, added_by_admin)
-          VALUES (${userId}, ${title}, ${url}, ${description || null}, ${type || 'article'}, false, true)
+          UPDATE users 
+          SET resources = COALESCE(resources, '[]'::jsonb) || ${JSON.stringify({
+            id: Date.now(),
+            title,
+            url,
+            description: description || '',
+            resource_type: type || 'article',
+            added_by_admin: true,
+            created_at: new Date().toISOString()
+          })}::jsonb
+          WHERE id = ${userId}
         `
         return res.status(201).json({ success: true, message: 'Resource added' })
       } catch (error) {
@@ -56,14 +66,20 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      const { id } = req.query
+      const { userId, resourceId } = req.query
 
-      if (!id) {
-        return res.status(400).json({ error: 'Resource ID required' })
+      if (!userId || !resourceId) {
+        return res.status(400).json({ error: 'userId and resourceId required' })
       }
 
       try {
-        await sql`DELETE FROM resources WHERE id = ${id}`
+        // Remove resource from user's resources JSONB array by id
+        const user = await sql`SELECT resources FROM users WHERE id = ${userId}`
+        if (user.rows.length > 0) {
+          const resources = user.rows[0].resources || []
+          const filteredResources = resources.filter(r => r.id !== parseInt(resourceId))
+          await sql`UPDATE users SET resources = ${JSON.stringify(filteredResources)}::jsonb WHERE id = ${userId}`
+        }
         return res.status(200).json({ success: true, message: 'Resource removed' })
       } catch (error) {
         console.error('Error removing resource:', error)
@@ -82,45 +98,47 @@ export default async function handler(req, res) {
   const { sortBy = 'created_at', sortOrder = 'desc' } = req.query
 
   try {
-    const validSortFields = ['created_at', 'sessions_remaining', 'total_bookings', 'last_booking', 'name', 'email']
-    const validOrders = ['asc', 'desc']
-    
-    const safeSortBy = validSortFields.includes(sortBy) ? sortBy : 'created_at'
-    const safeSortOrder = validOrders.includes(sortOrder.toLowerCase()) ? sortOrder.toLowerCase() : 'desc'
-
     const usersQuery = await sql`
       SELECT 
-        u.id, u.google_id, u.email, u.name, u.picture, u.phone,
-        u.profile_complete, u.current_level, u.is_admin, u.created_at,
-        COALESCE((SELECT SUM(up.sessions_total - up.sessions_used) 
-                  FROM user_packages up WHERE up.user_id = u.id AND up.status = 'active'), 0) as sessions_remaining,
-        COALESCE((SELECT COUNT(*) FROM bookings b WHERE b.user_id = u.id), 0) as total_bookings,
-        (SELECT MAX(b.booking_date) FROM bookings b WHERE b.user_id = u.id) as last_booking
-      FROM users u
-      ORDER BY u.created_at DESC
+        id, google_id, email, name, picture, phone,
+        application_stage, main_concerns, target_schools,
+        purchases, resources, profile_complete, is_admin, 
+        created_at, updated_at
+      FROM users
+      ORDER BY created_at DESC
     `
 
-    const usersWithDetails = await Promise.all(usersQuery.rows.map(async (user) => {
-      const schools = await sql`
-        SELECT school_name, interview_type, interview_date, priority
-        FROM target_schools WHERE user_id = ${user.id} ORDER BY priority, interview_date
-      `
-      const bookings = await sql`
-        SELECT booking_date, booking_time, status
-        FROM bookings WHERE user_id = ${user.id} ORDER BY booking_date DESC, booking_time DESC LIMIT 5
-      `
-      const resources = await sql`
-        SELECT id, title, url, description, resource_type, added_by_admin
-        FROM resources WHERE user_id = ${user.id} OR is_global = true ORDER BY created_at DESC
-      `
+    // Process users to calculate sessions remaining from purchases
+    const usersWithDetails = usersQuery.rows.map(user => {
+      const purchases = user.purchases || []
+      const targetSchools = user.target_schools || []
+      const resources = user.resources || []
       
+      // Calculate sessions remaining from purchases
+      let sessionsRemaining = 0
+      let totalBookings = 0
+      purchases.forEach(p => {
+        sessionsRemaining += (p.sessions_total || 0) - (p.sessions_used || 0)
+        totalBookings += (p.sessions_used || 0)
+      })
+
       return {
         ...user,
-        target_schools: schools.rows,
-        recent_bookings: bookings.rows,
-        resources: resources.rows
+        sessions_remaining: sessionsRemaining,
+        total_bookings: totalBookings,
+        target_schools: targetSchools,
+        resources: resources.map(r => ({
+          ...r,
+          id: r.id || Date.now()
+        }))
       }
-    }))
+    })
+
+    // Sort based on computed fields
+    const validSortFields = ['created_at', 'sessions_remaining', 'total_bookings', 'name', 'email']
+    const validOrders = ['asc', 'desc']
+    const safeSortBy = validSortFields.includes(sortBy) ? sortBy : 'created_at'
+    const safeSortOrder = validOrders.includes(sortOrder?.toLowerCase()) ? sortOrder.toLowerCase() : 'desc'
 
     if (safeSortBy === 'sessions_remaining') {
       usersWithDetails.sort((a, b) => {
@@ -137,7 +155,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ users: usersWithDetails })
   } catch (error) {
     console.error('Error fetching users:', error)
-    return res.status(500).json({ error: 'Failed to fetch users' })
+    return res.status(500).json({ error: 'Failed to fetch users', details: error.message })
   }
 }
-

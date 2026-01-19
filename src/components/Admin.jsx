@@ -77,7 +77,7 @@ export default function Admin() {
     if (!confirm('Remove this resource?')) return
 
     try {
-      const response = await fetch(`/api/admin?action=resources&id=${resourceId}`, {
+      const response = await fetch(`/api/admin?action=resources&userId=${expandedUser}&resourceId=${resourceId}`, {
         method: 'DELETE'
       })
 

@@ -1,8 +1,9 @@
-import Stripe from 'stripe'
+import Stripe from 'stripe';
+import { rateLimit } from '../lib/auth.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// Package definitions with Stripe price IDs (use test mode IDs)
+// Package definitions with Stripe price IDs
 const PACKAGES = {
   trial: {
     name: '30 Min Trial Session',
@@ -32,22 +33,58 @@ const PACKAGES = {
     sessions: 5,
     type: 'regular'
   }
-}
+};
+
+// SECURITY: Whitelist of allowed origins
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://premedical1on1.vercel.app',
+  // Add your production domain here
+];
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // SECURITY: Rate limiting
+  const clientIP = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+  const { allowed } = rateLimit(clientIP, 10, 60000); // 10 checkout attempts per minute
+  if (!allowed) {
+    return res.status(429).json({ error: 'Too many requests' });
+  }
+
+  // SECURITY: Validate Stripe key is configured
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.error('STRIPE_SECRET_KEY not configured');
+    return res.status(500).json({ error: 'Payment not configured' });
   }
 
   try {
-    const { packageId, userId, userEmail } = req.body
+    const { packageId, userId, userEmail } = req.body;
 
+    // SECURITY: Validate package ID against whitelist
     if (!packageId || !PACKAGES[packageId]) {
-      return res.status(400).json({ error: 'Invalid package' })
+      return res.status(400).json({ error: 'Invalid package' });
     }
 
-    const pkg = PACKAGES[packageId]
-    const origin = req.headers.origin || 'http://localhost:5173'
+    // SECURITY: Validate email format if provided
+    if (userEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // SECURITY: Validate and sanitize origin
+    const origin = req.headers.origin;
+    let safeOrigin = 'http://localhost:3000'; // Default fallback
+    
+    if (origin && ALLOWED_ORIGINS.some(allowed => origin.startsWith(allowed))) {
+      safeOrigin = origin;
+    } else if (process.env.VERCEL_URL) {
+      safeOrigin = `https://${process.env.VERCEL_URL}`;
+    }
+
+    const pkg = PACKAGES[packageId];
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
@@ -66,8 +103,8 @@ export default async function handler(req, res) {
         },
       ],
       mode: 'payment',
-      success_url: `${origin}?payment=success&session_id={CHECKOUT_SESSION_ID}&package=${packageId}`,
-      cancel_url: `${origin}?payment=cancelled`,
+      success_url: `${safeOrigin}?payment=success&session_id={CHECKOUT_SESSION_ID}&package=${packageId}`,
+      cancel_url: `${safeOrigin}?payment=cancelled`,
       customer_email: userEmail || undefined,
       metadata: {
         packageId,
@@ -75,15 +112,15 @@ export default async function handler(req, res) {
         sessions: pkg.sessions,
         type: pkg.type
       },
-    })
+    });
 
     res.status(200).json({ 
       sessionId: session.id,
       url: session.url 
-    })
+    });
   } catch (error) {
-    console.error('Stripe error:', error)
-    res.status(500).json({ error: error.message })
+    console.error('Stripe error:', error);
+    // SECURITY: Don't leak error details
+    res.status(500).json({ error: 'Payment initialization failed' });
   }
 }
-

@@ -5,6 +5,21 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // SECURITY: Only allow initialization with a secret key
+  // This prevents anyone from running init on production
+  const initSecret = req.headers['x-init-secret'] || req.body?.initSecret;
+  const expectedSecret = process.env.DB_INIT_SECRET;
+  
+  // In production, require the secret. In development, allow without it.
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+    if (!expectedSecret) {
+      return res.status(500).json({ error: 'DB_INIT_SECRET not configured' });
+    }
+    if (initSecret !== expectedSecret) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+  }
+
   try {
     // Create users table (includes profile + purchases)
     await sql`
@@ -77,6 +92,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ message: 'Database initialized successfully' });
   } catch (error) {
     console.error('Database initialization error:', error);
-    return res.status(500).json({ error: error.message });
+    // SECURITY: Don't leak error details in production
+    return res.status(500).json({ error: 'Database initialization failed' });
   }
 }
