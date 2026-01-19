@@ -1,10 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useAuth } from '../context/AuthContext'
 import RecentBookings from './RecentBookings'
 
 export default function Calendar() {
+  const { user } = useAuth()
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTime, setSelectedTime] = useState(null)
   const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [sessionCredits, setSessionCredits] = useState({
+    trial: 0,
+    regular: 0,
+    loading: true
+  })
 
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 
@@ -14,6 +21,51 @@ export default function Calendar() {
     '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
     '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'
   ]
+
+  useEffect(() => {
+    if (user) {
+      fetchSessionCredits()
+    } else {
+      setSessionCredits({ trial: 0, regular: 0, loading: false })
+    }
+  }, [user])
+
+  const fetchSessionCredits = async () => {
+    try {
+      // Try localStorage first
+      const localCredits = localStorage.getItem('sessionCredits')
+      if (localCredits) {
+        setSessionCredits({ ...JSON.parse(localCredits), loading: false })
+      }
+
+      // Try API
+      const response = await fetch(`/api/profile?userId=${user.id}`)
+      if (response.ok) {
+        const data = await response.json()
+        const packages = data.profile?.user_packages || []
+        
+        let trial = 0
+        let regular = 0
+        
+        packages.forEach(pkg => {
+          const remaining = pkg.sessions_total - pkg.sessions_used
+          if (pkg.name?.includes('Trial') || pkg.duration_minutes === 30) {
+            trial += remaining
+          } else {
+            regular += remaining
+          }
+        })
+        
+        setSessionCredits({ trial, regular, loading: false })
+        localStorage.setItem('sessionCredits', JSON.stringify({ trial, regular }))
+      } else {
+        setSessionCredits(prev => ({ ...prev, loading: false }))
+      }
+    } catch (error) {
+      console.log('Could not fetch session credits')
+      setSessionCredits(prev => ({ ...prev, loading: false }))
+    }
+  }
 
   const getDaysInMonth = (date) => {
     const year = date.getFullYear()
@@ -72,12 +124,47 @@ export default function Calendar() {
     return `${months[selectedDate.getMonth()]} ${selectedDate.getDate()}, ${selectedDate.getFullYear()}`
   }
 
+  const totalSessions = sessionCredits.trial + sessionCredits.regular
+
   return (
     <section className="calendar-section" id="book">
       <div className="section-header">
         <h2>Book Your Session</h2>
         <p>Select a date and time that works for you</p>
       </div>
+
+      {/* Session Credits Display */}
+      {user && (
+        <div className="session-credits">
+          <div className="credits-card">
+            <div className="credit-item">
+              <span className="credit-count">{sessionCredits.trial}</span>
+              <span className="credit-label">Trial Sessions</span>
+            </div>
+            <div className="credit-divider"></div>
+            <div className="credit-item">
+              <span className="credit-count">{sessionCredits.regular}</span>
+              <span className="credit-label">Regular Sessions</span>
+            </div>
+            <div className="credit-divider"></div>
+            <div className="credit-item total">
+              <span className="credit-count">{totalSessions}</span>
+              <span className="credit-label">Total Available</span>
+            </div>
+          </div>
+          {totalSessions === 0 && !sessionCredits.loading && (
+            <p className="no-credits-msg">
+              No sessions remaining. <a href="#packages">Purchase a package</a> to book.
+            </p>
+          )}
+        </div>
+      )}
+
+      {!user && (
+        <div className="session-credits">
+          <p className="sign-in-prompt">Sign in to see your available sessions and book</p>
+        </div>
+      )}
 
       <div className="calendar-container">
         <div className="calendar-card">
@@ -144,9 +231,17 @@ export default function Calendar() {
           {selectedDate && selectedTime && (
             <div className="booking-summary">
               <p><strong>Selected:</strong> {formatSelectedDate()} at {selectedTime}</p>
-              <button className="confirm-booking-btn">
-                Confirm Booking
-              </button>
+              {user && totalSessions > 0 ? (
+                <button className="confirm-booking-btn">
+                  Confirm Booking
+                </button>
+              ) : user ? (
+                <a href="#packages" className="confirm-booking-btn purchase-btn">
+                  Purchase Sessions
+                </a>
+              ) : (
+                <p className="booking-sign-in">Sign in to confirm your booking</p>
+              )}
             </div>
           )}
         </div>
