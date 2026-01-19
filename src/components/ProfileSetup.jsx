@@ -4,9 +4,10 @@ export default function ProfileSetup({ user, onComplete }) {
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
     phone: '',
-    interviewExperience: '',
+    applicationStage: '',
     targetSchools: [{ name: '', interviewType: 'MMI', interviewDate: '', priority: 1 }],
-    currentConcerns: ''
+    currentConcerns: '',
+    resources: [{ title: '', url: '' }]
   })
   const [loading, setLoading] = useState(false)
 
@@ -33,6 +34,28 @@ export default function ProfileSetup({ user, onComplete }) {
       setFormData(prev => ({
         ...prev,
         targetSchools: prev.targetSchools.filter((_, i) => i !== index)
+      }))
+    }
+  }
+
+  const handleResourceChange = (index, field, value) => {
+    const updated = [...formData.resources]
+    updated[index][field] = value
+    setFormData(prev => ({ ...prev, resources: updated }))
+  }
+
+  const addResource = () => {
+    setFormData(prev => ({
+      ...prev,
+      resources: [...prev.resources, { title: '', url: '' }]
+    }))
+  }
+
+  const removeResource = (index) => {
+    if (formData.resources.length > 1) {
+      setFormData(prev => ({
+        ...prev,
+        resources: prev.resources.filter((_, i) => i !== index)
       }))
     }
   }
@@ -74,13 +97,15 @@ export default function ProfileSetup({ user, onComplete }) {
             <div className={`progress-step ${step >= 2 ? 'active' : ''}`}>2</div>
             <div className="progress-line"></div>
             <div className={`progress-step ${step >= 3 ? 'active' : ''}`}>3</div>
+            <div className="progress-line"></div>
+            <div className={`progress-step ${step >= 4 ? 'active' : ''}`}>4</div>
           </div>
         </div>
 
         <div className="setup-content">
           {step === 1 && (
             <div className="setup-step">
-              <h3>Basic Info</h3>
+              <h3>About You</h3>
               
               <div className="form-group">
                 <label>Phone Number (optional)</label>
@@ -94,17 +119,19 @@ export default function ProfileSetup({ user, onComplete }) {
               </div>
 
               <div className="form-group">
-                <label>Interview Experience</label>
+                <label>Where are you in your application?</label>
                 <select
-                  name="interviewExperience"
-                  value={formData.interviewExperience}
+                  name="applicationStage"
+                  value={formData.applicationStage}
                   onChange={handleInputChange}
                 >
-                  <option value="">Select your experience level</option>
-                  <option value="none">No interview experience yet</option>
-                  <option value="some">Done a few practice interviews</option>
-                  <option value="moderate">Had real interviews before</option>
-                  <option value="extensive">Extensive interview experience</option>
+                  <option value="">Select your stage</option>
+                  <option value="pre-med-freshman">Pre-med (Freshman/Sophomore)</option>
+                  <option value="pre-med-junior">Pre-med (Junior/Senior)</option>
+                  <option value="gap-year">Gap year / Post-bacc</option>
+                  <option value="applying">Currently applying this cycle</option>
+                  <option value="interviews-scheduled">Have interviews scheduled</option>
+                  <option value="reapplicant">Reapplicant</option>
                 </select>
               </div>
 
@@ -173,6 +200,52 @@ export default function ProfileSetup({ user, onComplete }) {
 
           {step === 3 && (
             <div className="setup-step">
+              <h3>Helpful Resources</h3>
+              <p className="step-description">Share any resources you've been using (articles, videos, school pages) so I can understand your prep approach</p>
+
+              <div className="resources-form-list">
+                {formData.resources.map((resource, index) => (
+                  <div className="resource-entry" key={index}>
+                    <input
+                      type="text"
+                      placeholder="Resource name (e.g., UCLA interview tips)"
+                      value={resource.title}
+                      onChange={(e) => handleResourceChange(index, 'title', e.target.value)}
+                    />
+                    <div className="resource-url-row">
+                      <input
+                        type="url"
+                        placeholder="https://..."
+                        value={resource.url}
+                        onChange={(e) => handleResourceChange(index, 'url', e.target.value)}
+                      />
+                      {formData.resources.length > 1 && (
+                        <button className="remove-school-btn" onClick={() => removeResource(index)}>
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button className="add-school-btn" onClick={addResource}>
+                + Add Another Resource
+              </button>
+
+              <div className="setup-buttons">
+                <button className="setup-btn-secondary" onClick={() => setStep(2)}>
+                  Back
+                </button>
+                <button className="setup-btn" onClick={() => setStep(4)}>
+                  Continue
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="setup-step">
               <h3>What are your main concerns?</h3>
               <p className="step-description">This helps me focus on what matters most to you</p>
 
@@ -187,7 +260,7 @@ export default function ProfileSetup({ user, onComplete }) {
               </div>
 
               <div className="setup-buttons">
-                <button className="setup-btn-secondary" onClick={() => setStep(2)}>
+                <button className="setup-btn-secondary" onClick={() => setStep(3)}>
                   Back
                 </button>
                 <button className="setup-btn" onClick={handleSubmit} disabled={loading}>

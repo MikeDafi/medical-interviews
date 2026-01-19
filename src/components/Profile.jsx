@@ -8,6 +8,8 @@ export default function Profile({ onClose }) {
   const [bookings, setBookings] = useState({ upcoming: [], past: [] })
   const [resources, setResources] = useState([])
   const [loading, setLoading] = useState(true)
+  const [newResource, setNewResource] = useState({ title: '', url: '' })
+  const [showAddResource, setShowAddResource] = useState(false)
 
   useEffect(() => {
     fetchProfileData()
@@ -15,18 +17,30 @@ export default function Profile({ onClose }) {
 
   const fetchProfileData = async () => {
     try {
-      // Fetch profile, bookings, and resources in parallel
+      // Try to get from localStorage first
+      const localProfile = localStorage.getItem('profileData')
+      if (localProfile) {
+        const parsed = JSON.parse(localProfile)
+        setProfileData({
+          ...parsed,
+          application_stage: parsed.applicationStage,
+          target_schools: parsed.targetSchools?.map(s => ({ school_name: s.name, interview_type: s.interviewType, interview_date: s.interviewDate })) || []
+        })
+        setResources(parsed.resources?.filter(r => r.title && r.url) || [])
+      }
+
+      // Also try API
       const [profileRes, bookingsRes, resourcesRes] = await Promise.all([
-        fetch(`/api/profile?userId=${user.id}`),
-        fetch(`/api/bookings?userId=${user.id}`),
-        fetch(`/api/resources?userId=${user.id}`)
+        fetch(`/api/profile?userId=${user.id}`).catch(() => null),
+        fetch(`/api/bookings?userId=${user.id}`).catch(() => null),
+        fetch(`/api/resources?userId=${user.id}`).catch(() => null)
       ])
 
-      if (profileRes.ok) {
+      if (profileRes?.ok) {
         const data = await profileRes.json()
         setProfileData(data.profile)
       }
-      if (bookingsRes.ok) {
+      if (bookingsRes?.ok) {
         const data = await bookingsRes.json()
         const now = new Date()
         setBookings({
@@ -34,9 +48,11 @@ export default function Profile({ onClose }) {
           past: data.bookings?.filter(b => new Date(b.booking_date) < now || b.status === 'completed') || []
         })
       }
-      if (resourcesRes.ok) {
+      if (resourcesRes?.ok) {
         const data = await resourcesRes.json()
-        setResources(data.resources || [])
+        if (data.resources?.length > 0) {
+          setResources(data.resources)
+        }
       }
     } catch (error) {
       console.error('Error fetching profile data:', error)
@@ -44,15 +60,72 @@ export default function Profile({ onClose }) {
     setLoading(false)
   }
 
-  const getLevelProgress = () => {
-    const levels = { beginner: 33, intermediate: 66, advanced: 100 }
-    return levels[profileData?.current_level] || 33
+  const getStageLabel = (stage) => {
+    const stages = {
+      'pre-med-freshman': 'Pre-med (Early)',
+      'pre-med-junior': 'Pre-med (Upper)',
+      'gap-year': 'Gap Year / Post-bacc',
+      'applying': 'Applying This Cycle',
+      'interviews-scheduled': 'Interviews Scheduled',
+      'reapplicant': 'Reapplicant'
+    }
+    return stages[stage] || 'Getting Started'
+  }
+
+  const getStageProgress = () => {
+    const stages = {
+      'pre-med-freshman': 20,
+      'pre-med-junior': 35,
+      'gap-year': 50,
+      'applying': 65,
+      'interviews-scheduled': 85,
+      'reapplicant': 50
+    }
+    return stages[profileData?.application_stage] || 20
   }
 
   const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString('en-US', { 
       weekday: 'short', month: 'short', day: 'numeric' 
     })
+  }
+
+  const handleBookNow = () => {
+    onClose()
+    setTimeout(() => {
+      document.getElementById('book')?.scrollIntoView({ behavior: 'smooth' })
+    }, 100)
+  }
+
+  const handleAddResource = async () => {
+    if (!newResource.title || !newResource.url) return
+    
+    const updatedResources = [...resources, { ...newResource, id: Date.now() }]
+    setResources(updatedResources)
+    
+    // Save to localStorage
+    const localProfile = JSON.parse(localStorage.getItem('profileData') || '{}')
+    localProfile.resources = updatedResources
+    localStorage.setItem('profileData', JSON.stringify(localProfile))
+    
+    // Try to save to API
+    try {
+      await fetch('/api/resources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          title: newResource.title,
+          url: newResource.url,
+          resourceType: 'link'
+        })
+      })
+    } catch (e) {
+      console.log('Saved locally')
+    }
+    
+    setNewResource({ title: '', url: '' })
+    setShowAddResource(false)
   }
 
   if (loading) {
@@ -84,7 +157,7 @@ export default function Profile({ onClose }) {
           <div className="profile-info">
             <h2>{user.name}</h2>
             <p>{user.email}</p>
-            <span className="profile-level">{profileData?.current_level || 'Beginner'} Level</span>
+            <span className="profile-level">{getStageLabel(profileData?.application_stage)}</span>
           </div>
         </div>
 
@@ -122,16 +195,12 @@ export default function Profile({ onClose }) {
             <div className="tab-overview">
               {/* Progress Card */}
               <div className="overview-card">
-                <h4>Your Progress</h4>
+                <h4>Application Journey</h4>
                 <div className="progress-track">
-                  <div className="progress-labels">
-                    <span className={profileData?.current_level === 'beginner' ? 'active' : ''}>Beginner</span>
-                    <span className={profileData?.current_level === 'intermediate' ? 'active' : ''}>Intermediate</span>
-                    <span className={profileData?.current_level === 'advanced' ? 'active' : ''}>Advanced</span>
-                  </div>
                   <div className="progress-bar">
-                    <div className="progress-fill" style={{ width: `${getLevelProgress()}%` }}></div>
+                    <div className="progress-fill" style={{ width: `${getStageProgress()}%` }}></div>
                   </div>
+                  <p className="progress-stage">{getStageLabel(profileData?.application_stage)}</p>
                 </div>
               </div>
 
@@ -206,7 +275,7 @@ export default function Profile({ onClose }) {
                     ))}
                   </div>
                 ) : (
-                  <p className="no-bookings">No upcoming sessions. <a href="#book">Book one now!</a></p>
+                  <p className="no-bookings">No upcoming sessions. <button className="link-btn" onClick={handleBookNow}>Book one now!</button></p>
                 )}
               </div>
 
@@ -255,30 +324,49 @@ export default function Profile({ onClose }) {
               ) : (
                 <p className="no-schools">No target schools added yet.</p>
               )}
-              <button className="add-school-btn">+ Add School</button>
             </div>
           )}
 
           {activeTab === 'resources' && (
             <div className="tab-resources">
-              <h4>Your Resources</h4>
+              <div className="resources-header">
+                <h4>Your Resources</h4>
+                <button className="add-resource-btn" onClick={() => setShowAddResource(!showAddResource)}>
+                  {showAddResource ? 'Cancel' : '+ Add Resource'}
+                </button>
+              </div>
+
+              {showAddResource && (
+                <div className="add-resource-form">
+                  <input
+                    type="text"
+                    placeholder="Resource name"
+                    value={newResource.title}
+                    onChange={(e) => setNewResource(prev => ({ ...prev, title: e.target.value }))}
+                  />
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={newResource.url}
+                    onChange={(e) => setNewResource(prev => ({ ...prev, url: e.target.value }))}
+                  />
+                  <button className="save-resource-btn" onClick={handleAddResource}>
+                    Save Resource
+                  </button>
+                </div>
+              )}
+
               {resources.length > 0 ? (
                 <div className="resources-list">
-                  {resources.map(resource => (
+                  {resources.map((resource, index) => (
                     <a 
                       href={resource.url} 
                       className="resource-card" 
-                      key={resource.id}
+                      key={resource.id || index}
                       target="_blank" 
                       rel="noopener noreferrer"
                     >
-                      <div className="resource-icon">
-                        {resource.resource_type === 'video' && '🎥'}
-                        {resource.resource_type === 'article' && '📄'}
-                        {resource.resource_type === 'document' && '📋'}
-                        {resource.resource_type === 'practice_question' && '❓'}
-                        {!resource.resource_type && '🔗'}
-                      </div>
+                      <div className="resource-icon">🔗</div>
                       <div className="resource-info">
                         <span className="resource-title">{resource.title}</span>
                         {resource.description && (
@@ -292,7 +380,7 @@ export default function Profile({ onClose }) {
                   ))}
                 </div>
               ) : (
-                <p className="no-resources">No resources shared yet. Resources from your sessions will appear here.</p>
+                <p className="no-resources">No resources added yet. Add links to articles, videos, or school pages you've been using.</p>
               )}
             </div>
           )}
@@ -301,4 +389,3 @@ export default function Profile({ onClose }) {
     </div>
   )
 }
-
