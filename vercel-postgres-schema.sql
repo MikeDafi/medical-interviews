@@ -14,9 +14,13 @@ CREATE TABLE IF NOT EXISTS users (
   interview_experience TEXT,
   strengths TEXT,
   areas_to_improve TEXT,
+  is_admin BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- To make a user an admin, run:
+-- UPDATE users SET is_admin = TRUE WHERE email = 'your-email@example.com';
 
 -- Target schools table
 CREATE TABLE IF NOT EXISTS target_schools (
@@ -98,6 +102,7 @@ CREATE TABLE IF NOT EXISTS resources (
   description TEXT,
   resource_type VARCHAR(50), -- 'video', 'article', 'document', 'practice_question'
   is_global BOOLEAN DEFAULT FALSE, -- if true, visible to all users
+  added_by_admin BOOLEAN DEFAULT FALSE, -- if true, added by admin
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -38,7 +38,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const { userId, packageId, bookingDate, bookingTime, notes } = req.body;
+      const { userId, packageId, bookingDate, bookingTime, notes, userName, userEmail } = req.body;
 
       // Check if time slot is available
       const existing = await sql`
@@ -57,6 +57,29 @@ export default async function handler(req, res) {
         VALUES (${userId}, ${packageId}, ${bookingDate}, ${bookingTime}, ${notes})
         RETURNING *
       `;
+
+      // Send notification to admins (non-blocking)
+      try {
+        const baseUrl = process.env.VERCEL_URL 
+          ? `https://${process.env.VERCEL_URL}` 
+          : 'http://localhost:3000';
+        
+        fetch(`${baseUrl}/api/notifications/booking`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingDetails: {
+              date: bookingDate,
+              time: bookingTime,
+              sessionType: notes
+            },
+            userName,
+            userEmail
+          })
+        }).catch(err => console.log('Notification failed (non-critical):', err.message));
+      } catch (notifyError) {
+        console.log('Could not send notification:', notifyError.message);
+      }
 
       return res.status(201).json({ booking: result.rows[0] });
     } catch (error) {

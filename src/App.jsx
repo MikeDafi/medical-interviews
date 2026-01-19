@@ -1,4 +1,5 @@
 import './App.css'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Header from './components/Header'
@@ -14,11 +15,10 @@ import Calendar from './components/Calendar'
 import Footer from './components/Footer'
 import RecentBookingNotification from './components/RecentBookingNotification'
 import ProfileSetup from './components/ProfileSetup'
-import MouseTrail from './components/MouseTrail'
+import PaymentStatus from './components/PaymentStatus'
+import Admin from './components/Admin'
 
-function AppContent() {
-  const { user, showProfileSetup, completeProfileSetup } = useAuth()
-
+function HomePage() {
   return (
     <>
       <div className="app">
@@ -54,7 +54,21 @@ function AppContent() {
       </div>
 
       <RecentBookingNotification />
-      <MouseTrail />
+      <PaymentStatus />
+    </>
+  )
+}
+
+function AppContent() {
+  const { user, showProfileSetup, completeProfileSetup } = useAuth()
+
+  return (
+    <>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/admin" element={<Admin />} />
+      </Routes>
+      
       <Analytics />
       
       {user && showProfileSetup && (
@@ -66,9 +80,11 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </BrowserRouter>
   )
 }
 

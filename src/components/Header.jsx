@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Login from './Login'
 import Profile from './Profile'
@@ -7,15 +8,7 @@ export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
-  const { user, signOut } = useAuth()
-
-  const handleAuthClick = () => {
-    if (user) {
-      signOut()
-    } else {
-      setShowLogin(true)
-    }
-  }
+  const { user, isAdmin } = useAuth()
 
   return (
     <>
@@ -27,21 +20,26 @@ export default function Header() {
             <a href="#about" className="nav-link">About</a>
             <a href="#faq" className="nav-link">FAQ</a>
             <a href="#book" className="nav-link">Contact</a>
+            {isAdmin && (
+              <Link to="/admin" className="nav-link admin-link">
+                Admin
+              </Link>
+            )}
             {user ? (
-              <div className="user-menu">
-                <button className="user-avatar-btn" onClick={() => setShowProfile(true)}>
-                  <img 
-                    src={user.picture || `https://ui-avatars.com/api/?name=${user.name || user.email}`} 
-                    alt="Profile" 
-                    className="user-avatar"
-                  />
-                </button>
-                <button onClick={handleAuthClick} className="nav-btn logout-btn">
-                  Sign Out
-                </button>
-              </div>
+              <button className="user-avatar-btn" onClick={() => setShowProfile(true)}>
+                <img 
+                  src={user.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=0d9488&color=fff`} 
+                  alt="Profile" 
+                  className="user-avatar"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    e.target.onerror = null
+                    e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=0d9488&color=fff`
+                  }}
+                />
+              </button>
             ) : (
-              <button onClick={handleAuthClick} className="nav-btn">
+              <button onClick={() => setShowLogin(true)} className="nav-btn">
                 Sign In
               </button>
             )}
@@ -63,15 +61,15 @@ export default function Header() {
               <a href="#about" onClick={() => setMobileMenuOpen(false)}>About</a>
               <a href="#faq" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
               <a href="#book" onClick={() => setMobileMenuOpen(false)}>Contact</a>
+              {isAdmin && (
+                <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className="nav-btn-mobile admin-link-mobile">
+                  Admin Dashboard
+                </Link>
+              )}
               {user ? (
-                <>
-                  <button onClick={() => { setShowProfile(true); setMobileMenuOpen(false); }} className="nav-btn-mobile">
-                    My Profile
-                  </button>
-                  <button onClick={() => { handleAuthClick(); setMobileMenuOpen(false); }} className="nav-btn-mobile logout-btn">
-                    Sign Out
-                  </button>
-                </>
+                <button onClick={() => { setShowProfile(true); setMobileMenuOpen(false); }} className="nav-btn-mobile">
+                  My Profile
+                </button>
               ) : (
                 <button onClick={() => { setShowLogin(true); setMobileMenuOpen(false); }} className="nav-btn-mobile">
                   Sign In

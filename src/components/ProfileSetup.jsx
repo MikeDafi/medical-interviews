@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+const MAX_CONCERNS_LENGTH = 500
+
 export default function ProfileSetup({ user, onComplete }) {
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
@@ -10,9 +12,28 @@ export default function ProfileSetup({ user, onComplete }) {
     resources: [{ title: '', url: '' }]
   })
   const [loading, setLoading] = useState(false)
+  const [phoneError, setPhoneError] = useState('')
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
+    
+    // Special handling for phone - only allow numbers
+    if (name === 'phone') {
+      const numbersOnly = value.replace(/[^0-9]/g, '')
+      if (value !== numbersOnly && value !== '') {
+        setPhoneError('Please enter numbers only')
+      } else {
+        setPhoneError('')
+      }
+      setFormData(prev => ({ ...prev, [name]: numbersOnly }))
+      return
+    }
+    
+    // Special handling for concerns - enforce character limit
+    if (name === 'currentConcerns' && value.length > MAX_CONCERNS_LENGTH) {
+      return
+    }
+    
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
@@ -114,8 +135,10 @@ export default function ProfileSetup({ user, onComplete }) {
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
-                  placeholder="For session reminders"
+                  placeholder="For session reminders (numbers only)"
+                  maxLength={15}
                 />
+                {phoneError && <span className="field-error">{phoneError}</span>}
               </div>
 
               <div className="form-group">
@@ -135,7 +158,7 @@ export default function ProfileSetup({ user, onComplete }) {
                 </select>
               </div>
 
-              <button className="setup-btn" onClick={() => setStep(2)}>
+              <button type="button" className="setup-btn" onClick={() => setStep(2)}>
                 Continue
               </button>
             </div>
@@ -146,7 +169,7 @@ export default function ProfileSetup({ user, onComplete }) {
               <h3>Target Schools</h3>
               <p className="step-description">Add the schools you're applying to so I can tailor your prep</p>
 
-              <div className="schools-list">
+              <div className="schools-form-list">
                 {formData.targetSchools.map((school, index) => (
                   <div className="school-entry" key={index}>
                     <div className="school-row">
@@ -166,7 +189,7 @@ export default function ProfileSetup({ user, onComplete }) {
                         <option value="Unknown">Not sure</option>
                       </select>
                       {formData.targetSchools.length > 1 && (
-                        <button className="remove-school-btn" onClick={() => removeSchool(index)}>
+                        <button type="button" className="remove-school-btn" onClick={() => removeSchool(index)}>
                           ×
                         </button>
                       )}
@@ -183,15 +206,15 @@ export default function ProfileSetup({ user, onComplete }) {
                 ))}
               </div>
 
-              <button className="add-school-btn" onClick={addSchool}>
+              <button type="button" className="add-school-btn" onClick={addSchool}>
                 + Add Another School
               </button>
 
               <div className="setup-buttons">
-                <button className="setup-btn-secondary" onClick={() => setStep(1)}>
+                <button type="button" className="setup-btn-secondary" onClick={() => setStep(1)}>
                   Back
                 </button>
-                <button className="setup-btn" onClick={() => setStep(3)}>
+                <button type="button" className="setup-btn" onClick={() => setStep(3)}>
                   Continue
                 </button>
               </div>
@@ -220,7 +243,7 @@ export default function ProfileSetup({ user, onComplete }) {
                         onChange={(e) => handleResourceChange(index, 'url', e.target.value)}
                       />
                       {formData.resources.length > 1 && (
-                        <button className="remove-school-btn" onClick={() => removeResource(index)}>
+                        <button type="button" className="remove-school-btn" onClick={() => removeResource(index)}>
                           ×
                         </button>
                       )}
@@ -229,15 +252,15 @@ export default function ProfileSetup({ user, onComplete }) {
                 ))}
               </div>
 
-              <button className="add-school-btn" onClick={addResource}>
+              <button type="button" className="add-school-btn" onClick={addResource}>
                 + Add Another Resource
               </button>
 
               <div className="setup-buttons">
-                <button className="setup-btn-secondary" onClick={() => setStep(2)}>
+                <button type="button" className="setup-btn-secondary" onClick={() => setStep(2)}>
                   Back
                 </button>
-                <button className="setup-btn" onClick={() => setStep(4)}>
+                <button type="button" className="setup-btn" onClick={() => setStep(4)}>
                   Continue
                 </button>
               </div>
@@ -256,14 +279,22 @@ export default function ProfileSetup({ user, onComplete }) {
                   onChange={handleInputChange}
                   placeholder="e.g., I freeze up when I don't know the answer, I struggle with ethical scenarios, I talk too fast when nervous..."
                   rows={5}
+                  maxLength={MAX_CONCERNS_LENGTH}
+                  className="concerns-textarea"
                 />
+                <div className="char-count">
+                  <span className={formData.currentConcerns.length >= MAX_CONCERNS_LENGTH * 0.9 ? 'char-count-warning' : ''}>
+                    {formData.currentConcerns.length}
+                  </span>
+                  /{MAX_CONCERNS_LENGTH} characters
+                </div>
               </div>
 
               <div className="setup-buttons">
-                <button className="setup-btn-secondary" onClick={() => setStep(3)}>
+                <button type="button" className="setup-btn-secondary" onClick={() => setStep(3)}>
                   Back
                 </button>
-                <button className="setup-btn" onClick={handleSubmit} disabled={loading}>
+                <button type="button" className="setup-btn" onClick={handleSubmit} disabled={loading}>
                   {loading ? 'Saving...' : 'Complete Setup'}
                 </button>
               </div>
@@ -271,7 +302,7 @@ export default function ProfileSetup({ user, onComplete }) {
           )}
         </div>
 
-        <button className="skip-setup" onClick={onComplete}>
+        <button type="button" className="skip-setup" onClick={onComplete}>
           Skip for now
         </button>
       </div>

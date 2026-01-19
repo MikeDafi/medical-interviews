@@ -41,7 +41,7 @@ export default function About() {
         <div className="about-right">
           <div className="about-image-container">
             <img 
-              src="https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=500&h=600&fit=crop" 
+              src="/ashley-kumar.png" 
               alt="Ashley Kumar - Interview Coach"
               className="about-image"
             />

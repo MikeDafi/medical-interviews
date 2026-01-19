@@ -28,17 +28,21 @@ export default function Calendar() {
     } else {
       setSessionCredits({ trial: 0, regular: 0, loading: false })
     }
+    
+    // Listen for payment completed to refresh from DB
+    const handlePaymentCompleted = () => {
+      if (user) {
+        // Small delay to allow webhook to process
+        setTimeout(() => fetchSessionCredits(), 2000)
+      }
+    }
+    
+    window.addEventListener('paymentCompleted', handlePaymentCompleted)
+    return () => window.removeEventListener('paymentCompleted', handlePaymentCompleted)
   }, [user])
 
   const fetchSessionCredits = async () => {
     try {
-      // Try localStorage first
-      const localCredits = localStorage.getItem('sessionCredits')
-      if (localCredits) {
-        setSessionCredits({ ...JSON.parse(localCredits), loading: false })
-      }
-
-      // Try API
       const response = await fetch(`/api/profile?userId=${user.id}`)
       if (response.ok) {
         const data = await response.json()
@@ -57,13 +61,12 @@ export default function Calendar() {
         })
         
         setSessionCredits({ trial, regular, loading: false })
-        localStorage.setItem('sessionCredits', JSON.stringify({ trial, regular }))
       } else {
-        setSessionCredits(prev => ({ ...prev, loading: false }))
+        setSessionCredits({ trial: 0, regular: 0, loading: false })
       }
     } catch (error) {
-      console.log('Could not fetch session credits')
-      setSessionCredits(prev => ({ ...prev, loading: false }))
+      console.log('Could not fetch session credits:', error)
+      setSessionCredits({ trial: 0, regular: 0, loading: false })
     }
   }
 

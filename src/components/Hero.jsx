@@ -1,4 +1,55 @@
+// Row 1: Ivy League + Top Medical Schools - ESPN CDN
+const row1Logos = [
+  // All 8 Ivy League Schools
+  { name: 'Harvard', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/108.png' },
+  { name: 'Yale', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/43.png' },
+  { name: 'Princeton', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/163.png' },
+  { name: 'Columbia', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/171.png' },
+  { name: 'Penn', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/219.png' },
+  { name: 'Brown', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/225.png' },
+  { name: 'Dartmouth', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/159.png' },
+  { name: 'Cornell', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/172.png' },
+  // Top Medical Schools
+  { name: 'Stanford', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/24.png' },
+  { name: 'Duke', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/150.png' },
+  { name: 'Johns Hopkins', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2172.png' },
+  { name: 'Northwestern', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/77.png' },
+  { name: 'UCLA', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/26.png' },
+  { name: 'Michigan', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/130.png' },
+  { name: 'Vanderbilt', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/238.png' },
+  { name: 'UChicago', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2130.png' },
+  { name: 'NYU', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2429.png' },
+  { name: 'Georgetown', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/46.png' },
+  { name: 'Cal Berkeley', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/25.png' },
+  { name: 'Washington', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/264.png' },
+]
+
+// Row 2: More Elite Medical Schools - ESPN CDN
+const row2Logos = [
+  { name: 'Emory', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2197.png' },
+  { name: 'USC', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/30.png' },
+  { name: 'UNC', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/153.png' },
+  { name: 'Virginia', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/258.png' },
+  { name: 'Pittsburgh', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/221.png' },
+  { name: 'Boston University', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/104.png' },
+  { name: 'Case Western', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2086.png' },
+  { name: 'Baylor', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/239.png' },
+  { name: 'Wake Forest', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/154.png' },
+  { name: 'Rice', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/242.png' },
+  { name: 'Tufts', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2610.png' },
+  { name: 'Rochester', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/235.png' },
+  { name: 'Tulane', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2655.png' },
+  { name: 'Boston College', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/103.png' },
+  { name: 'Notre Dame', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/87.png' },
+  { name: 'Wisconsin', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/275.png' },
+  { name: 'Colorado', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/38.png' },
+  { name: 'Ohio State', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/194.png' },
+  { name: 'Florida', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/57.png' },
+  { name: 'Texas', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/251.png' },
+]
+
 export default function Hero() {
+
   return (
     <section className="hero">
       <div className="hero-content">
@@ -32,12 +83,25 @@ export default function Hero() {
         </div>
         
         <div className="hero-right">
-          <div className="hero-image-container">
-            <img 
-              src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=800&h=800&fit=crop" 
-              alt="Medical professional" 
-              className="hero-image"
-            />
+          <div className="hero-logos-container">
+            <div className="logos-row logos-row-1">
+              <div className="logos-track">
+                {[...row1Logos, ...row1Logos].map((logo, index) => (
+                  <div className="logo-item" key={`row1-${index}`}>
+                    <img src={logo.url} alt={logo.name} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="logos-row logos-row-2">
+              <div className="logos-track reverse">
+                {[...row2Logos, ...row2Logos].map((logo, index) => (
+                  <div className="logo-item" key={`row2-${index}`}>
+                    <img src={logo.url} alt={logo.name} />
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="hero-badge">
               <span className="badge-number">100s</span>
               <span className="badge-text">of mock interviews conducted</span>

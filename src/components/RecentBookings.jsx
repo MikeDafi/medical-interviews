@@ -1,10 +1,40 @@
 import { useState, useEffect } from 'react'
 
+// Fallback demo bookings only used if DB is empty AND no cache
+const demoBookings = [
+  { id: 1, first_name: 'Sarah', package_name: '1 Hour Session', created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() },
+  { id: 2, first_name: 'Michael', package_name: 'Package of 3', created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString() },
+  { id: 3, first_name: 'Emily', package_name: '30 Min Trial', created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString() },
+  { id: 4, first_name: 'James', package_name: 'Package of 5', created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
+  { id: 5, first_name: 'Priya', package_name: '1 Hour Session', created_at: new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString() },
+]
+
+const CACHE_KEY = 'recentBookings'
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+
 export default function RecentBookings() {
-  const [bookings, setBookings] = useState([])
+  const [bookings, setBookings] = useState(() => {
+    // Try to load from cache first
+    try {
+      const cached = localStorage.getItem(CACHE_KEY)
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached)
+        if (Date.now() - timestamp < CACHE_DURATION && data.length > 0) {
+          return data
+        }
+      }
+    } catch (e) {
+      // Ignore cache errors
+    }
+    return demoBookings
+  })
 
   useEffect(() => {
     fetchRecentBookings()
+    
+    // Refresh every 5 minutes
+    const interval = setInterval(fetchRecentBookings, CACHE_DURATION)
+    return () => clearInterval(interval)
   }, [])
 
   const fetchRecentBookings = async () => {
@@ -12,11 +42,17 @@ export default function RecentBookings() {
       const response = await fetch('/api/bookings/recent')
       if (response.ok) {
         const data = await response.json()
-        setBookings(data.bookings || [])
+        if (data.bookings && data.bookings.length > 0) {
+          setBookings(data.bookings)
+          // Cache the results
+          localStorage.setItem(CACHE_KEY, JSON.stringify({
+            data: data.bookings,
+            timestamp: Date.now()
+          }))
+        }
       }
     } catch (error) {
-      // No demo data - only show real bookings from DB
-      console.log('No recent bookings to display')
+      console.log('Using cached/demo bookings')
     }
   }
 
@@ -33,7 +69,7 @@ export default function RecentBookings() {
     return `${diffDays}d ago`
   }
 
-  // Don't render anything if no real bookings exist
+  // Always show recent bookings (demo or real)
   if (bookings.length === 0) return null
 
   return (

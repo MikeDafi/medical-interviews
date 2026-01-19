@@ -6,10 +6,16 @@ export default async function handler(req, res) {
       const { userId, googleId } = req.query;
       
       let user;
-      if (userId) {
-        user = await sql`SELECT * FROM users WHERE id = ${userId}`;
-      } else if (googleId) {
+      // userId from frontend is the Google ID
+      if (googleId) {
         user = await sql`SELECT * FROM users WHERE google_id = ${googleId}`;
+      } else if (userId) {
+        // Check if userId looks like a Google ID (long numeric string) or a DB id
+        if (userId.length > 10) {
+          user = await sql`SELECT * FROM users WHERE google_id = ${userId}`;
+        } else {
+          user = await sql`SELECT * FROM users WHERE id = ${parseInt(userId)}`;
+        }
       } else {
         return res.status(400).json({ error: 'userId or googleId required' });
       }
@@ -25,20 +31,21 @@ export default async function handler(req, res) {
         SELECT * FROM target_schools WHERE user_id = ${profile.id} ORDER BY priority
       `;
 
-      // Get active package
-      const activePackage = await sql`
-        SELECT up.*, p.name 
+      // Get ALL user packages (not just one)
+      const userPackages = await sql`
+        SELECT up.*, p.name, p.duration_minutes
         FROM user_packages up
         JOIN packages p ON up.package_id = p.id
         WHERE up.user_id = ${profile.id} AND up.status = 'active'
-        LIMIT 1
+        ORDER BY up.purchase_date DESC
       `;
 
       return res.status(200).json({ 
         profile: {
           ...profile,
           target_schools: schools.rows,
-          active_package: activePackage.rows[0] || null
+          user_packages: userPackages.rows,
+          active_package: userPackages.rows[0] || null
         }
       });
     } catch (error) {

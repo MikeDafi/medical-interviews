@@ -34,6 +34,20 @@ export default async function handler(req, res) {
       )
     `;
 
+    // Create user_packages table (purchased packages with session tracking)
+    await sql`
+      CREATE TABLE IF NOT EXISTS user_packages (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        package_id INTEGER REFERENCES packages(id),
+        sessions_total INTEGER NOT NULL,
+        sessions_used INTEGER DEFAULT 0,
+        purchase_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP,
+        status VARCHAR(50) DEFAULT 'active'
+      )
+    `;
+
     // Create bookings table
     await sql`
       CREATE TABLE IF NOT EXISTS bookings (

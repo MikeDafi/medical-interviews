@@ -1,11 +1,33 @@
 import { useState, useEffect } from 'react'
 
+const CACHE_KEY = 'recentBookings'
+
 export default function RecentBookingNotification() {
   const [notification, setNotification] = useState(null)
   const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {
-    fetchRecentBooking()
+    // Small delay to let the page load, then check cache first
+    const timer = setTimeout(() => {
+      // Try cache first
+      try {
+        const cached = localStorage.getItem(CACHE_KEY)
+        if (cached) {
+          const { data } = JSON.parse(cached)
+          if (data && data.length > 0) {
+            setNotification(data[0])
+            setIsVisible(true)
+            return
+          }
+        }
+      } catch (e) {
+        // Ignore cache errors
+      }
+      // Only fetch if no cache
+      fetchRecentBooking()
+    }, 3000)
+    
+    return () => clearTimeout(timer)
   }, [])
 
   const fetchRecentBooking = async () => {
@@ -16,12 +38,15 @@ export default function RecentBookingNotification() {
         if (data.bookings && data.bookings.length > 0) {
           // Only show the most recent booking
           setNotification(data.bookings[0])
-          // Show notification after a short delay
-          setTimeout(() => setIsVisible(true), 3000)
+          setIsVisible(true)
+          // Cache the results (shared with RecentBookings)
+          localStorage.setItem(CACHE_KEY, JSON.stringify({
+            data: data.bookings,
+            timestamp: Date.now()
+          }))
         }
       }
     } catch (error) {
-      // No demo data - only show real bookings from DB
       console.log('No recent bookings to display')
     }
   }
