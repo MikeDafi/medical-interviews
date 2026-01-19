@@ -54,6 +54,7 @@ function HomePage() {
       </div>
 
       <PaymentStatus />
+      <RecentBookingNotification />
     </>
   )
 }

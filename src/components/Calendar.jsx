@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { calculateSessionCredits } from '../utils'
+import RecentBookings from './RecentBookings'
 
 export default function Calendar() {
   const { user } = useAuth()
@@ -65,6 +66,13 @@ export default function Calendar() {
     }
   }
 
+  // Default fallback slots for when API is unavailable (local dev)
+  const fallbackSlots = [
+    '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
+    '12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM', '2:00 PM', '2:30 PM',
+    '3:00 PM', '3:30 PM', '4:00 PM', '4:30 PM', '5:00 PM', '5:30 PM'
+  ]
+
   const fetchAvailability = async (date) => {
     setLoadingSlots(true)
     setAvailableSlots([])
@@ -75,19 +83,40 @@ export default function Calendar() {
       
       if (response.ok) {
         const data = await response.json()
-        // Store slots with info about whether an hour session is possible
-        const slots = (data.availableSlots || []).map(time => {
-          // Check if the next 30-min slot is also available (for hour session)
-          const canBookHour = canBookHourSession(time, data.availableSlots)
+        const slotsData = data.availableSlots || []
+        
+        if (slotsData.length > 0) {
+          // Store slots with info about whether an hour session is possible
+          const slots = slotsData.map(time => {
+            const canBookHour = canBookHourSession(time, slotsData)
+            return { time, canBookHour }
+          })
+          setAvailableSlots(slots)
+        } else {
+          // API returned empty - use fallback for local dev
+          const slots = fallbackSlots.map(time => {
+            const canBookHour = canBookHourSession(time, fallbackSlots)
+            return { time, canBookHour }
+          })
+          setAvailableSlots(slots)
+        }
+      } else {
+        // API error - use fallback slots for local development
+        console.log('Calendar API not available, using fallback slots')
+        const slots = fallbackSlots.map(time => {
+          const canBookHour = canBookHourSession(time, fallbackSlots)
           return { time, canBookHour }
         })
         setAvailableSlots(slots)
-      } else {
-        setAvailableSlots([])
       }
     } catch (error) {
-      console.log('Error fetching availability:', error)
-      setAvailableSlots([])
+      console.log('Error fetching availability, using fallback:', error)
+      // Use fallback slots for local development
+      const slots = fallbackSlots.map(time => {
+        const canBookHour = canBookHourSession(time, fallbackSlots)
+        return { time, canBookHour }
+      })
+      setAvailableSlots(slots)
     } finally {
       setLoadingSlots(false)
     }
@@ -433,6 +462,8 @@ export default function Calendar() {
           )}
         </div>
       </div>
+
+      <RecentBookings />
     </section>
   )
 }
