@@ -14,6 +14,7 @@ import Calendar from './components/Calendar'
 import Footer from './components/Footer'
 import RecentBookingNotification from './components/RecentBookingNotification'
 import ProfileSetup from './components/ProfileSetup'
+import MouseTrail from './components/MouseTrail'
 
 function AppContent() {
   const { user, showProfileSetup, completeProfileSetup } = useAuth()
@@ -53,6 +54,7 @@ function AppContent() {
       </div>
 
       <RecentBookingNotification />
+      <MouseTrail />
       <Analytics />
       
       {user && showProfileSetup && (
