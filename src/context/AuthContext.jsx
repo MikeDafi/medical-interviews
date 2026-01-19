@@ -52,7 +52,7 @@ export function AuthProvider({ children }) {
     }
 
     try {
-      const response = await fetch(`/api/admin/check?googleId=${userData.id}`)
+      const response = await fetch(`/api/admin?action=check&googleId=${userData.id}`)
       if (response.ok) {
         const data = await response.json()
         setIsAdmin(data.isAdmin || false)
@@ -72,7 +72,7 @@ export function AuthProvider({ children }) {
     }
 
     try {
-      const response = await fetch(`/api/profile?googleId=${userData.id}`)
+      const response = await fetch(`/api/profile?googleId=${userData.id}&email=${encodeURIComponent(userData.email)}`)
       if (response.ok) {
         const data = await response.json()
         if (data.profile?.profile_complete) {

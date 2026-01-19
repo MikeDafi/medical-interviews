@@ -6,48 +6,57 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { userId, phone, interviewExperience, targetSchools, currentConcerns } = req.body;
+    const { googleId, email, name, picture, phone, applicationStage, targetSchools, concerns, resources } = req.body;
 
-    // Update user profile
-    await sql`
-      UPDATE users SET
-        phone = ${phone || null},
-        interview_experience = ${interviewExperience || null},
-        areas_to_improve = ${currentConcerns || null},
-        profile_complete = true,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ${userId} OR google_id = ${userId}
-    `;
-
-    // Get the actual user id if google_id was passed
-    const userResult = await sql`
-      SELECT id FROM users WHERE id = ${userId} OR google_id = ${userId}
-    `;
-    
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+    if (!email) {
+      return res.status(400).json({ error: 'Email required' });
     }
 
-    const dbUserId = userResult.rows[0].id;
+    // Check if user exists
+    let user = await sql`SELECT * FROM users WHERE email = ${email}`;
+    
+    if (user.rows.length === 0 && googleId) {
+      user = await sql`SELECT * FROM users WHERE google_id = ${googleId}`;
+    }
 
-    // Delete existing target schools and add new ones
-    await sql`DELETE FROM target_schools WHERE user_id = ${dbUserId}`;
-
-    // Insert target schools
-    for (let i = 0; i < targetSchools.length; i++) {
-      const school = targetSchools[i];
-      if (school.name) {
-        await sql`
-          INSERT INTO target_schools (user_id, school_name, interview_type, interview_date, priority)
-          VALUES (${dbUserId}, ${school.name}, ${school.interviewType}, ${school.interviewDate || null}, ${i + 1})
-        `;
-      }
+    if (user.rows.length === 0) {
+      // Create new user
+      await sql`
+        INSERT INTO users (google_id, email, name, picture, phone, application_stage, target_schools, main_concerns, resources, profile_complete)
+        VALUES (
+          ${googleId}, 
+          ${email}, 
+          ${name}, 
+          ${picture}, 
+          ${phone}, 
+          ${applicationStage}, 
+          ${JSON.stringify(targetSchools || [])}::jsonb, 
+          ${concerns}, 
+          ${JSON.stringify(resources || [])}::jsonb,
+          true
+        )
+      `;
+    } else {
+      // Update existing user
+      await sql`
+        UPDATE users SET
+          google_id = COALESCE(${googleId}, google_id),
+          name = COALESCE(${name}, name),
+          picture = COALESCE(${picture}, picture),
+          phone = ${phone},
+          application_stage = ${applicationStage},
+          target_schools = ${JSON.stringify(targetSchools || [])}::jsonb,
+          main_concerns = ${concerns},
+          resources = ${JSON.stringify(resources || [])}::jsonb,
+          profile_complete = true,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE email = ${email}
+      `;
     }
 
     return res.status(200).json({ success: true });
   } catch (error) {
-    console.error('Error saving profile:', error);
+    console.error('Profile setup error:', error);
     return res.status(500).json({ error: error.message });
   }
 }
-

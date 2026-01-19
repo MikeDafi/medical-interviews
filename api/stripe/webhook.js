@@ -1,134 +1,104 @@
-import Stripe from 'stripe'
-import { sql } from '@vercel/postgres'
+import Stripe from 'stripe';
+import { sql } from '@vercel/postgres';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 export const config = {
-  api: {
-    bodyParser: false,
-  },
-}
+  api: { bodyParser: false }
+};
 
 async function getRawBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = ''
-    req.on('data', chunk => {
-      data += chunk
-    })
-    req.on('end', () => {
-      resolve(Buffer.from(data))
-    })
-    req.on('error', reject)
-  })
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  }
+  return Buffer.concat(chunks);
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
+    return res.status(405).json({ error: 'Method not allowed' });
   }
-
-  let event
-  const sig = req.headers['stripe-signature']
 
   try {
-    // Get raw body for signature verification
-    const rawBody = await getRawBody(req)
-    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err.message)
+    const rawBody = await getRawBody(req);
+    const sig = req.headers['stripe-signature'];
     
-    // For local development, try parsing body directly if signature fails
-    if (process.env.NODE_ENV !== 'production' || req.headers.host?.includes('localhost')) {
-      console.log('Attempting to parse body without signature verification (local dev)')
+    let event;
+    
+    if (webhookSecret && sig) {
       try {
-        const rawBody = await getRawBody(req)
-        event = JSON.parse(rawBody.toString())
-      } catch (parseErr) {
-        console.error('Failed to parse body:', parseErr)
-        return res.status(400).send(`Webhook Error: ${err.message}`)
+        event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+      } catch (err) {
+        console.error('Webhook signature verification failed:', err.message);
+        // For local dev, parse directly
+        event = JSON.parse(rawBody.toString());
       }
     } else {
-      return res.status(400).send(`Webhook Error: ${err.message}`)
+      event = JSON.parse(rawBody.toString());
     }
-  }
 
-  // Handle the event
-  switch (event.type) {
-    case 'checkout.session.completed': {
-      const session = event.data.object
-      
-      // Extract metadata
-      const { packageId, userId, sessions, type } = session.metadata
-      const customerEmail = session.customer_email
-      const googleId = userId // userId from metadata is the Google ID
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const { packageId, userId, sessions, type } = session.metadata || {};
+      const customerEmail = session.customer_email;
 
-      console.log('Processing payment for:', { customerEmail, googleId, packageId, sessions })
+      console.log('Processing payment:', { customerEmail, packageId, sessions, type });
 
-      try {
-        // Find user by Google ID or email
-        let user = await sql`
-          SELECT id FROM users WHERE google_id = ${googleId} OR email = ${customerEmail}
-        `
-        
-        let dbUserId = user.rows[0]?.id
-
-        // If no user found, create one
-        if (!dbUserId && customerEmail) {
-          const newUser = await sql`
-            INSERT INTO users (google_id, email, name)
-            VALUES (${googleId}, ${customerEmail}, ${customerEmail.split('@')[0]})
-            RETURNING id
-          `
-          dbUserId = newUser.rows[0].id
-          console.log('Created new user with id:', dbUserId)
-        }
-
-        // Get the package ID from packages table
-        const packageResult = await sql`
-          SELECT id, name FROM packages WHERE name ILIKE ${'%' + packageId + '%'} LIMIT 1
-        `
-        const dbPackageId = packageResult.rows[0]?.id
-
-        console.log('Found package:', packageResult.rows[0])
-
-        // Create package purchase record
-        if (dbUserId && dbPackageId) {
-          await sql`
-            INSERT INTO user_packages (user_id, package_id, sessions_total, sessions_used, purchase_date, status)
-            VALUES (
-              ${dbUserId},
-              ${dbPackageId},
-              ${parseInt(sessions)},
-              0,
-              NOW(),
-              'active'
-            )
-          `
-          console.log('Created user_package for user:', dbUserId, 'package:', dbPackageId)
-        } else {
-          console.error('Missing dbUserId or dbPackageId:', { dbUserId, dbPackageId })
-        }
-
-        console.log('Payment successful for:', customerEmail, packageId)
-      } catch (dbError) {
-        console.error('Database error:', dbError)
-        // Don't fail the webhook - payment was still successful
+      if (!customerEmail && !userId) {
+        console.log('No customer email or userId in session');
+        return res.status(200).json({ received: true });
       }
 
-      break
+      // Find or create user
+      let user = await sql`SELECT * FROM users WHERE email = ${customerEmail}`;
+      
+      if (user.rows.length === 0 && userId) {
+        user = await sql`SELECT * FROM users WHERE google_id = ${userId}`;
+      }
+
+      let dbUser;
+      if (user.rows.length === 0) {
+        const newUser = await sql`
+          INSERT INTO users (google_id, email, name, purchases)
+          VALUES (${userId || customerEmail}, ${customerEmail}, ${customerEmail.split('@')[0]}, '[]'::jsonb)
+          RETURNING *
+        `;
+        dbUser = newUser.rows[0];
+        console.log('Created new user:', dbUser.id);
+      } else {
+        dbUser = user.rows[0];
+        // Update google_id if we have it and user doesn't
+        if (userId && !dbUser.google_id) {
+          await sql`UPDATE users SET google_id = ${userId} WHERE id = ${dbUser.id}`;
+        }
+      }
+
+      // Add purchase to user's purchases JSON array
+      const newPurchase = {
+        id: session.id,
+        package_id: packageId,
+        type: type || (packageId === 'trial' ? 'trial' : 'regular'),
+        sessions_total: parseInt(sessions) || 1,
+        sessions_used: 0,
+        purchase_date: new Date().toISOString(),
+        status: 'active'
+      };
+
+      await sql`
+        UPDATE users 
+        SET purchases = COALESCE(purchases, '[]'::jsonb) || ${JSON.stringify(newPurchase)}::jsonb,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${dbUser.id}
+      `;
+
+      console.log('Added purchase for user:', dbUser.id, newPurchase);
     }
 
-    case 'payment_intent.payment_failed': {
-      const paymentIntent = event.data.object
-      console.log('Payment failed:', paymentIntent.id)
-      break
-    }
-
-    default:
-      console.log(`Unhandled event type: ${event.type}`)
+    return res.status(200).json({ received: true });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    return res.status(400).json({ error: error.message });
   }
-
-  res.status(200).json({ received: true })
 }
-

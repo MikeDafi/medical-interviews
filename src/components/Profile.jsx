@@ -33,17 +33,18 @@ export default function Profile({ onClose }) {
 
   const fetchSessionData = async () => {
     try {
-      const response = await fetch(`/api/profile?userId=${user.id}`)
+      const response = await fetch(`/api/profile?userId=${user.id}&email=${encodeURIComponent(user.email)}`)
       if (response.ok) {
         const data = await response.json()
-        const packages = data.profile?.user_packages || []
+        // Purchases are now JSON on the user object
+        const purchases = data.profile?.purchases || []
         
         let trial = 0
         let regular = 0
         
-        packages.forEach(pkg => {
-          const remaining = pkg.sessions_total - pkg.sessions_used
-          if (pkg.name?.includes('Trial') || pkg.duration_minutes === 30) {
+        purchases.forEach(p => {
+          const remaining = (p.sessions_total || 0) - (p.sessions_used || 0)
+          if (p.type === 'trial' || p.package_id === 'trial') {
             trial += remaining
           } else {
             regular += remaining
@@ -51,7 +52,7 @@ export default function Profile({ onClose }) {
         })
         
         setSessionCredits({ trial, regular, loading: false })
-        setPurchasedPackages(packages)
+        setPurchasedPackages(purchases)
       } else {
         setSessionCredits({ trial: 0, regular: 0, loading: false })
       }
@@ -77,30 +78,14 @@ export default function Profile({ onClose }) {
         setConcerns(parsed.currentConcerns || '')
       }
 
-      // Also try API
-      const [profileRes, bookingsRes, resourcesRes] = await Promise.all([
-        fetch(`/api/profile?userId=${user.id}`).catch(() => null),
-        fetch(`/api/bookings?userId=${user.id}`).catch(() => null),
-        fetch(`/api/resources?userId=${user.id}`).catch(() => null)
-      ])
+      // Try API for profile
+      const profileRes = await fetch(`/api/profile?userId=${user.id}&email=${encodeURIComponent(user.email)}`).catch(() => null)
 
       if (profileRes?.ok) {
         const data = await profileRes.json()
         setProfileData(data.profile)
-      }
-      if (bookingsRes?.ok) {
-        const data = await bookingsRes.json()
-        const now = new Date()
-        setBookings({
-          upcoming: data.bookings?.filter(b => new Date(b.booking_date) >= now && b.status !== 'cancelled') || [],
-          past: data.bookings?.filter(b => new Date(b.booking_date) < now || b.status === 'completed') || []
-        })
-      }
-      if (resourcesRes?.ok) {
-        const data = await resourcesRes.json()
-        if (data.resources?.length > 0) {
-          setResources(data.resources)
-        }
+        // Resources are now JSON on user object
+        setResources(data.profile?.resources || [])
       }
     } catch (error) {
       console.error('Error fetching profile data:', error)

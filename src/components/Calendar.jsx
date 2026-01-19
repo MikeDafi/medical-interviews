@@ -7,6 +7,10 @@ export default function Calendar() {
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTime, setSelectedTime] = useState(null)
   const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [availableSlots, setAvailableSlots] = useState([])
+  const [loadingSlots, setLoadingSlots] = useState(false)
+  const [booking, setBooking] = useState(false)
+  const [bookingResult, setBookingResult] = useState(null)
   const [sessionCredits, setSessionCredits] = useState({
     trial: 0,
     regular: 0,
@@ -16,11 +20,6 @@ export default function Calendar() {
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 
                   'July', 'August', 'September', 'October', 'November', 'December']
-
-  const timeSlots = [
-    '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
-    '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'
-  ]
 
   useEffect(() => {
     if (user) {
@@ -41,19 +40,27 @@ export default function Calendar() {
     return () => window.removeEventListener('paymentCompleted', handlePaymentCompleted)
   }, [user])
 
+  // Fetch available time slots when date is selected
+  useEffect(() => {
+    if (selectedDate) {
+      fetchAvailability(selectedDate)
+    }
+  }, [selectedDate])
+
   const fetchSessionCredits = async () => {
     try {
-      const response = await fetch(`/api/profile?userId=${user.id}`)
+      const response = await fetch(`/api/profile?userId=${user.id}&email=${encodeURIComponent(user.email)}`)
       if (response.ok) {
         const data = await response.json()
-        const packages = data.profile?.user_packages || []
+        // Purchases are now JSON on user object
+        const purchases = data.profile?.purchases || []
         
         let trial = 0
         let regular = 0
         
-        packages.forEach(pkg => {
-          const remaining = pkg.sessions_total - pkg.sessions_used
-          if (pkg.name?.includes('Trial') || pkg.duration_minutes === 30) {
+        purchases.forEach(p => {
+          const remaining = (p.sessions_total || 0) - (p.sessions_used || 0)
+          if (p.type === 'trial' || p.package_id === 'trial') {
             trial += remaining
           } else {
             regular += remaining
@@ -67,6 +74,93 @@ export default function Calendar() {
     } catch (error) {
       console.log('Could not fetch session credits:', error)
       setSessionCredits({ trial: 0, regular: 0, loading: false })
+    }
+  }
+
+  const fetchAvailability = async (date) => {
+    setLoadingSlots(true)
+    setAvailableSlots([])
+    
+    try {
+      const dateStr = date.toISOString().split('T')[0] // YYYY-MM-DD
+      const response = await fetch(`/api/calendar/availability?date=${dateStr}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        setAvailableSlots(data.availableSlots || [])
+      } else {
+        // Fallback to default slots if API fails
+        console.log('Availability API not available, using defaults')
+        setAvailableSlots([
+          '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
+          '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'
+        ])
+      }
+    } catch (error) {
+      console.log('Error fetching availability:', error)
+      // Fallback to default slots
+      setAvailableSlots([
+        '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
+        '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'
+      ])
+    } finally {
+      setLoadingSlots(false)
+    }
+  }
+
+  const handleBooking = async () => {
+    if (!selectedDate || !selectedTime || !user) return
+    
+    setBooking(true)
+    setBookingResult(null)
+    
+    try {
+      const dateStr = selectedDate.toISOString().split('T')[0]
+      const sessionType = sessionCredits.trial > 0 ? 'trial' : 'regular'
+      const duration = sessionType === 'trial' ? 30 : 60
+      
+      const response = await fetch('/api/calendar/book', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: dateStr,
+          time: selectedTime,
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name || user.email.split('@')[0],
+          sessionType,
+          duration
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (response.ok) {
+        setBookingResult({
+          success: true,
+          message: data.message || 'Booking confirmed!',
+          eventLink: data.eventLink
+        })
+        // Refresh credits after booking
+        fetchSessionCredits()
+        // Clear selection
+        setSelectedTime(null)
+        // Refresh available slots for this date
+        fetchAvailability(selectedDate)
+      } else {
+        setBookingResult({
+          success: false,
+          message: data.error || 'Failed to book. Please try again.'
+        })
+      }
+    } catch (error) {
+      console.error('Booking error:', error)
+      setBookingResult({
+        success: false,
+        message: 'Network error. Please try again.'
+      })
+    } finally {
+      setBooking(false)
     }
   }
 
@@ -107,18 +201,23 @@ export default function Calendar() {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))
     setSelectedDate(null)
     setSelectedTime(null)
+    setAvailableSlots([])
+    setBookingResult(null)
   }
 
   const nextMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))
     setSelectedDate(null)
     setSelectedTime(null)
+    setAvailableSlots([])
+    setBookingResult(null)
   }
 
   const handleDateClick = (dayObj) => {
     if (!dayObj.disabled && dayObj.day) {
       setSelectedDate(dayObj.date)
       setSelectedTime(null)
+      setBookingResult(null)
     }
   }
 
@@ -215,28 +314,52 @@ export default function Calendar() {
           {selectedDate ? (
             <>
               <p className="selected-date">{formatSelectedDate()}</p>
-              <div className="time-slots-grid">
-                {timeSlots.map(time => (
-                  <button
-                    key={time}
-                    className={`time-slot ${selectedTime === time ? 'selected' : ''}`}
-                    onClick={() => setSelectedTime(time)}
-                  >
-                    {time}
-                  </button>
-                ))}
-              </div>
+              {loadingSlots ? (
+                <div className="loading-slots">
+                  <div className="slot-spinner"></div>
+                  <p>Checking availability...</p>
+                </div>
+              ) : availableSlots.length > 0 ? (
+                <div className="time-slots-grid">
+                  {availableSlots.map(time => (
+                    <button
+                      key={time}
+                      className={`time-slot ${selectedTime === time ? 'selected' : ''}`}
+                      onClick={() => setSelectedTime(time)}
+                    >
+                      {time}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="no-slots-msg">No available times for this date. Please select another day.</p>
+              )}
             </>
           ) : (
             <p className="select-date-prompt">Select a date to see available times</p>
           )}
 
-          {selectedDate && selectedTime && (
+          {bookingResult && (
+            <div className={`booking-result ${bookingResult.success ? 'success' : 'error'}`}>
+              <p>{bookingResult.message}</p>
+              {bookingResult.eventLink && (
+                <a href={bookingResult.eventLink} target="_blank" rel="noopener noreferrer" className="event-link">
+                  View in Google Calendar →
+                </a>
+              )}
+            </div>
+          )}
+
+          {selectedDate && selectedTime && !bookingResult?.success && (
             <div className="booking-summary">
               <p><strong>Selected:</strong> {formatSelectedDate()} at {selectedTime}</p>
               {user && totalSessions > 0 ? (
-                <button className="confirm-booking-btn">
-                  Confirm Booking
+                <button 
+                  className="confirm-booking-btn" 
+                  onClick={handleBooking}
+                  disabled={booking}
+                >
+                  {booking ? 'Booking...' : 'Confirm Booking'}
                 </button>
               ) : user ? (
                 <a href="#packages" className="confirm-booking-btn purchase-btn">

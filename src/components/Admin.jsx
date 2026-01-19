@@ -23,7 +23,7 @@ export default function Admin() {
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/admin/users?sortBy=${sortBy}&sortOrder=${sortOrder}`)
+      const response = await fetch(`/api/admin?sortBy=${sortBy}&sortOrder=${sortOrder}`)
       if (response.ok) {
         const data = await response.json()
         setUsers(data.users || [])
@@ -53,7 +53,7 @@ export default function Admin() {
     if (!newResource.title || !newResource.url) return
 
     try {
-      const response = await fetch('/api/admin/resources', {
+      const response = await fetch('/api/admin?action=resources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -77,7 +77,7 @@ export default function Admin() {
     if (!confirm('Remove this resource?')) return
 
     try {
-      const response = await fetch(`/api/admin/resources?id=${resourceId}`, {
+      const response = await fetch(`/api/admin?action=resources&id=${resourceId}`, {
         method: 'DELETE'
       })
 

@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Create users table
+    // Create users table (includes profile + purchases)
     await sql`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -14,6 +14,14 @@ export default async function handler(req, res) {
         email VARCHAR(255) UNIQUE NOT NULL,
         name VARCHAR(255),
         picture TEXT,
+        phone VARCHAR(50),
+        application_stage VARCHAR(100),
+        main_concerns TEXT,
+        target_schools JSONB DEFAULT '[]',
+        purchases JSONB DEFAULT '[]',
+        resources JSONB DEFAULT '[]',
+        profile_complete BOOLEAN DEFAULT FALSE,
+        is_admin BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -30,71 +38,6 @@ export default async function handler(req, res) {
         session_count INTEGER DEFAULT 1,
         features JSONB,
         is_active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-
-    // Create user_packages table (purchased packages with session tracking)
-    await sql`
-      CREATE TABLE IF NOT EXISTS user_packages (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        package_id INTEGER REFERENCES packages(id),
-        sessions_total INTEGER NOT NULL,
-        sessions_used INTEGER DEFAULT 0,
-        purchase_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        expires_at TIMESTAMP,
-        status VARCHAR(50) DEFAULT 'active'
-      )
-    `;
-
-    // Create bookings table
-    await sql`
-      CREATE TABLE IF NOT EXISTS bookings (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        package_id INTEGER REFERENCES packages(id),
-        booking_date DATE NOT NULL,
-        booking_time TIME NOT NULL,
-        status VARCHAR(50) DEFAULT 'pending',
-        notes TEXT,
-        zoom_link TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-
-    // Create availability table
-    await sql`
-      CREATE TABLE IF NOT EXISTS availability (
-        id SERIAL PRIMARY KEY,
-        day_of_week INTEGER CHECK (day_of_week BETWEEN 0 AND 6),
-        start_time TIME NOT NULL,
-        end_time TIME NOT NULL,
-        is_available BOOLEAN DEFAULT TRUE
-      )
-    `;
-
-    // Create blocked_dates table
-    await sql`
-      CREATE TABLE IF NOT EXISTS blocked_dates (
-        id SERIAL PRIMARY KEY,
-        blocked_date DATE NOT NULL,
-        reason TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-
-    // Create reviews table
-    await sql`
-      CREATE TABLE IF NOT EXISTS reviews (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id),
-        rating INTEGER CHECK (rating BETWEEN 1 AND 5),
-        review_text TEXT,
-        school_accepted VARCHAR(255),
-        is_featured BOOLEAN DEFAULT FALSE,
-        is_approved BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
@@ -124,15 +67,12 @@ export default async function handler(req, res) {
       WHERE NOT EXISTS (SELECT 1 FROM packages WHERE name = 'Package of 5')
     `;
 
-    // Insert default availability (Mon-Fri, 9am-5pm)
-    const days = [1, 2, 3, 4, 5];
-    for (const day of days) {
-      await sql`
-        INSERT INTO availability (day_of_week, start_time, end_time)
-        SELECT ${day}, '09:00', '17:00'
-        WHERE NOT EXISTS (SELECT 1 FROM availability WHERE day_of_week = ${day})
-      `;
-    }
+    // Insert admin user
+    await sql`
+      INSERT INTO users (google_id, email, name, is_admin)
+      SELECT '106108496620102922676', 'premedical1on1@gmail.com', 'Ashley Kumar', true
+      WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'premedical1on1@gmail.com')
+    `;
 
     return res.status(200).json({ message: 'Database initialized successfully' });
   } catch (error) {
@@ -140,4 +80,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: error.message });
   }
 }
-
