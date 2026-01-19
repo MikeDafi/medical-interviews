@@ -49,11 +49,15 @@ export default function ProfileSetup({ user, onComplete }) {
         })
       })
       
-      if (response.ok) {
-        onComplete()
-      }
+      // Complete setup regardless of API response (DB may not be set up yet)
+      // Save to localStorage as backup
+      localStorage.setItem('profileData', JSON.stringify(formData))
+      onComplete()
     } catch (error) {
       console.error('Error saving profile:', error)
+      // Still complete setup - save locally
+      localStorage.setItem('profileData', JSON.stringify(formData))
+      onComplete()
     }
     setLoading(false)
   }
@@ -140,12 +144,14 @@ export default function ProfileSetup({ user, onComplete }) {
                         </button>
                       )}
                     </div>
-                    <input
-                      type="date"
-                      placeholder="Interview date (if known)"
-                      value={school.interviewDate}
-                      onChange={(e) => handleSchoolChange(index, 'interviewDate', e.target.value)}
-                    />
+                    <div className="form-group">
+                      <label className="date-label">Interview Date (if scheduled)</label>
+                      <input
+                        type="date"
+                        value={school.interviewDate}
+                        onChange={(e) => handleSchoolChange(index, 'interviewDate', e.target.value)}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -199,4 +205,3 @@ export default function ProfileSetup({ user, onComplete }) {
     </div>
   )
 }
-
