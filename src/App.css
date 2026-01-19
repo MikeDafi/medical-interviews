@@ -899,11 +899,16 @@ img {
 }
 
 .faq-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
-  max-width: 1000px;
-  margin: 0 auto;
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding-bottom: 16px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.faq-grid::-webkit-scrollbar {
+  display: none;
 }
 
 .faq-item {
@@ -912,6 +917,8 @@ img {
   border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 20px;
   padding: 28px;
+  flex: 0 0 320px;
+  min-width: 320px;
 }
 
 .faq-item h4 {
@@ -2325,9 +2332,6 @@ img {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .faq-grid {
-    grid-template-columns: 1fr;
-  }
 
   .footer-content {
     grid-template-columns: 1fr;
