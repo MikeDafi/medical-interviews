@@ -88,8 +88,15 @@ export default function ProfileSetup({ user, onComplete }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user.id,
-          ...formData
+          googleId: user.id,
+          email: user.email,
+          name: user.name,
+          picture: user.picture,
+          phone: formData.phone,
+          applicationStage: formData.applicationStage,
+          targetSchools: formData.targetSchools,
+          concerns: formData.currentConcerns,
+          resources: formData.resources
         })
       })
       

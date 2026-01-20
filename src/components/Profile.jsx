@@ -59,6 +59,7 @@ export default function Profile({ onClose }) {
         const parsed = JSON.parse(localProfile)
         setProfileData({
           ...parsed,
+          phone: parsed.phone,
           application_stage: parsed.applicationStage,
           target_schools: parsed.targetSchools?.map(s => ({ school_name: s.name, interview_type: s.interviewType, interview_date: s.interviewDate })) || [],
           current_concerns: parsed.currentConcerns || ''
@@ -267,6 +268,7 @@ export default function Profile({ onClose }) {
           <div className="profile-info">
             <h2>{user.name}</h2>
             <p>{user.email}</p>
+            {profileData?.phone && <p className="profile-phone">📞 {profileData.phone}</p>}
           </div>
         </div>
 
