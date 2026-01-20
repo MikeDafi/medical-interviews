@@ -81,8 +81,12 @@ export default function ProfileSetup({ user, onComplete }) {
     }
   }
 
+  const [error, setError] = useState(null)
+
   const handleSubmit = async () => {
     setLoading(true)
+    setError(null)
+    
     try {
       const response = await fetch('/api/profile/setup', {
         method: 'POST',
@@ -94,21 +98,21 @@ export default function ProfileSetup({ user, onComplete }) {
           picture: user.picture,
           phone: formData.phone,
           applicationStage: formData.applicationStage,
-          targetSchools: formData.targetSchools,
+          targetSchools: formData.targetSchools.filter(s => s.name.trim()),
           concerns: formData.currentConcerns,
-          resources: formData.resources
+          resources: formData.resources.filter(r => r.title.trim() && r.url.trim())
         })
       })
       
-      // Complete setup regardless of API response (DB may not be set up yet)
-      // Save to localStorage as backup
-      localStorage.setItem('profileData', JSON.stringify(formData))
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to save profile')
+      }
+      
       onComplete()
-    } catch (error) {
-      console.error('Error saving profile:', error)
-      // Still complete setup - save locally
-      localStorage.setItem('profileData', JSON.stringify(formData))
-      onComplete()
+    } catch (err) {
+      console.error('Error saving profile:', err)
+      setError('Failed to save profile. Please try again.')
     }
     setLoading(false)
   }
@@ -296,6 +300,12 @@ export default function ProfileSetup({ user, onComplete }) {
                   /{MAX_CONCERNS_LENGTH} characters
                 </div>
               </div>
+
+              {error && (
+                <div className="setup-error">
+                  {error}
+                </div>
+              )}
 
               <div className="setup-buttons">
                 <button type="button" className="setup-btn-secondary" onClick={() => setStep(3)}>

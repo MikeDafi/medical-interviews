@@ -4,26 +4,43 @@ import { getTimeAgo } from '../utils'
 const CACHE_KEY = 'recentPurchases'
 const NOTIFICATION_DELAY = 3000 // 3 seconds after page load
 
+// Safely read from localStorage
+function readCache(key) {
+  try {
+    const cached = localStorage.getItem(key)
+    if (cached) {
+      const { data } = JSON.parse(cached)
+      if (data?.length > 0) return data
+    }
+  } catch {
+    // localStorage unavailable or corrupt - gracefully degrade
+  }
+  return null
+}
+
+// Safely write to localStorage
+function writeCache(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }))
+  } catch {
+    // localStorage full or unavailable - gracefully degrade
+  }
+}
+
 export default function RecentBookingNotification() {
   const [notification, setNotification] = useState(null)
   const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      // Try cache first
-      try {
-        const cached = localStorage.getItem(CACHE_KEY)
-        if (cached) {
-          const { data } = JSON.parse(cached)
-          if (data?.length > 0) {
-            setNotification(data[0])
-            setIsVisible(true)
-            return
-          }
-        }
-      } catch {
-        // Ignore
+      // Try cache first for instant display
+      const cached = readCache(CACHE_KEY)
+      if (cached) {
+        setNotification(cached[0])
+        setIsVisible(true)
+        return
       }
+      // Fall back to API
       fetchRecentPurchase()
     }, NOTIFICATION_DELAY)
     
@@ -38,15 +55,12 @@ export default function RecentBookingNotification() {
         if (data.purchases?.length > 0) {
           setNotification(data.purchases[0])
           setIsVisible(true)
-          // Cache for RecentBookings component
-          localStorage.setItem(CACHE_KEY, JSON.stringify({
-            data: data.purchases,
-            timestamp: Date.now()
-          }))
+          writeCache(CACHE_KEY, data.purchases)
         }
       }
+      // Non-200 or no data: don't show notification (silent degradation)
     } catch {
-      // No notification to display
+      // Network error: don't show notification (silent degradation)
     }
   }
 

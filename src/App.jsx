@@ -17,6 +17,9 @@ import RecentBookingNotification from './components/RecentBookingNotification'
 import ProfileSetup from './components/ProfileSetup'
 import PaymentStatus from './components/PaymentStatus'
 import Admin from './components/Admin'
+import Terms from './components/pages/Terms'
+import Privacy from './components/pages/Privacy'
+import NotFound from './components/pages/NotFound'
 
 function HomePage() {
   return (
@@ -67,6 +70,9 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
       
       <Analytics />

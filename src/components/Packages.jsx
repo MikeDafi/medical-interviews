@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { loadStripe } from '@stripe/stripe-js'
 import { useAuth } from '../context/AuthContext'
+import GoogleIcon from './icons/GoogleIcon'
 
 // Initialize Stripe with publishable key
 const stripePromise = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY 
@@ -10,6 +11,7 @@ const stripePromise = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
 export default function Packages() {
   const [loading, setLoading] = useState(null)
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
+  const [activeCategory, setActiveCategory] = useState('interviews')
   const { user, signInWithGoogle } = useAuth()
 
   const handlePurchase = async (packageId) => {
@@ -22,7 +24,6 @@ export default function Packages() {
     setLoading(packageId)
     
     try {
-      // First try the API route (works on Vercel)
       const response = await fetch('/api/stripe/create-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -46,7 +47,6 @@ export default function Packages() {
         }
       }
       
-      // If we got here, something went wrong
       console.error('API response:', response.status, data)
       throw new Error(data.error || 'Failed to create checkout session')
       
@@ -57,6 +57,12 @@ export default function Packages() {
     
     setLoading(null)
   }
+
+  const categories = [
+    { id: 'interviews', label: 'Interview Prep', icon: '🎤' },
+    { id: 'resume', label: 'CV & Strategy', icon: '📄' },
+    { id: 'advisory', label: 'Advisory', icon: '💬' }
+  ]
 
   return (
     <section className="packages-section" id="packages">
@@ -71,95 +77,268 @@ export default function Packages() {
           <div className="login-prompt-modal" onClick={e => e.stopPropagation()}>
             <button className="login-prompt-close" onClick={() => setShowLoginPrompt(false)}>×</button>
             <h3>Sign in to Purchase</h3>
-            <p>Please sign in with Google to purchase a session package. This helps us track your sessions and provide personalized coaching.</p>
+            <p>Please sign in with Google to purchase a session package.</p>
             <button className="login-prompt-btn" onClick={() => { signInWithGoogle(); setShowLoginPrompt(false); }}>
-              <svg width="20" height="20" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
+              <GoogleIcon />
               Sign in with Google
             </button>
           </div>
         </div>
       )}
-      
-      <div className="packages-grid">
-        <PackageCard
-          badge="Try It Out"
-          title="30 Min Trial"
-          price="$30"
-          features={[
-            "Brief introduction & assessment",
-            "One MMI question practice",
-            "7 min timed response (2 min prep + 5 min answer)",
-            "Immediate feedback & debrief"
-          ]}
-          buttonText="Book Trial"
-          variant="trial"
-          packageId="trial"
-          onPurchase={handlePurchase}
-          loading={loading === 'trial'}
-        />
 
-        <PackageCard
-          title="1 Hour Session"
-          price="$100"
-          features={[
-            "Full prep & coaching session",
-            "MMI or traditional interview practice",
-            "Detailed feedback & review",
-            "Take-home notes on improvement areas"
-          ]}
-          buttonText="Book Session"
-          packageId="single"
-          onPurchase={handlePurchase}
-          loading={loading === 'single'}
-        />
+      {/* Category Tabs */}
+      <div className="packages-tabs">
+        {categories.map(cat => (
+          <button
+            key={cat.id}
+            className={`packages-tab ${activeCategory === cat.id ? 'active' : ''}`}
+            onClick={() => setActiveCategory(cat.id)}
+          >
+            <span className="tab-icon">{cat.icon}</span>
+            <span className="tab-label">{cat.label}</span>
+          </button>
+        ))}
+      </div>
 
-        <PackageCard
-          badge="Popular"
-          title="Package of 3"
-          price="$250"
-          priceNote="Save $50"
-          features={[
-            "3 one-hour sessions",
-            "Progressive skill building",
-            "Beginner to Intermediate to Advanced",
-            "Comprehensive feedback after each"
-          ]}
-          buttonText="Get Package"
-          variant="popular"
-          packageId="package3"
-          onPurchase={handlePurchase}
-          loading={loading === 'package3'}
-        />
+      {/* Interview Prep Packages */}
+      {activeCategory === 'interviews' && (
+        <div className="packages-grid">
+          <PackageCard
+            badge="Try It Out"
+            title="30 Min Trial"
+            price="$30"
+            features={[
+              "Brief introduction & assessment",
+              "One MMI question practice",
+              "7 min timed response (2 min prep + 5 min answer)",
+              "Immediate feedback & debrief"
+            ]}
+            buttonText="Book Trial"
+            variant="trial"
+            packageId="trial"
+            onPurchase={handlePurchase}
+            loading={loading === 'trial'}
+          />
 
-        <PackageCard
-          badge="Premium"
-          title="Package of 5"
-          price="$450"
-          priceNote="Save $50"
-          features={[
-            "5 one-hour sessions",
-            "Full interview mastery program",
-            "Take-home interview questions included",
-            "Priority scheduling",
-            "Session recordings available"
-          ]}
-          buttonText="Get Premium"
-          variant="premium"
-          packageId="package5"
-          onPurchase={handlePurchase}
-          loading={loading === 'package5'}
-        />
+          <PackageCard
+            title="1 Hour Session"
+            price="$100"
+            features={[
+              "Full prep & coaching session",
+              "MMI or traditional interview practice",
+              "Detailed feedback & review",
+              "Take-home notes on improvement areas"
+            ]}
+            buttonText="Book Session"
+            packageId="single"
+            onPurchase={handlePurchase}
+            loading={loading === 'single'}
+          />
+
+          <PackageCard
+            badge="Popular"
+            title="Package of 3"
+            price="$250"
+            priceNote="Save $50"
+            features={[
+              "3 one-hour sessions",
+              "Progressive skill building",
+              "Beginner → Intermediate → Advanced",
+              "Comprehensive feedback after each"
+            ]}
+            buttonText="Get Package"
+            variant="popular"
+            packageId="package3"
+            onPurchase={handlePurchase}
+            loading={loading === 'package3'}
+          />
+
+          <PackageCard
+            badge="Premium"
+            title="Package of 5"
+            price="$450"
+            priceNote="Save $50"
+            features={[
+              "5 one-hour sessions",
+              "Full interview mastery program",
+              "Take-home interview questions",
+              "Priority scheduling",
+              "Session recordings available"
+            ]}
+            buttonText="Get Premium"
+            variant="premium"
+            packageId="package5"
+            onPurchase={handlePurchase}
+            loading={loading === 'package5'}
+          />
+        </div>
+      )}
+
+      {/* CV & Strategy Packages */}
+      {activeCategory === 'resume' && (
+        <div className="packages-grid">
+          <PackageCard
+            badge="Try It Out"
+            title="30 Min Strategy Snapshot"
+            price="$30"
+            features={[
+              "Rapid assessment of where you are",
+              "High-level CV review or verbal walkthrough",
+              "Identify major gaps & misprioritized activities",
+              "Clear actionable next steps"
+            ]}
+            notIncluded={[
+              "Detailed CV phrasing",
+              "Long-term planning"
+            ]}
+            buttonText="Book Snapshot"
+            variant="trial"
+            packageId="cv_trial"
+            onPurchase={handlePurchase}
+            loading={loading === 'cv_trial'}
+          />
+
+          <PackageCard
+            title="1 Hour In-Depth Review"
+            price="$100"
+            features={[
+              "Full CV or activity review (live)",
+              "Blunt but supportive assessment",
+              "Clear prioritization of what matters",
+              "Guidance on clinical, volunteering, leadership, research",
+              "Realistic hour expectations"
+            ]}
+            highlight="You leave knowing exactly what to focus on and why."
+            buttonText="Book Review"
+            packageId="cv_single"
+            onPurchase={handlePurchase}
+            loading={loading === 'cv_single'}
+          />
+
+          <PackageCard
+            badge="Flexible"
+            title="3 Session Package"
+            price="$250"
+            priceNote="Save $50"
+            features={[
+              "Three 1-hour sessions",
+              "Use anytime (no expiration)",
+              "Session 1: Full strategy + CV review",
+              "Session 2: Progress check & course correction",
+              "Session 3: Refinement & leadership framing"
+            ]}
+            buttonText="Get Package"
+            variant="popular"
+            packageId="cv_package3"
+            onPurchase={handlePurchase}
+            loading={loading === 'cv_package3'}
+          />
+
+          <PackageCard
+            badge="Long-Term"
+            title="5 Session Package"
+            price="$450"
+            priceNote="Save $50"
+            features={[
+              "Five 1-hour sessions",
+              "Use across months or years",
+              "Mentorship-style advising",
+              "Long-term planning with recalibration",
+              "Ideal for college or gap year students"
+            ]}
+            buttonText="Get Package"
+            variant="premium"
+            packageId="cv_package5"
+            onPurchase={handlePurchase}
+            loading={loading === 'cv_package5'}
+          />
+        </div>
+      )}
+
+      {/* Advisory Packages */}
+      {activeCategory === 'advisory' && (
+        <div className="packages-grid advisory-grid">
+          <PackageCard
+            title="Email-Only Advisory"
+            price="$50"
+            priceNote="/month"
+            features={[
+              "Email access for short questions",
+              "Help with opportunity evaluation",
+              "Prioritization guidance",
+              "Timing decisions",
+              "Response within 48 hours"
+            ]}
+            buttonText="Subscribe"
+            variant="advisory"
+            packageId="advisory_email"
+            onPurchase={handlePurchase}
+            loading={loading === 'advisory_email'}
+          />
+
+          <PackageCard
+            badge="Popular"
+            title="Monthly Check-In"
+            price="$60"
+            priceNote="/month"
+            features={[
+              "One 30-minute Zoom call per month",
+              "Progress review",
+              "Priority adjustments",
+              "Short-term planning",
+              "Unused sessions roll over"
+            ]}
+            buttonText="Subscribe"
+            variant="popular advisory"
+            packageId="advisory_checkin"
+            onPurchase={handlePurchase}
+            loading={loading === 'advisory_checkin'}
+          />
+
+          <PackageCard
+            badge="Best Value"
+            title="Email + Check-In"
+            price="$100"
+            priceNote="/month"
+            features={[
+              "Email access included",
+              "One 30-min Zoom check-in monthly",
+              "Real mentorship relationship",
+              "Ongoing guidance & support",
+              "Best for serious applicants"
+            ]}
+            buttonText="Subscribe"
+            variant="premium advisory"
+            packageId="advisory_full"
+            onPurchase={handlePurchase}
+            loading={loading === 'advisory_full'}
+          />
+        </div>
+      )}
+
+      {/* Category Descriptions */}
+      <div className="packages-info">
+        {activeCategory === 'interviews' && (
+          <p className="packages-description">
+            Mock interview sessions tailored to your target schools. Practice MMI, traditional, or combination formats with realistic questions and brutally honest feedback.
+          </p>
+        )}
+        {activeCategory === 'resume' && (
+          <p className="packages-description">
+            Strategic guidance on building a competitive application. Get honest assessment of your CV, activity prioritization, and clear direction on what to focus on.
+          </p>
+        )}
+        {activeCategory === 'advisory' && (
+          <p className="packages-description">
+            Ongoing mentorship for students who want consistent guidance throughout their pre-med journey. No long-term contracts—cancel anytime.
+          </p>
+        )}
       </div>
     </section>
   )
 }
 
-function PackageCard({ badge, title, price, priceNote, features, buttonText, variant = '', packageId, onPurchase, loading }) {
+function PackageCard({ badge, title, price, priceNote, features, notIncluded, highlight, buttonText, variant = '', packageId, onPurchase, loading }) {
   const handleClick = (e) => {
     e.preventDefault()
     if (packageId && onPurchase) {
@@ -177,12 +356,22 @@ function PackageCard({ badge, title, price, priceNote, features, buttonText, var
       </div>
       <ul className="package-features">
         {features.map((feature, index) => (
-          <li key={index}>{feature}</li>
+          <li key={index}><span className="feature-check">✓</span> {feature}</li>
         ))}
       </ul>
+      {notIncluded && notIncluded.length > 0 && (
+        <ul className="package-not-included">
+          {notIncluded.map((item, index) => (
+            <li key={index}><span className="feature-x">✗</span> {item}</li>
+          ))}
+        </ul>
+      )}
+      {highlight && (
+        <p className="package-highlight">{highlight}</p>
+      )}
       <button 
         onClick={handleClick} 
-        className={variant === 'premium' ? 'package-btn-premium' : 'package-btn'}
+        className={variant.includes('premium') ? 'package-btn-premium' : 'package-btn'}
         disabled={loading}
       >
         {loading ? 'Processing...' : buttonText}

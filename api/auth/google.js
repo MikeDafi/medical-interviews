@@ -1,31 +1,12 @@
 import { sql } from '@vercel/postgres';
 import { rateLimit } from '../lib/auth.js';
+import { sanitizeString, sanitizeEmail, sanitizeUrl } from '../lib/sanitize.js';
 
-// Input validation helpers
-const sanitizeString = (str, maxLength = 255) => {
-  if (typeof str !== 'string') return '';
-  return str.slice(0, maxLength).trim();
-};
-
-const sanitizeEmail = (email) => {
-  if (typeof email !== 'string') return '';
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email) ? email.toLowerCase().trim() : '';
-};
-
-const sanitizeUrl = (url) => {
-  if (typeof url !== 'string') return '';
-  try {
-    const parsed = new URL(url);
-    // Only allow Google profile picture URLs
-    if (!parsed.hostname.includes('googleusercontent.com') && 
-        !parsed.hostname.includes('google.com')) {
-      return '';
-    }
-    return url.slice(0, 500);
-  } catch {
-    return '';
-  }
+// Google-specific URL sanitizer (only allows Google profile picture URLs)
+const sanitizeGooglePictureUrl = (url) => {
+  return sanitizeUrl(url, { 
+    allowedHosts: ['googleusercontent.com', 'google.com'] 
+  });
 };
 
 export default async function handler(req, res) {
@@ -55,7 +36,7 @@ export default async function handler(req, res) {
 
     const cleanGoogleId = sanitizeString(userData.id, 100);
     const cleanName = sanitizeString(userData.name, 100);
-    const cleanPicture = sanitizeUrl(userData.picture);
+    const cleanPicture = sanitizeGooglePictureUrl(userData.picture);
 
     if (!cleanGoogleId) {
       return res.status(400).json({ error: 'Invalid Google ID' });

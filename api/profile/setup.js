@@ -1,35 +1,12 @@
 import { sql } from '@vercel/postgres';
 import { rateLimit } from '../lib/auth.js';
-
-// Input validation helpers
-const sanitizeString = (str, maxLength = 500) => {
-  if (typeof str !== 'string') return '';
-  return str.slice(0, maxLength).trim();
-};
-
-const sanitizePhone = (phone) => {
-  if (typeof phone !== 'string') return '';
-  // Only allow digits, spaces, dashes, parentheses, plus
-  return phone.replace(/[^\d\s\-\(\)\+]/g, '').slice(0, 20);
-};
-
-const sanitizeEmail = (email) => {
-  if (typeof email !== 'string') return '';
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email) ? email.toLowerCase().trim() : '';
-};
-
-const sanitizeUrl = (url) => {
-  if (typeof url !== 'string') return '';
-  try {
-    const parsed = new URL(url);
-    // Only allow http and https protocols
-    if (!['http:', 'https:'].includes(parsed.protocol)) return '';
-    return url.slice(0, 500);
-  } catch {
-    return '';
-  }
-};
+import { 
+  sanitizeString, 
+  sanitizeEmail, 
+  sanitizeUrl, 
+  sanitizePhone,
+  sanitizeArray 
+} from '../lib/sanitize.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

@@ -20,6 +20,9 @@ export default function Profile({ onClose }) {
   const [purchasedPackages, setPurchasedPackages] = useState([])
   const [editingName, setEditingName] = useState(false)
   const [newName, setNewName] = useState('')
+  const [editingPhone, setEditingPhone] = useState(false)
+  const [newPhone, setNewPhone] = useState('')
+  const [phoneError, setPhoneError] = useState('')
 
   useEffect(() => {
     fetchProfileData()
@@ -92,38 +95,45 @@ export default function Profile({ onClose }) {
     }, 100)
   }
 
-  const handleAddResource = () => {
+  const handleAddResource = async () => {
     if (!newResource.title || !newResource.url) return
     
     const newRes = { ...newResource, id: Date.now(), type: 'user' }
     const updatedResources = [...resources, newRes]
+    
+    // Optimistically update UI
     setResources(updatedResources)
-    
-    // Save to localStorage
-    const localProfile = JSON.parse(localStorage.getItem('profileData') || '{}')
-    localProfile.resources = updatedResources
-    localStorage.setItem('profileData', JSON.stringify(localProfile))
-    
     setNewResource({ title: '', url: '' })
     setShowAddResource(false)
+    
+    // Save to DB
+    const saved = await saveProfileUpdate({ resources: updatedResources })
+    if (!saved) {
+      // Revert on failure
+      setResources(resources)
+    }
   }
 
-  const handleDeleteResource = (resourceId) => {
+  const handleDeleteResource = async (resourceId) => {
     const updatedResources = resources.filter(r => r.id !== resourceId)
+    
+    // Optimistically update UI
+    const previousResources = resources
     setResources(updatedResources)
     
-    // Update localStorage
-    const localProfile = JSON.parse(localStorage.getItem('profileData') || '{}')
-    localProfile.resources = updatedResources
-    localStorage.setItem('profileData', JSON.stringify(localProfile))
+    // Save to DB
+    const saved = await saveProfileUpdate({ resources: updatedResources })
+    if (!saved) {
+      // Revert on failure
+      setResources(previousResources)
+    }
   }
 
   const handleSaveName = async () => {
     if (!newName.trim()) return
     
     try {
-      // Update in backend
-      await fetch('/api/profile/setup', {
+      const response = await fetch('/api/profile/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -133,76 +143,111 @@ export default function Profile({ onClose }) {
         })
       })
       
-      // Update local storage
-      const storedUser = JSON.parse(localStorage.getItem('authSession') || '{}')
-      if (storedUser.user) {
-        storedUser.user.name = newName.trim()
-        localStorage.setItem('authSession', JSON.stringify(storedUser))
-        sessionStorage.setItem('authSession', JSON.stringify(storedUser))
+      if (response.ok) {
+        setEditingName(false)
+        // Refresh profile data to get updated name
+        fetchProfileData()
       }
-      
-      // Update user object (would need context update in real app)
-      user.name = newName.trim()
-      setEditingName(false)
     } catch (error) {
       console.error('Failed to update name:', error)
     }
   }
 
-  // Coach-provided resources (static for now)
-  const coachResources = [
-    { id: 'coach-1', title: 'MMI Interview Guide', url: 'https://example.com/mmi-guide', type: 'coach' },
-    { id: 'coach-2', title: 'Common Interview Questions', url: 'https://example.com/questions', type: 'coach' }
-  ]
+  const handleSavePhone = async () => {
+    // Validate phone - digits only
+    const cleanPhone = newPhone.replace(/\D/g, '')
+    if (cleanPhone.length < 10) {
+      setPhoneError('Please enter a valid phone number (at least 10 digits)')
+      return
+    }
+    
+    setPhoneError('')
+    
+    try {
+      // Update in backend
+      await fetch('/api/profile/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          googleId: user.id,
+          email: user.email,
+          phone: cleanPhone
+        })
+      })
+      
+      // Update local storage
+      const localProfile = JSON.parse(localStorage.getItem('profileData') || '{}')
+      localProfile.phone = cleanPhone
+      localStorage.setItem('profileData', JSON.stringify(localProfile))
+      
+      // Update profile data state
+      setProfileData(prev => ({ ...prev, phone: cleanPhone }))
+      setEditingPhone(false)
+    } catch (error) {
+      console.error('Failed to update phone:', error)
+      setPhoneError('Failed to save. Please try again.')
+    }
+  }
 
-  const handleAddSchool = () => {
+  // Coach-provided resources are stored in the user's resources array with added_by_admin: true
+  // They will be populated by the admin when they add resources for this user
+  const coachResources = resources.filter(r => r.added_by_admin === true)
+
+  const handleAddSchool = async () => {
     if (!newSchool.name) return
     
     const school = {
-      school_name: newSchool.name,
-      interview_type: newSchool.interviewType,
-      interview_date: newSchool.interviewDate
+      name: newSchool.name,
+      interviewType: newSchool.interviewType,
+      interviewDate: newSchool.interviewDate
     }
     
-    const updatedSchools = [...(profileData?.target_schools || []), school]
+    const currentSchools = profileData?.target_schools || []
+    const updatedSchools = [...currentSchools, school]
+    
+    // Optimistically update UI
     setProfileData(prev => ({ ...prev, target_schools: updatedSchools }))
-    
-    // Update localStorage
-    const localProfile = JSON.parse(localStorage.getItem('profileData') || '{}')
-    localProfile.targetSchools = updatedSchools.map(s => ({
-      name: s.school_name,
-      interviewType: s.interview_type,
-      interviewDate: s.interview_date
-    }))
-    localStorage.setItem('profileData', JSON.stringify(localProfile))
-    
     setNewSchool({ name: '', interviewType: 'MMI', interviewDate: '' })
     setShowAddSchool(false)
+    
+    // Save to DB
+    const saved = await saveProfileUpdate({ targetSchools: updatedSchools })
+    if (!saved) {
+      // Revert on failure
+      setProfileData(prev => ({ ...prev, target_schools: currentSchools }))
+    }
   }
 
-  const handleRemoveSchool = (index) => {
-    const updatedSchools = profileData.target_schools.filter((_, i) => i !== index)
+  const handleRemoveSchool = async (index) => {
+    const currentSchools = profileData?.target_schools || []
+    const updatedSchools = currentSchools.filter((_, i) => i !== index)
+    
+    // Optimistically update UI
     setProfileData(prev => ({ ...prev, target_schools: updatedSchools }))
     
-    // Update localStorage
-    const localProfile = JSON.parse(localStorage.getItem('profileData') || '{}')
-    localProfile.targetSchools = updatedSchools.map(s => ({
-      name: s.school_name,
-      interviewType: s.interview_type,
-      interviewDate: s.interview_date
-    }))
-    localStorage.setItem('profileData', JSON.stringify(localProfile))
+    // Save to DB
+    const saved = await saveProfileUpdate({ targetSchools: updatedSchools })
+    if (!saved) {
+      // Revert on failure
+      setProfileData(prev => ({ ...prev, target_schools: currentSchools }))
+    }
   }
 
-  const handleSaveConcerns = () => {
-    setProfileData(prev => ({ ...prev, current_concerns: concerns }))
+  const handleSaveConcerns = async () => {
+    const previousConcerns = profileData?.main_concerns || ''
     
-    // Update localStorage
-    const localProfile = JSON.parse(localStorage.getItem('profileData') || '{}')
-    localProfile.currentConcerns = concerns
-    localStorage.setItem('profileData', JSON.stringify(localProfile))
-    
+    // Optimistically update UI
+    setProfileData(prev => ({ ...prev, main_concerns: concerns }))
     setEditingConcerns(false)
+    
+    // Save to DB
+    const saved = await saveProfileUpdate({ concerns })
+    if (!saved) {
+      // Revert on failure
+      setProfileData(prev => ({ ...prev, main_concerns: previousConcerns }))
+      setConcerns(previousConcerns)
+      setEditingConcerns(true)
+    }
   }
 
   const handleDeleteAccount = async () => {
@@ -219,19 +264,14 @@ export default function Profile({ onClose }) {
         alert(data.error || 'Failed to delete account')
         return
       }
+      
+      // Sign out and close on successful deletion
+      signOut()
+      onClose()
     } catch (e) {
-      console.log('API delete failed, continuing with local cleanup')
+      console.error('Account deletion failed:', e)
+      alert('Failed to delete account. Please try again.')
     }
-    
-    // Clear all local data
-    localStorage.removeItem('user')
-    localStorage.removeItem('profileData')
-    localStorage.removeItem('profileComplete')
-    localStorage.removeItem('sessionCredits')
-    
-    // Sign out and close
-    signOut()
-    onClose()
   }
 
   if (loading) {
@@ -310,45 +350,29 @@ export default function Profile({ onClose }) {
         <div className="profile-content">
           {activeTab === 'overview' && (
             <div className="tab-overview">
-              {/* Session Credits */}
-              <div className="overview-card session-credits-card">
-                <h4>Available Sessions</h4>
-                <div className="session-credits-display">
-                  <div className="credit-box">
-                    <span className="credit-number">{sessionCredits.trial}</span>
-                    <span className="credit-type">Trial Sessions</span>
-                  </div>
-                  <div className="credit-box">
-                    <span className="credit-number">{sessionCredits.regular}</span>
-                    <span className="credit-type">Regular Sessions</span>
-                  </div>
-                  <div className="credit-box total">
-                    <span className="credit-number">{sessionCredits.trial + sessionCredits.regular}</span>
-                    <span className="credit-type">Total</span>
-                  </div>
-                </div>
-                {sessionCredits.trial + sessionCredits.regular === 0 && (
-                  <p className="no-sessions-msg">No sessions available. <a href="#packages" onClick={onClose}>Purchase a package</a></p>
-                )}
-              </div>
-
               {/* Purchased Packages */}
               {purchasedPackages.length > 0 && (
                 <div className="overview-card">
                   <h4>Your Packages</h4>
                   <div className="packages-list">
-                    {purchasedPackages.map((pkg) => (
-                      <div className="package-item" key={pkg.id}>
-                        <div className="package-info">
-                          <span className="package-name">{pkg.name || pkg.package_name}</span>
-                          <span className="package-date">Purchased {new Date(pkg.purchase_date || pkg.purchaseDate).toLocaleDateString()}</span>
+                    {purchasedPackages.map((pkg) => {
+                      const total = pkg.sessions_total || pkg.sessionsTotal || 1
+                      const used = pkg.sessions_used || pkg.sessionsUsed || 0
+                      const remaining = total - used
+                      const packageType = pkg.type === 'trial' ? 'Trial' : 'Regular'
+                      return (
+                        <div className="package-item" key={pkg.id}>
+                          <div className="package-info">
+                            <span className="package-name">{pkg.name || pkg.package_name}</span>
+                            <span className="package-date">Purchased {new Date(pkg.purchase_date || pkg.purchaseDate).toLocaleDateString()}</span>
+                          </div>
+                          <div className="package-sessions">
+                            <span className="sessions-remaining">{remaining} {packageType}</span>
+                            <span className="sessions-label">{remaining === 1 ? 'session left' : 'sessions left'}</span>
+                          </div>
                         </div>
-                        <div className="package-sessions">
-                          <span className="sessions-remaining">{(pkg.sessions_total || pkg.sessionsTotal) - (pkg.sessions_used || pkg.sessionsUsed)}/{pkg.sessions_total || pkg.sessionsTotal}</span>
-                          <span className="sessions-label">remaining</span>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -361,7 +385,7 @@ export default function Profile({ onClose }) {
                 </div>
                 <div className="stat-card">
                   <span className="stat-number">{sessionCredits.trial + sessionCredits.regular}</span>
-                  <span className="stat-label">Available</span>
+                  <span className="stat-label">{(sessionCredits.trial + sessionCredits.regular) === 1 ? 'Session Available' : 'Sessions Available'}</span>
                 </div>
                 <div className="stat-card">
                   <span className="stat-number">{profileData?.target_schools?.length || 0}</span>
@@ -369,15 +393,11 @@ export default function Profile({ onClose }) {
                 </div>
               </div>
 
-              {/* Book a Session CTA */}
+              {/* Small Book Button below stats */}
               {(sessionCredits.trial + sessionCredits.regular) > 0 && (
-                <div className="overview-card next-session">
-                  <h4>Ready to Book?</h4>
-                  <p>You have sessions available!</p>
-                  <button className="book-session-btn" onClick={handleBookNow}>
-                    Book a Session
-                  </button>
-                </div>
+                <button className="book-session-btn-small" onClick={handleBookNow}>
+                  Book Your Session →
+                </button>
               )}
 
               {/* Main Concerns */}
@@ -419,8 +439,30 @@ export default function Profile({ onClose }) {
 
           {activeTab === 'bookings' && (
             <div className="tab-bookings">
-              <div className="bookings-section">
+              {/* Session Credits */}
+              <div className="overview-card session-credits-card">
                 <h4>Available Sessions</h4>
+                <div className="session-credits-display">
+                  <div className="credit-box">
+                    <span className="credit-number">{sessionCredits.trial}</span>
+                    <span className="credit-type">Trial Sessions</span>
+                  </div>
+                  <div className="credit-box">
+                    <span className="credit-number">{sessionCredits.regular}</span>
+                    <span className="credit-type">Regular Sessions</span>
+                  </div>
+                  <div className="credit-box total">
+                    <span className="credit-number">{sessionCredits.trial + sessionCredits.regular}</span>
+                    <span className="credit-type">Total</span>
+                  </div>
+                </div>
+                {sessionCredits.trial + sessionCredits.regular === 0 && (
+                  <p className="no-sessions-msg">No sessions available. <a href="#packages" onClick={onClose}>Purchase a package</a></p>
+                )}
+              </div>
+
+              <div className="bookings-section">
+                <h4>Purchased Packages</h4>
                 {purchasedPackages.length > 0 ? (
                   <>
                     <div className="bookings-list">
@@ -595,9 +637,9 @@ export default function Profile({ onClose }) {
                   </div>
                 )}
 
-                {resources.filter(r => r.type === 'user' || !r.type).length > 0 ? (
+                {resources.filter(r => !r.added_by_admin).length > 0 ? (
                   <div className="resources-list">
-                    {resources.filter(r => r.type === 'user' || !r.type).map((resource, index) => (
+                    {resources.filter(r => !r.added_by_admin).map((resource, index) => (
                       <div className="resource-card-wrapper" key={resource.id || index}>
                         <a 
                           href={resource.url} 

@@ -4,21 +4,33 @@ import { getTimeAgo } from '../utils'
 const CACHE_KEY = 'recentPurchases'
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
-export default function RecentBookings() {
-  const [purchases, setPurchases] = useState(() => {
-    try {
-      const cached = localStorage.getItem(CACHE_KEY)
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached)
-        if (Date.now() - timestamp < CACHE_DURATION && data?.length > 0) {
-          return data
-        }
+// Safely read from localStorage (handles SSR, private browsing, quota errors)
+function readCache(key) {
+  try {
+    const cached = localStorage.getItem(key)
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached)
+      if (Date.now() - timestamp < CACHE_DURATION && data?.length > 0) {
+        return data
       }
-    } catch {
-      // Ignore cache errors
     }
-    return []
-  })
+  } catch {
+    // localStorage unavailable or corrupt - gracefully degrade
+  }
+  return []
+}
+
+// Safely write to localStorage
+function writeCache(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }))
+  } catch {
+    // localStorage full or unavailable - gracefully degrade
+  }
+}
+
+export default function RecentBookings() {
+  const [purchases, setPurchases] = useState(() => readCache(CACHE_KEY))
 
   useEffect(() => {
     fetchRecentPurchases()
@@ -33,14 +45,12 @@ export default function RecentBookings() {
         const data = await response.json()
         if (data.purchases?.length > 0) {
           setPurchases(data.purchases)
-          localStorage.setItem(CACHE_KEY, JSON.stringify({
-            data: data.purchases,
-            timestamp: Date.now()
-          }))
+          writeCache(CACHE_KEY, data.purchases)
         }
       }
+      // Non-200 responses: keep showing cached data silently
     } catch {
-      // Use cached data
+      // Network error: keep showing cached data silently
     }
   }
 

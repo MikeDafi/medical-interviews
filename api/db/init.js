@@ -1,16 +1,19 @@
 import { sql } from '@vercel/postgres';
 
+// Admin config from environment (fallback for backwards compatibility)
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'premedical1on1@gmail.com';
+const ADMIN_NAME = process.env.ADMIN_NAME || 'Ashley Kumar';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   // SECURITY: Only allow initialization with a secret key
-  // This prevents anyone from running init on production
   const initSecret = req.headers['x-init-secret'] || req.body?.initSecret;
   const expectedSecret = process.env.DB_INIT_SECRET;
   
-  // In production, require the secret. In development, allow without it.
+  // In production, require the secret
   if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
     if (!expectedSecret) {
       return res.status(500).json({ error: 'DB_INIT_SECRET not configured' });
@@ -42,6 +45,22 @@ export default async function handler(req, res) {
       )
     `;
 
+    // Create performance indexes for common query patterns
+    // Index on email for login lookups
+    await sql`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`;
+    
+    // Index on google_id for OAuth lookups
+    await sql`CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)`;
+    
+    // Index on created_at for recent users queries
+    await sql`CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at DESC)`;
+    
+    // Index on updated_at for recent activity queries
+    await sql`CREATE INDEX IF NOT EXISTS idx_users_updated_at ON users(updated_at DESC)`;
+    
+    // GIN index on purchases JSONB for efficient JSON queries
+    await sql`CREATE INDEX IF NOT EXISTS idx_users_purchases ON users USING GIN(purchases)`;
+
     // Create packages table
     await sql`
       CREATE TABLE IF NOT EXISTS packages (
@@ -56,6 +75,9 @@ export default async function handler(req, res) {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
+
+    // Index on active packages (most common query)
+    await sql`CREATE INDEX IF NOT EXISTS idx_packages_active ON packages(is_active) WHERE is_active = true`;
 
     // Insert default packages if they don't exist
     await sql`
@@ -82,15 +104,21 @@ export default async function handler(req, res) {
       WHERE NOT EXISTS (SELECT 1 FROM packages WHERE name = 'Package of 5')
     `;
 
-    // Insert admin user
+    // Insert admin user from environment config
     await sql`
-      INSERT INTO users (google_id, email, name, is_admin)
-      SELECT '106108496620102922676', 'premedical1on1@gmail.com', 'Ashley Kumar', true
-      WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'premedical1on1@gmail.com')
+      INSERT INTO users (email, name, is_admin)
+      SELECT ${ADMIN_EMAIL}, ${ADMIN_NAME}, true
+      WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = ${ADMIN_EMAIL})
     `;
 
-    return res.status(200).json({ message: 'Database initialized successfully' });
-  } catch {
+    return res.status(200).json({ 
+      message: 'Database initialized successfully',
+      tables: ['users', 'packages'],
+      indexes: ['idx_users_email', 'idx_users_google_id', 'idx_users_created_at', 'idx_users_updated_at', 'idx_users_purchases', 'idx_packages_active']
+    });
+  } catch (error) {
+    // Log error for debugging but don't expose details
+    console.error('DB init error:', error.message);
     return res.status(500).json({ error: 'Database initialization failed' });
   }
 }
