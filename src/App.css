@@ -716,6 +716,10 @@ img {
   position: relative;
 }
 
+.package-features li:last-child {
+  border-bottom: none;
+}
+
 .package-features li::before {
   content: none; /* Remove default before, using .feature-check instead */
 }
@@ -895,6 +899,10 @@ img {
 
 .package-card.premium .package-features li {
   border-color: rgba(255, 255, 255, 0.1);
+}
+
+.package-card.premium .package-features li:last-child {
+  border-bottom: none;
 }
 
 .package-btn {

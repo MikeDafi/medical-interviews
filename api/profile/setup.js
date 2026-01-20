@@ -1,11 +1,11 @@
 import { sql } from '@vercel/postgres';
+import { requireAuth } from '../lib/session.js';
 import { rateLimit } from '../lib/auth.js';
 import { 
   sanitizeString, 
   sanitizeEmail, 
   sanitizeUrl, 
-  sanitizePhone,
-  sanitizeArray 
+  sanitizePhone
 } from '../lib/sanitize.js';
 
 export default async function handler(req, res) {
@@ -20,18 +20,22 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Too many requests' });
   }
 
+  // SECURITY: Require authenticated session
+  const { authenticated, user: sessionUser, error: authError } = await requireAuth(req);
+  
+  if (!authenticated) {
+    return res.status(401).json({ error: authError || 'Authentication required' });
+  }
+
   try {
-    const { googleId, email, name, picture, phone, applicationStage, targetSchools, concerns, resources } = req.body;
+    const { phone, applicationStage, targetSchools, concerns, resources, name } = req.body;
 
-    // SECURITY: Validate and sanitize all inputs
-    const cleanEmail = sanitizeEmail(email);
-    if (!cleanEmail) {
-      return res.status(400).json({ error: 'Valid email required' });
-    }
+    // SECURITY: Use verified email from session, not from body
+    const cleanEmail = sessionUser.email;
+    const cleanGoogleId = sessionUser.googleId;
 
-    const cleanGoogleId = sanitizeString(googleId, 100);
-    const cleanName = sanitizeString(name, 100);
-    const cleanPicture = sanitizeUrl(picture);
+    // Sanitize inputs
+    const cleanName = sanitizeString(name, 100) || sessionUser.name;
     const cleanPhone = sanitizePhone(phone);
     const cleanApplicationStage = sanitizeString(applicationStage, 50);
     const cleanConcerns = sanitizeString(concerns, 1000);
@@ -54,21 +58,21 @@ export default async function handler(req, res) {
       : [];
 
     // Check if user exists
-    let user = await sql`SELECT * FROM users WHERE email = ${cleanEmail}`;
+    let user = await sql`SELECT * FROM users WHERE google_id = ${cleanGoogleId}`;
     
-    if (user.rows.length === 0 && cleanGoogleId) {
-      user = await sql`SELECT * FROM users WHERE google_id = ${cleanGoogleId}`;
+    if (user.rows.length === 0) {
+      // Try by email as fallback
+      user = await sql`SELECT * FROM users WHERE email = ${cleanEmail}`;
     }
 
     if (user.rows.length === 0) {
-      // Create new user
+      // Create new user (this shouldn't normally happen as user is already authenticated)
       await sql`
-        INSERT INTO users (google_id, email, name, picture, phone, application_stage, target_schools, main_concerns, resources, profile_complete)
+        INSERT INTO users (google_id, email, name, phone, application_stage, target_schools, main_concerns, resources, profile_complete)
         VALUES (
           ${cleanGoogleId}, 
           ${cleanEmail}, 
           ${cleanName}, 
-          ${cleanPicture}, 
           ${cleanPhone}, 
           ${cleanApplicationStage}, 
           ${JSON.stringify(cleanTargetSchools)}::jsonb, 
@@ -78,9 +82,9 @@ export default async function handler(req, res) {
         )
       `;
     } else {
-      // SECURITY: Verify the googleId matches if user exists (prevent hijacking)
+      // SECURITY: Verify the session google_id matches the user record
       const existingUser = user.rows[0];
-      if (existingUser.google_id && cleanGoogleId && existingUser.google_id !== cleanGoogleId) {
+      if (existingUser.google_id && existingUser.google_id !== cleanGoogleId) {
         return res.status(403).json({ error: 'Account mismatch' });
       }
 
@@ -89,7 +93,6 @@ export default async function handler(req, res) {
         UPDATE users SET
           google_id = COALESCE(${cleanGoogleId}, google_id),
           name = COALESCE(${cleanName}, name),
-          picture = COALESCE(${cleanPicture}, picture),
           phone = ${cleanPhone},
           application_stage = ${cleanApplicationStage},
           target_schools = ${JSON.stringify(cleanTargetSchools)}::jsonb,
@@ -97,12 +100,13 @@ export default async function handler(req, res) {
           resources = ${JSON.stringify(cleanResources)}::jsonb,
           profile_complete = true,
           updated_at = CURRENT_TIMESTAMP
-        WHERE email = ${cleanEmail}
+        WHERE id = ${existingUser.id}
       `;
     }
 
     return res.status(200).json({ success: true });
-  } catch {
+  } catch (error) {
+    console.error('Profile setup error:', error);
     return res.status(500).json({ error: 'Failed to save profile' });
   }
 }

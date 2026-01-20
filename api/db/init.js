@@ -79,6 +79,28 @@ export default async function handler(req, res) {
     // Index on active packages (most common query)
     await sql`CREATE INDEX IF NOT EXISTS idx_packages_active ON packages(is_active) WHERE is_active = true`;
 
+    // Create sessions table for secure server-side session management
+    await sql`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id SERIAL PRIMARY KEY,
+        token_hash VARCHAR(64) UNIQUE NOT NULL,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        google_id VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+
+    // Index on token_hash for fast session lookups
+    await sql`CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash)`;
+    
+    // Index on expires_at for cleanup queries
+    await sql`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`;
+    
+    // Index on google_id for invalidating all user sessions
+    await sql`CREATE INDEX IF NOT EXISTS idx_sessions_google_id ON sessions(google_id)`;
+
     // Insert default packages if they don't exist
     await sql`
       INSERT INTO packages (name, description, price, duration_minutes, session_count, features)
@@ -113,8 +135,8 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ 
       message: 'Database initialized successfully',
-      tables: ['users', 'packages'],
-      indexes: ['idx_users_email', 'idx_users_google_id', 'idx_users_created_at', 'idx_users_updated_at', 'idx_users_purchases (GIN jsonb_path_ops)', 'idx_packages_active']
+      tables: ['users', 'packages', 'sessions'],
+      indexes: ['idx_users_email', 'idx_users_google_id', 'idx_users_created_at', 'idx_users_updated_at', 'idx_users_purchases (GIN)', 'idx_packages_active', 'idx_sessions_token_hash', 'idx_sessions_expires_at', 'idx_sessions_google_id']
     });
   } catch (error) {
     // Log error for debugging but don't expose details

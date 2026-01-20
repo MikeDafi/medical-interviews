@@ -91,14 +91,13 @@ export default function ProfileSetup({ user, onComplete }) {
     setError(null)
     
     try {
+      // SECURITY: Session authenticates user, no need to send googleId/email
       const response = await fetch('/api/profile/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          googleId: user.id,
-          email: user.email,
           name: user.name,
-          picture: user.picture,
           phone: formData.phone,
           applicationStage: formData.applicationStage,
           targetSchools: formData.targetSchools.filter(s => s.name.trim()),

@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { rateLimit } from '../lib/auth.js';
+import { requireAuth } from '../lib/session.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -120,6 +121,8 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:5173',
   'https://premedical1on1.vercel.app',
+  'https://premedical1on1.biz',
+  'https://www.premedical1on1.biz',
   'https://www.premedical1on1.com',
 ];
 
@@ -135,19 +138,26 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Too many requests' });
   }
 
+  // SECURITY: Require authenticated session for purchases
+  const { authenticated, user: sessionUser, error: authError } = await requireAuth(req);
+  
+  if (!authenticated) {
+    return res.status(401).json({ error: authError || 'Please sign in to purchase' });
+  }
+
   if (!process.env.STRIPE_SECRET_KEY) {
     return res.status(500).json({ error: 'Payment not configured' });
   }
 
   try {
-    const { packageId, userId, userEmail } = req.body;
+    const { packageId } = req.body;
+
+    // SECURITY: Use verified email from session
+    const userId = sessionUser.googleId;
+    const userEmail = sessionUser.email;
 
     if (!packageId || !PACKAGES[packageId]) {
       return res.status(400).json({ error: 'Invalid package' });
-    }
-
-    if (userEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
-      return res.status(400).json({ error: 'Invalid email format' });
     }
 
     const origin = req.headers.origin;

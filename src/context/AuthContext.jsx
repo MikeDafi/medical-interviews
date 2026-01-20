@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 
 const AuthContext = createContext({})
 
@@ -6,8 +6,27 @@ export const useAuth = () => useContext(AuthContext)
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
-// Session duration configurable via env or default to 24 hours
-const SESSION_DURATION = parseInt(import.meta.env.VITE_SESSION_DURATION_HOURS || '24') * 60 * 60 * 1000
+/**
+ * Generate a cryptographically secure random string for PKCE
+ */
+function generateRandomString(length = 64) {
+  const array = new Uint8Array(length)
+  crypto.getRandomValues(array)
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * Generate PKCE code challenge from verifier (SHA-256)
+ */
+async function generateCodeChallenge(verifier) {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(verifier)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -15,204 +34,138 @@ export function AuthProvider({ children }) {
   const [showProfileSetup, setShowProfileSetup] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
 
-  useEffect(() => {
-    // Check for existing session (use sessionStorage for security)
-    const session = getSession()
-    if (session?.user && !isSessionExpired(session)) {
-      setUser(session.user)
-      checkAdminStatus(session.user)
+  // Check session with server on mount
+  const checkSession = useCallback(async () => {
+    try {
+      const response = await fetch('/api/auth/session', {
+        credentials: 'include' // Include httpOnly cookies
+      })
       
-      if (session.profileComplete) {
-        setShowProfileSetup(false)
-      } else {
-        checkProfileComplete(session.user)
+      if (response.ok) {
+        const data = await response.json()
+        
+        if (data.authenticated && data.user) {
+          setUser(data.user)
+          setIsAdmin(data.user.isAdmin || false)
+          
+          if (!data.user.profileComplete) {
+            setShowProfileSetup(true)
+          }
+        } else {
+          setUser(null)
+          setIsAdmin(false)
+        }
       }
-    } else {
-      // Clear expired session
-      clearSession()
-    }
-    setLoading(false)
-
-    // Handle OAuth callback
-    const params = new URLSearchParams(window.location.hash.substring(1))
-    const accessToken = params.get('access_token')
-    const returnedState = params.get('state')
-    const savedState = sessionStorage.getItem('oauth_state')
-    
-    // SECURITY: Validate state parameter to prevent CSRF
-    if (accessToken) {
-      if (returnedState && savedState && returnedState === savedState) {
-        sessionStorage.removeItem('oauth_state')
-        fetchGoogleUserInfo(accessToken)
-        window.history.replaceState({}, document.title, window.location.pathname)
-      } else if (!savedState) {
-        // No saved state - might be a refresh, still allow
-        fetchGoogleUserInfo(accessToken)
-        window.history.replaceState({}, document.title, window.location.pathname)
-      } else {
-        // State mismatch - potential CSRF attack
-        console.error('OAuth state mismatch - possible CSRF attack')
-        clearSession()
-        window.history.replaceState({}, document.title, window.location.pathname)
-      }
+    } catch (error) {
+      console.error('Session check failed:', error)
+      setUser(null)
+    } finally {
+      setLoading(false)
     }
   }, [])
 
-  // Session management functions
-  const getSession = () => {
-    try {
-      // Try sessionStorage first (current tab), then localStorage (returning user)
-      const sessionData = sessionStorage.getItem('authSession') || localStorage.getItem('authSession')
-      return sessionData ? JSON.parse(sessionData) : null
-    } catch {
-      return null
+  useEffect(() => {
+    // Check for auth callback results in URL
+    const params = new URLSearchParams(window.location.search)
+    const authResult = params.get('auth')
+    const authError = params.get('auth_error')
+    const profileComplete = params.get('profile_complete')
+
+    if (authError) {
+      console.error('Auth error:', authError)
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname)
     }
-  }
 
-  const saveSession = (userData, profileComplete = false) => {
-    const session = {
-      user: userData,
-      profileComplete,
-      createdAt: Date.now()
-    }
-    // Save to both: sessionStorage for security, localStorage for "remember me"
-    sessionStorage.setItem('authSession', JSON.stringify(session))
-    localStorage.setItem('authSession', JSON.stringify(session))
-  }
-
-  const clearSession = () => {
-    sessionStorage.removeItem('authSession')
-    localStorage.removeItem('authSession')
-    sessionStorage.removeItem('oauth_state')
-  }
-
-  const isSessionExpired = (session) => {
-    if (!session?.createdAt) return true
-    return Date.now() - session.createdAt > SESSION_DURATION
-  }
-
-  const updateSessionProfileComplete = (complete) => {
-    const session = getSession()
-    if (session) {
-      session.profileComplete = complete
-      sessionStorage.setItem('authSession', JSON.stringify(session))
-      localStorage.setItem('authSession', JSON.stringify(session))
-    }
-  }
-
-  const checkAdminStatus = async (userData) => {
-    try {
-      const response = await fetch(`/api/admin?action=check&googleId=${userData.id}`)
-      if (response.ok) {
-        const data = await response.json()
-        setIsAdmin(data.isAdmin || false)
-      }
-    } catch {
-      // Admin check unavailable - default to non-admin
-      setIsAdmin(false)
-    }
-  }
-
-  const checkProfileComplete = async (userData) => {
-    try {
-      const response = await fetch(`/api/profile?googleId=${userData.id}&email=${encodeURIComponent(userData.email)}`)
-      if (response.ok) {
-        const data = await response.json()
-        if (data.profile?.profile_complete) {
-          updateSessionProfileComplete(true)
-          setShowProfileSetup(false)
-        } else {
-          setShowProfileSetup(true)
-        }
-      } else if (response.status === 404) {
-        // New user - show profile setup
-        setShowProfileSetup(true)
-      }
-    } catch {
-      // API unavailable - check local session
-      const session = getSession()
-      if (!session?.profileComplete) {
+    if (authResult === 'success') {
+      // Clean up URL and check session
+      window.history.replaceState({}, document.title, window.location.pathname)
+      
+      if (profileComplete === 'false') {
         setShowProfileSetup(true)
       }
     }
-  }
 
-  const fetchGoogleUserInfo = async (accessToken) => {
-    try {
-      const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      })
-      
-      if (!response.ok) throw new Error('Failed to fetch user info')
-      
-      const data = await response.json()
-      const userData = {
-        id: data.id,
-        email: data.email,
-        name: data.name,
-        picture: data.picture
-      }
-      
-      setUser(userData)
-      saveSession(userData, false)
-      
-      // Save to backend
-      try {
-        await fetch('/api/auth/google', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userData })
-        })
-      } catch {
-        // Backend save will happen on next API call
-      }
-      
-      checkAdminStatus(userData)
-      checkProfileComplete(userData)
-    } catch (error) {
-      console.error('Error fetching user info:', error)
-      clearSession()
-    }
-  }
+    // Always verify session with server
+    checkSession()
+  }, [checkSession])
 
-  const signInWithGoogle = () => {
+  /**
+   * Initiate Google OAuth with Authorization Code Flow + PKCE
+   */
+  const signInWithGoogle = async () => {
     if (!GOOGLE_CLIENT_ID) {
-      // Use a custom notification instead of alert in production
       console.error('Google Sign In is not configured')
       return
     }
 
-    // Generate state for CSRF protection
-    const state = crypto.randomUUID()
-    sessionStorage.setItem('oauth_state', state)
+    try {
+      // Generate PKCE code verifier and challenge
+      const verifier = generateRandomString(64)
+      const challenge = await generateCodeChallenge(verifier)
+      
+      // Generate state nonce for CSRF protection
+      const nonce = generateRandomString(32)
+      
+      // Store verifier in state (sent to callback, not stored client-side)
+      const stateData = JSON.stringify({ verifier, nonce })
+      const state = btoa(stateData).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+      
+      // Build OAuth URL with PKCE
+      const redirectUri = `${window.location.origin}/api/auth/callback`
+      const scope = 'email profile'
+      
+      const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+      authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID)
+      authUrl.searchParams.set('redirect_uri', redirectUri)
+      authUrl.searchParams.set('response_type', 'code')
+      authUrl.searchParams.set('scope', scope)
+      authUrl.searchParams.set('state', state)
+      authUrl.searchParams.set('code_challenge', challenge)
+      authUrl.searchParams.set('code_challenge_method', 'S256')
+      authUrl.searchParams.set('access_type', 'online')
+      authUrl.searchParams.set('prompt', 'select_account')
 
-    const redirectUri = window.location.origin
-    const scope = 'email profile'
-    
-    // Note: For production, should use authorization code flow with PKCE
-    // Implicit flow is used here for simplicity but is less secure
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${GOOGLE_CLIENT_ID}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&response_type=token` +
-      `&scope=${encodeURIComponent(scope)}` +
-      `&state=${state}` +
-      `&prompt=select_account`
-
-    window.location.href = authUrl
+      // Redirect to Google OAuth
+      window.location.href = authUrl.toString()
+    } catch (error) {
+      console.error('Failed to initiate OAuth:', error)
+    }
   }
 
-  const signOut = () => {
+  /**
+   * Sign out - invalidate session on server
+   */
+  const signOut = async () => {
+    try {
+      await fetch('/api/auth/session', {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+    
     setUser(null)
     setShowProfileSetup(false)
     setIsAdmin(false)
-    clearSession()
   }
 
-  const completeProfileSetup = () => {
+  /**
+   * Mark profile setup as complete
+   */
+  const completeProfileSetup = async () => {
     setShowProfileSetup(false)
-    updateSessionProfileComplete(true)
+    // Refresh session to get updated profileComplete status
+    await checkSession()
   }
+
+  /**
+   * Refresh session data from server
+   */
+  const refreshSession = useCallback(async () => {
+    await checkSession()
+  }, [checkSession])
 
   const value = {
     user,
@@ -221,7 +174,8 @@ export function AuthProvider({ children }) {
     signInWithGoogle,
     signOut,
     showProfileSetup,
-    completeProfileSetup
+    completeProfileSetup,
+    refreshSession
   }
 
   return (

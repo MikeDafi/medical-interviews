@@ -34,14 +34,12 @@ export default function Packages() {
     setError(null)
     
     try {
+      // SECURITY: Session authenticates user
       const response = await fetch('/api/stripe/create-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          packageId,
-          userId: user.id,
-          userEmail: user.email
-        })
+        credentials: 'include',
+        body: JSON.stringify({ packageId })
       })
 
       const data = await response.json()

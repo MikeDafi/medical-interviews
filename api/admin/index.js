@@ -1,5 +1,6 @@
 import { sql } from '@vercel/postgres';
-import { verifyAuth, rateLimit } from '../lib/auth.js';
+import { rateLimit } from '../lib/auth.js';
+import { requireAuth } from '../lib/session.js';
 
 export default async function handler(req, res) {
   // SECURITY: Rate limiting
@@ -9,27 +10,19 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Too many requests' });
   }
 
-  const { action, googleId } = req.query;
+  const { action } = req.query;
 
-  // Check admin status - this endpoint does NOT require admin auth
-  // (it's used to DETERMINE if someone is an admin)
+  // Check admin status - requires authentication
   if (action === 'check' && req.method === 'GET') {
-    if (!googleId) {
-      return res.status(400).json({ error: 'googleId required', isAdmin: false });
-    }
-    try {
-      const result = await sql`SELECT is_admin FROM users WHERE google_id = ${googleId}`;
-      if (result.rows.length === 0) {
-        return res.status(200).json({ isAdmin: false });
-      }
-      return res.status(200).json({ isAdmin: result.rows[0].is_admin || false });
-    } catch {
+    const { authenticated, user } = await requireAuth(req);
+    if (!authenticated || !user) {
       return res.status(200).json({ isAdmin: false });
     }
+    return res.status(200).json({ isAdmin: user.isAdmin || false });
   }
 
-  // SECURITY: Require admin authentication for ALL OTHER actions
-  const { authenticated, user, error } = await verifyAuth(req, { requireAdmin: true });
+  // SECURITY: Require authenticated admin session for ALL OTHER actions
+  const { authenticated, user, error } = await requireAuth(req, { requireAdmin: true });
   if (!authenticated) {
     return res.status(403).json({ error: error || 'Admin access required' });
   }

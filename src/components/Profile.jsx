@@ -139,11 +139,8 @@ export default function Profile({ onClose }) {
       const response = await fetch('/api/profile/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          googleId: user.id,
-          email: user.email,
-          name: newName.trim()
-        })
+        credentials: 'include',
+        body: JSON.stringify({ name: newName.trim() })
       })
       
       if (response.ok) {
@@ -167,15 +164,12 @@ export default function Profile({ onClose }) {
     setPhoneError('')
     
     try {
-      // Update in backend
+      // Update in backend (session authenticates user)
       await fetch('/api/profile/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          googleId: user.id,
-          email: user.email,
-          phone: cleanPhone
-        })
+        credentials: 'include',
+        body: JSON.stringify({ phone: cleanPhone })
       })
       
       // Update local storage

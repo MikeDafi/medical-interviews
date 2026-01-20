@@ -1,6 +1,7 @@
 import { sql } from '@vercel/postgres';
 import { google } from 'googleapis';
 import { rateLimit } from '../lib/auth.js';
+import { requireAuth } from '../lib/session.js';
 import { sendCustomerBookingEmail, sendAdminBookingEmail } from '../lib/email.js';
 
 // Calendar IDs to check for busy times (Ashley's calendars)
@@ -84,17 +85,30 @@ const IGNORED_EVENT_PATTERNS = [
   /^week$/i,       // Just "Week"
 ];
 
+// Event titles that OVERRIDE busy times - "Ash is free" marks time as available
+const FREE_OVERRIDE_PATTERNS = [
+  /ash\s+is\s+free/i,  // "Ash is free", "ash is free", etc.
+  /ashley\s+is\s+free/i,  // "Ashley is free" variant
+];
+
 // Check if an event should be ignored based on its title
 function shouldIgnoreEvent(title) {
   if (!title) return false;
   return IGNORED_EVENT_PATTERNS.some(pattern => pattern.test(title.trim()));
 }
 
-// Query Events API to get busy times, filtering out ignored events
+// Check if an event marks time as explicitly FREE (overrides busy)
+function isFreeOverrideEvent(title) {
+  if (!title) return false;
+  return FREE_OVERRIDE_PATTERNS.some(pattern => pattern.test(title.trim()));
+}
+
+// Query Events API to get busy times and free override periods
+// Returns { busyPeriods: [], freeOverrides: [] }
 async function getBusyTimes(calendar, date) {
   if (CALENDAR_IDS.length === 0) {
     console.warn('No calendar IDs configured - returning empty busy times');
-    return [];
+    return { busyPeriods: [], freeOverrides: [] };
   }
 
   const startOfDay = new Date(date);
@@ -104,6 +118,7 @@ async function getBusyTimes(calendar, date) {
   endOfDay.setHours(23, 59, 59, 999);
 
   const allBusyPeriods = [];
+  const freeOverrides = [];
 
   // Query each calendar for events
   for (const calendarId of CALENDAR_IDS) {
@@ -119,19 +134,26 @@ async function getBusyTimes(calendar, date) {
       const events = response.data.items || [];
 
       for (const event of events) {
+        // Get event start/end times
+        const start = event.start?.dateTime || event.start?.date;
+        const end = event.end?.dateTime || event.end?.date;
+
+        if (!start || !end) continue;
+
+        // Check if this is a "free override" event - "Ash is free" marks time as AVAILABLE
+        if (isFreeOverrideEvent(event.summary)) {
+          freeOverrides.push({ start, end, title: event.summary });
+          continue;
+        }
+
         // Skip events marked as "free" or "transparent"
         if (event.transparency === 'transparent') continue;
 
         // Skip ignored events (like "Week #")
         if (shouldIgnoreEvent(event.summary)) continue;
 
-        // Get event start/end times
-        const start = event.start?.dateTime || event.start?.date;
-        const end = event.end?.dateTime || event.end?.date;
-
-        if (start && end) {
-          allBusyPeriods.push({ start, end });
-        }
+        // This is a busy period
+        allBusyPeriods.push({ start, end });
       }
     } catch (error) {
       console.warn(`Error querying calendar ${calendarId}:`, error.message);
@@ -139,11 +161,12 @@ async function getBusyTimes(calendar, date) {
     }
   }
 
-  return allBusyPeriods;
+  return { busyPeriods: allBusyPeriods, freeOverrides };
 }
 
 // Generate available 30-min slots for a date, excluding busy times
-function generateAvailableSlots(date, busyPeriods) {
+// freeOverrides: Array of time periods where "Ash is free" - these OVERRIDE busy times
+function generateAvailableSlots(date, busyPeriods, freeOverrides = []) {
   const dayOfWeek = date.getDay();
   
   // Check if it's an available day
@@ -170,15 +193,33 @@ function generateAvailableSlots(date, busyPeriods) {
       const slotStart = new Date(slotTimeStr);
       const slotEnd = new Date(slotStart.getTime() + BUSINESS_HOURS.slotDuration * 60 * 1000);
 
+      // FIRST: Check if this slot falls within a "free override" period ("Ash is free")
+      // If so, it's available regardless of other busy times
+      const hasFreeOverride = freeOverrides.some(free => {
+        const freeStart = new Date(free.start);
+        const freeEnd = new Date(free.end);
+        // Slot is in free override if it's completely contained within the free period
+        return slotStart >= freeStart && slotEnd <= freeEnd;
+      });
+
+      if (hasFreeOverride) {
+        // "Ash is free" overrides all busy times - slot is available
+        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const timeStr = `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}`;
+        slots.push(timeStr);
+        continue;
+      }
+
       // Check if this slot overlaps with any busy period
-      const isAvailable = !busyPeriods.some(busy => {
+      const isBusy = busyPeriods.some(busy => {
         const busyStart = new Date(busy.start);
         const busyEnd = new Date(busy.end);
         // Slot is busy if it overlaps with busy period
         return slotStart < busyEnd && slotEnd > busyStart;
       });
 
-      if (isAvailable) {
+      if (!isBusy) {
         // Format time for display (e.g., "9:00 AM", "2:30 PM")
         const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
         const ampm = hour >= 12 ? 'PM' : 'AM';
@@ -212,7 +253,9 @@ async function batchPreloadAvailability() {
     endDate.setDate(today.getDate() + PRELOAD_DAYS);
 
     // Collect all events from all calendars for the entire 4-week period
-    const allEvents = [];
+    // Separate into busy events and "free override" events ("Ash is free")
+    const busyEvents = [];
+    const freeOverrideEvents = [];
     
     for (const calendarId of CALENDAR_IDS) {
       try {
@@ -228,16 +271,22 @@ async function batchPreloadAvailability() {
         const events = response.data.items || [];
 
         for (const event of events) {
+          const start = event.start?.dateTime || event.start?.date;
+          const end = event.end?.dateTime || event.end?.date;
+          if (!start || !end) continue;
+
+          // Check for "Ash is free" - this OVERRIDES busy times
+          if (isFreeOverrideEvent(event.summary)) {
+            freeOverrideEvents.push({ start, end, summary: event.summary });
+            continue;
+          }
+
           // Skip transparent/free events
           if (event.transparency === 'transparent') continue;
           // Skip ignored patterns (Week #)
           if (shouldIgnoreEvent(event.summary)) continue;
 
-          const start = event.start?.dateTime || event.start?.date;
-          const end = event.end?.dateTime || event.end?.date;
-          if (start && end) {
-            allEvents.push({ start, end, summary: event.summary });
-          }
+          busyEvents.push({ start, end, summary: event.summary });
         }
       } catch (error) {
         console.warn(`Error fetching from ${calendarId}:`, error.message);
@@ -258,13 +307,22 @@ async function batchPreloadAvailability() {
       const dayEnd = new Date(date);
       dayEnd.setHours(23, 59, 59, 999);
 
-      const dayEvents = allEvents.filter(e => {
+      // Get busy periods for this day
+      const dayBusyPeriods = busyEvents.filter(e => {
         const eventStart = new Date(e.start);
         const eventEnd = new Date(e.end);
         return eventStart < dayEnd && eventEnd > dayStart;
       });
 
-      const availableSlots = generateAvailableSlots(date, dayEvents);
+      // Get free override periods for this day ("Ash is free")
+      const dayFreeOverrides = freeOverrideEvents.filter(e => {
+        const eventStart = new Date(e.start);
+        const eventEnd = new Date(e.end);
+        return eventStart < dayEnd && eventEnd > dayStart;
+      });
+
+      // Generate available slots - free overrides take priority over busy times
+      const availableSlots = generateAvailableSlots(date, dayBusyPeriods, dayFreeOverrides);
       availabilityMap.set(dateStr, {
         availableSlots,
         timezone: BUSINESS_HOURS.timezone,
@@ -516,15 +574,27 @@ export default async function handler(req, res) {
 
   // POST to book a session
   if (req.method === 'POST' && action === 'book') {
-    const { date, time, userId, userEmail, userName, duration } = req.body;
+    // SECURITY: Require authenticated session for booking
+    const { authenticated, user: sessionUser, error: authError } = await requireAuth(req);
+    
+    if (!authenticated) {
+      return res.status(401).json({ error: authError || 'Authentication required to book' });
+    }
 
-    if (!date || !time || !userId || !duration) {
+    const { date, time, duration } = req.body;
+
+    if (!date || !time || !duration) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
     if (![30, 60].includes(duration)) {
       return res.status(400).json({ error: 'Invalid duration (must be 30 or 60 minutes)' });
     }
+
+    // SECURITY: Use verified session data, not client-provided data
+    const userId = sessionUser.googleId;
+    const userEmail = sessionUser.email;
+    const userName = sessionUser.name;
 
     // SECURITY: Reject same-day bookings
     const bookingDate = new Date(date + 'T00:00:00');
@@ -566,18 +636,14 @@ export default async function handler(req, res) {
     }
 
     try {
-      // Use a transaction with row-level locking to prevent race conditions
-      // This ensures only one booking can process at a time for the same user
-      const result = await sql.begin(async (tx) => {
-        // Lock the user row to prevent concurrent modifications
-        const userResult = await tx`
-          SELECT id, purchases, phone, application_stage, main_concerns, target_schools FROM users 
-          WHERE google_id = ${userId} OR email = ${userEmail}
-          FOR UPDATE
+      // Fetch user data
+      const userResult = await sql`
+        SELECT id, purchases, phone, application_stage, main_concerns, target_schools FROM users 
+        WHERE google_id = ${userId} OR email = ${userEmail}
       `;
 
       if (userResult.rows.length === 0) {
-          throw { status: 404, message: 'User not found' };
+        return res.status(404).json({ error: 'User not found. Please sign in again.' });
       }
 
       const user = userResult.rows[0];
@@ -589,141 +655,121 @@ export default async function handler(req, res) {
         target_schools: user.target_schools
       };
 
-        // Find an active package with matching duration and available sessions
-        const packageIndex = purchases.findIndex(p => {
-          if (p.status !== 'active') return false;
-          const remaining = (p.sessions_total || 0) - (p.sessions_used || 0);
-          if (remaining <= 0) return false;
-          
-          // Check duration_minutes (new format) or fall back to type (legacy)
-          const pkgDuration = p.duration_minutes || (p.type === 'trial' ? 30 : 60);
-          return pkgDuration === duration;
-        });
+      // Find an active package with matching duration and available sessions
+      const packageIndex = purchases.findIndex(p => {
+        if (p.status !== 'active') return false;
+        const remaining = (p.sessions_total || 0) - (p.sessions_used || 0);
+        if (remaining <= 0) return false;
+        
+        // Check duration_minutes (new format) or fall back to type (legacy)
+        const pkgDuration = p.duration_minutes || (p.type === 'trial' ? 30 : 60);
+        return pkgDuration === duration;
+      });
 
       if (packageIndex === -1) {
-          throw { status: 400, message: `No ${duration}-minute sessions available` };
-        }
+        return res.status(400).json({ error: `No ${duration}-minute sessions available. Please purchase a package.` });
+      }
 
-        // Create booking in Google Calendar if configured
-        let eventLink = null;
-        if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY && BOOKINGS_CALENDAR_ID) {
-          try {
-            const calendar = getCalendarClient();
-            
-            // Parse time and create event
-            const [timePart, ampm] = time.split(' ');
-            const [hours, minutes] = timePart.split(':').map(Number);
-            let hour24 = hours;
-            if (ampm === 'PM' && hours !== 12) hour24 += 12;
-            if (ampm === 'AM' && hours === 12) hour24 = 0;
+      // Create booking in Google Calendar if configured
+      let eventLink = null;
+      if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY && BOOKINGS_CALENDAR_ID) {
+        try {
+          const calendar = getCalendarClient();
+          
+          // Parse time and create event
+          const [timePart, ampm] = time.split(' ');
+          const [hours, minutes] = timePart.split(':').map(Number);
+          let hour24 = hours;
+          if (ampm === 'PM' && hours !== 12) hour24 += 12;
+          if (ampm === 'AM' && hours === 12) hour24 = 0;
 
-            const startDateTime = new Date(`${date}T${hour24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`);
-            const endDateTime = new Date(startDateTime.getTime() + duration * 60 * 1000);
+          const startDateTime = new Date(`${date}T${hour24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`);
+          const endDateTime = new Date(startDateTime.getTime() + duration * 60 * 1000);
 
-            const sessionLabel = duration === 30 ? '30-min Session' : '1-hour Session';
-            const event = await calendar.events.insert({
-              calendarId: BOOKINGS_CALENDAR_ID,
-              requestBody: {
-                summary: `${sessionLabel} - ${userName || userEmail}`,
-                description: `Session with ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes`,
-                start: {
-                  dateTime: startDateTime.toISOString(),
-                  timeZone: BUSINESS_HOURS.timezone
-                },
-                end: {
-                  dateTime: endDateTime.toISOString(),
-                  timeZone: BUSINESS_HOURS.timezone
-                },
-                attendees: [{ email: userEmail }],
-                reminders: {
-                  useDefault: false,
-                  overrides: [
-                    { method: 'email', minutes: 24 * 60 },
-                    { method: 'popup', minutes: 30 }
-                  ]
-                }
+          const sessionLabel = duration === 30 ? '30-min Session' : '1-hour Session';
+          const event = await calendar.events.insert({
+            calendarId: BOOKINGS_CALENDAR_ID,
+            requestBody: {
+              summary: `${sessionLabel} - ${userName || userEmail}`,
+              description: `Session with ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes`,
+              start: {
+                dateTime: startDateTime.toISOString(),
+                timeZone: BUSINESS_HOURS.timezone
+              },
+              end: {
+                dateTime: endDateTime.toISOString(),
+                timeZone: BUSINESS_HOURS.timezone
+              },
+              attendees: [{ email: userEmail }],
+              reminders: {
+                useDefault: false,
+                overrides: [
+                  { method: 'email', minutes: 24 * 60 },
+                  { method: 'popup', minutes: 30 }
+                ]
               }
-            });
+            }
+          });
 
-            eventLink = event.data.htmlLink;
-          } catch (calError) {
-            console.error('Google Calendar event creation error:', calError.message);
-            // Continue with booking even if calendar event fails
-          }
+          eventLink = event.data.htmlLink;
+        } catch (calError) {
+          console.error('Google Calendar event creation error:', calError.message);
+          // Continue with booking even if calendar event fails
         }
+      }
 
-        // Create booking record
+      // Create booking record
       const booking = {
-          id: `booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: `booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         date,
         time,
-          duration,
+        duration,
         status: 'confirmed',
-          booked_at: new Date().toISOString(),
-          calendar_event_link: eventLink
+        booked_at: new Date().toISOString(),
+        calendar_event_link: eventLink
       };
 
-        // Update the package atomically
+      // Update the package
       purchases[packageIndex].sessions_used = (purchases[packageIndex].sessions_used || 0) + 1;
       purchases[packageIndex].bookings = purchases[packageIndex].bookings || [];
       purchases[packageIndex].bookings.push(booking);
 
-        // Save back to DB within the transaction
-        await tx`
+      // Save back to DB
+      await sql`
         UPDATE users SET purchases = ${JSON.stringify(purchases)}::jsonb WHERE id = ${user.id}
       `;
 
-        return { booking, eventLink, duration, date, time, dbUserId: user.id, userProfile };
-      });
-
-      // Send confirmation emails (don't block the response)
-      const emailPromises = [];
+      // Send confirmation emails (fire and forget - errors logged but don't affect booking)
+      sendCustomerBookingEmail({
+        customerEmail: userEmail,
+        customerName: userName,
+        date,
+        time,
+        duration,
+        eventLink,
+        timezone: 'Central Time'
+      }).catch(err => console.error('Customer email error:', err));
       
-      // Email to customer
-      emailPromises.push(
-        sendCustomerBookingEmail({
-          customerEmail: userEmail,
-          customerName: userName,
-          date: result.date,
-          time: result.time,
-          duration: result.duration,
-          eventLink: result.eventLink,
-          timezone: 'Central Time'
-        }).catch(err => console.error('Customer email error:', err))
-      );
-      
-      // Email to admin
-      emailPromises.push(
-        sendAdminBookingEmail({
-          customerEmail: userEmail,
-          customerName: userName,
-          customerId: result.dbUserId,
-          date: result.date,
-          time: result.time,
-          duration: result.duration,
-          eventLink: result.eventLink,
-          userProfile: result.userProfile
-        }).catch(err => console.error('Admin email error:', err))
-      );
-
-      // Fire and forget - don't wait for emails to complete
-      Promise.all(emailPromises).then(() => {
-        console.log('Booking emails sent successfully');
-      });
+      sendAdminBookingEmail({
+        customerEmail: userEmail,
+        customerName: userName,
+        customerId: user.id,
+        date,
+        time,
+        duration,
+        eventLink,
+        userProfile
+      }).catch(err => console.error('Admin email error:', err));
 
       return res.status(200).json({ 
         success: true, 
-        message: `${result.duration}-minute session booked for ${result.date} at ${result.time}`,
-        booking: result.booking,
-        eventLink: result.eventLink
+        message: `${duration}-minute session booked for ${date} at ${time}`,
+        booking,
+        eventLink
       });
     } catch (error) {
       console.error('Booking error:', error);
-      // Return user-friendly error for known errors
-      if (error.status) {
-        return res.status(error.status).json({ error: error.message });
-      }
-      return res.status(500).json({ error: 'Failed to book session' });
+      return res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
   }
 

@@ -252,15 +252,14 @@ export default function Calendar() {
     try {
       const dateStr = selectedDate.toISOString().split('T')[0]
       
+      // SECURITY: Session cookie authenticates user, no need to send userId/email
       const response = await fetch('/api/calendar?action=book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include session cookie
         body: JSON.stringify({
           date: dateStr,
           time: selectedTime,
-          userId: user.id,
-          userEmail: user.email,
-          userName: user.name || user.email.split('@')[0],
           duration: selectedDuration
         })
       })

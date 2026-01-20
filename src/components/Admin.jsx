@@ -84,8 +84,11 @@ export default function Admin() {
         setNewResource({ title: '', url: '', description: '', type: 'article' })
         setAddingResourceFor(null)
         fetchUsers()
+        // Brief success feedback
+        console.log('Resource added successfully')
       } else {
         const errorData = await response.json().catch(() => ({}))
+        console.error('Add resource failed:', response.status, errorData)
         alert(`Failed to add resource: ${errorData.error || response.statusText}`)
       }
     } catch (error) {
@@ -524,8 +527,8 @@ export default function Admin() {
                                 onChange={e => setNewResource({ ...newResource, title: e.target.value })}
                               />
                               <input
-                                type="url"
-                                placeholder="URL"
+                                type="text"
+                                placeholder="URL (https://...)"
                                 value={newResource.url}
                                 onChange={e => setNewResource({ ...newResource, url: e.target.value })}
                               />
