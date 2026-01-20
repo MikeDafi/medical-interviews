@@ -1,12 +1,12 @@
 import { sql } from '@vercel/postgres';
-import { requireAuth } from '../lib/session.js';
-import { rateLimit } from '../lib/auth.js';
+import { requireAuth } from '../_lib/session.js';
+import { rateLimit } from '../_lib/auth.js';
 import { 
   sanitizeString, 
   sanitizeEmail, 
   sanitizeUrl, 
   sanitizePhone
-} from '../lib/sanitize.js';
+} from '../_lib/sanitize.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
-import { rateLimit } from '../lib/auth.js';
-import { requireAuth } from '../lib/session.js';
+import { rateLimit } from '../_lib/auth.js';
+import { requireAuth } from '../_lib/session.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 

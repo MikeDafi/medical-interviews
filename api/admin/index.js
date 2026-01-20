@@ -1,6 +1,6 @@
 import { sql } from '@vercel/postgres';
-import { rateLimit } from '../lib/auth.js';
-import { requireAuth } from '../lib/session.js';
+import { rateLimit } from '../_lib/auth.js';
+import { requireAuth } from '../_lib/session.js';
 
 export default async function handler(req, res) {
   // SECURITY: Rate limiting

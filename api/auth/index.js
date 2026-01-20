@@ -4,8 +4,8 @@
  */
 
 import { sql } from '@vercel/postgres';
-import { rateLimit } from '../lib/auth.js';
-import { sanitizeString, sanitizeEmail, sanitizeUrl } from '../lib/sanitize.js';
+import { rateLimit } from '../_lib/auth.js';
+import { sanitizeString, sanitizeEmail, sanitizeUrl } from '../_lib/sanitize.js';
 import { 
   createSession, 
   setSessionCookie, 
@@ -13,7 +13,7 @@ import {
   invalidateSession, 
   getTokenFromRequest, 
   clearSessionCookie 
-} from '../lib/session.js';
+} from '../_lib/session.js';
 
 const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;

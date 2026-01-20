@@ -1,8 +1,8 @@
 import { sql } from '@vercel/postgres';
 import { google } from 'googleapis';
-import { rateLimit } from '../lib/auth.js';
-import { requireAuth } from '../lib/session.js';
-import { sendCustomerBookingEmail, sendAdminBookingEmail } from '../lib/email.js';
+import { rateLimit } from '../_lib/auth.js';
+import { requireAuth } from '../_lib/session.js';
+import { sendCustomerBookingEmail, sendAdminBookingEmail } from '../_lib/email.js';
 
 // Calendar IDs to check for busy times (Ashley's calendars)
 // Set these in environment variables, comma-separated
