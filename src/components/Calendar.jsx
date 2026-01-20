@@ -11,6 +11,11 @@ export default function Calendar() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [availableSlots, setAvailableSlots] = useState([])
   const [loadingSlots, setLoadingSlots] = useState(false)
+  const [businessTimezone, setBusinessTimezone] = useState('America/Chicago')
+  const [cacheStatus, setCacheStatus] = useState({ loaded: false, loading: false, expiresIn: 0 })
+  
+  // Get user's timezone
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const [booking, setBooking] = useState(false)
   const [bookingResult, setBookingResult] = useState(null)
   const [sessionCredits, setSessionCredits] = useState({ trial: 0, regular: 0, trialUsed: false, loading: true })
@@ -19,10 +24,15 @@ export default function Calendar() {
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 
                   'July', 'August', 'September', 'October', 'November', 'December']
 
-  // Calculate date limits (next 2 weeks only)
+  // Calculate date limits (next 4 weeks - matches server preload)
   const today = new Date()
-  const twoWeeksFromNow = new Date(today)
-  twoWeeksFromNow.setDate(today.getDate() + 14)
+  const fourWeeksFromNow = new Date(today)
+  fourWeeksFromNow.setDate(today.getDate() + 28)
+
+  // Preload all availability on component mount
+  useEffect(() => {
+    preloadAvailability()
+  }, [])
 
   useEffect(() => {
     if (user) {
@@ -38,6 +48,27 @@ export default function Calendar() {
     window.addEventListener('paymentCompleted', handlePaymentCompleted)
     return () => window.removeEventListener('paymentCompleted', handlePaymentCompleted)
   }, [user])
+
+  // Preload 4 weeks of availability (only 4 API calls!)
+  const preloadAvailability = async () => {
+    setCacheStatus(prev => ({ ...prev, loading: true }))
+    try {
+      const response = await fetch('/api/calendar?action=preload')
+      if (response.ok) {
+        const data = await response.json()
+        setCacheStatus({
+          loaded: true,
+          loading: false,
+          expiresIn: data.cacheExpires || 60,
+          daysLoaded: data.daysLoaded || 0
+        })
+        console.log(`Availability preloaded: ${data.daysLoaded} days, expires in ${data.cacheExpires}min`)
+      }
+    } catch (error) {
+      console.error('Failed to preload availability:', error)
+      setCacheStatus({ loaded: false, loading: false, expiresIn: 0 })
+    }
+  }
 
   // Fetch available slots when date is selected
   useEffect(() => {
@@ -66,6 +97,31 @@ export default function Calendar() {
     }
   }
 
+  // Convert time from business timezone to user's local timezone
+  const convertToLocalTime = (timeStr, dateStr, fromTimezone) => {
+    const [timePart, ampm] = timeStr.split(' ')
+    const [hours, minutes] = timePart.split(':').map(Number)
+    let hour24 = hours
+    if (ampm === 'PM' && hours !== 12) hour24 += 12
+    if (ampm === 'AM' && hours === 12) hour24 = 0
+
+    // Create a date string in the business timezone
+    const dateTimeStr = `${dateStr}T${hour24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`
+    
+    // Parse as business timezone and convert to local
+    const businessDate = new Date(dateTimeStr)
+    
+    // Get the offset difference between business and local timezone
+    const localTime = businessDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: userTimezone
+    })
+    
+    return localTime
+  }
+
   const fetchAvailability = async (date) => {
     setLoadingSlots(true)
     setAvailableSlots([])
@@ -77,11 +133,18 @@ export default function Calendar() {
       if (response.ok) {
         const data = await response.json()
         const slotsData = data.availableSlots || []
+        const tz = data.timezone || 'America/Chicago'
+        setBusinessTimezone(tz)
         
-        // Store slots with info about whether an hour session is possible
+        // Store slots with both business time and local time
         const slots = slotsData.map(time => {
           const canBookHour = canBookHourSession(time, slotsData)
-          return { time, canBookHour }
+          const localTime = convertToLocalTime(time, dateStr, tz)
+          return { 
+            time,  // Original business timezone time (for booking)
+            localTime, // User's local timezone time (for display)
+            canBookHour 
+          }
         })
         setAvailableSlots(slots)
       } else {
@@ -159,10 +222,26 @@ export default function Calendar() {
         setSelectedSessionType(null)
         fetchAvailability(selectedDate)
       } else {
-        setBookingResult({
-          success: false,
-          message: data.error || 'Failed to book. Please try again.'
-        })
+        // Handle cache expired or slot unavailable - refresh and retry
+        if (data.needsRefresh || data.code === 'CACHE_EXPIRED' || data.code === 'SLOT_UNAVAILABLE') {
+          setBookingResult({
+            success: false,
+            message: 'Availability changed. Refreshing times...',
+            refreshing: true
+          })
+          // Refresh cache and reload slots
+          await preloadAvailability()
+          await fetchAvailability(selectedDate)
+          setBookingResult({
+            success: false,
+            message: data.error || 'Please select a new time slot.'
+          })
+        } else {
+          setBookingResult({
+            success: false,
+            message: data.error || 'Failed to book. Please try again.'
+          })
+        }
       }
     } catch (error) {
       console.error('Booking error:', error)
@@ -193,12 +272,12 @@ export default function Calendar() {
     for (let i = 1; i <= daysInMonth; i++) {
       const thisDate = new Date(year, month, i)
       const isPast = thisDate < todayStart
-      const isBeyondTwoWeeks = thisDate > twoWeeksFromNow
+      const isBeyondLimit = thisDate > fourWeeksFromNow
       days.push({ 
         day: i, 
-        disabled: isPast || isBeyondTwoWeeks, 
+        disabled: isPast || isBeyondLimit, 
         date: thisDate,
-        beyondLimit: isBeyondTwoWeeks
+        beyondLimit: isBeyondLimit
       })
     }
     
@@ -251,15 +330,24 @@ export default function Calendar() {
   const canSelectTrial = sessionCredits.trial > 0 && !sessionCredits.trialUsed
   const canSelectRegular = sessionCredits.regular > 0 && selectedSlot?.canBookHour
 
-  // Get user's timezone
-  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  // Format timezone for display (e.g., "America/Chicago" -> "Central Time")
+  const formatTimezone = (tz) => {
+    const tzMap = {
+      'America/Chicago': 'Central Time',
+      'America/New_York': 'Eastern Time',
+      'America/Los_Angeles': 'Pacific Time',
+      'America/Denver': 'Mountain Time',
+      'America/Phoenix': 'Arizona Time'
+    }
+    return tzMap[tz] || tz.replace('America/', '').replace(/_/g, ' ')
+  }
 
   return (
     <section className="calendar-section" id="book">
       <div className="section-header">
         <h2>Book Your Session</h2>
-        <p>Select a date and time that works for you (next 2 weeks only)</p>
-        <p className="timezone-note">All times shown in {userTimezone}</p>
+        <p>Select a date and time that works for you (next 4 weeks)</p>
+        <p className="timezone-note">Times shown in your timezone ({formatTimezone(userTimezone)}) • Sessions held in {formatTimezone(businessTimezone)}</p>
       </div>
 
       {user && (
@@ -335,7 +423,7 @@ export default function Calendar() {
                 }`}
                 onClick={() => handleDateClick(dayObj)}
                 disabled={dayObj.disabled}
-                title={dayObj.beyondLimit ? 'Only booking within 2 weeks' : ''}
+                title={dayObj.beyondLimit ? 'Only booking within 4 weeks' : ''}
               >
                 {dayObj.day}
               </button>
@@ -360,8 +448,9 @@ export default function Calendar() {
                       key={slot.time}
                       className={`time-slot ${selectedTime === slot.time ? 'selected' : ''}`}
                       onClick={() => handleTimeClick(slot)}
+                      title={`${slot.time} ${formatTimezone(businessTimezone)}`}
                     >
-                      {slot.time}
+                      {slot.localTime}
                       {!slot.canBookHour && <span className="slot-badge">30m only</span>}
                     </button>
                   ))}
@@ -417,7 +506,9 @@ export default function Calendar() {
           {selectedDate && selectedTime && selectedSessionType && !bookingResult?.success && (
             <div className="booking-summary">
               <p>
-                <strong>Selected:</strong> {formatSelectedDate()} at {selectedTime}
+                <strong>Selected:</strong> {formatSelectedDate()} at {selectedSlot?.localTime || selectedTime}
+                <br />
+                <span className="timezone-detail">({selectedTime} {formatTimezone(businessTimezone)})</span>
                 <br />
                 <strong>Type:</strong> {selectedSessionType === 'trial' ? 'Trial (30 min)' : 'Regular (1 hour)'}
               </p>

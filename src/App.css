@@ -1294,7 +1294,13 @@ img {
   font-size: 0.85rem;
   color: #666;
   margin-top: 8px;
-  font-style: italic;
+  font-style: normal;
+}
+
+.timezone-detail {
+  font-size: 0.85rem;
+  color: #888;
+  font-style: normal;
 }
 
 .profile-reminder {

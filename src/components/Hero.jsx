@@ -1,55 +1,57 @@
 // Row 1: Ivy League + Top Medical Schools - ESPN CDN
 const row1Logos = [
-  // All 8 Ivy League Schools
-  { name: 'Harvard', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/108.png' },
-  { name: 'Yale', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/43.png' },
-  { name: 'Princeton', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/163.png' },
-  { name: 'Columbia', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/171.png' },
-  { name: 'Penn', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/219.png' },
-  { name: 'Brown', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/225.png' },
-  { name: 'Dartmouth', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/159.png' },
-  { name: 'Cornell', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/172.png' },
-  // Top Medical Schools
-  { name: 'Stanford', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/24.png' },
-  { name: 'Duke', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/150.png' },
-  { name: 'Johns Hopkins', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2172.png' },
-  { name: 'Northwestern', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/77.png' },
-  { name: 'UCLA', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/26.png' },
-  { name: 'Michigan', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/130.png' },
-  { name: 'Vanderbilt', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/238.png' },
-  { name: 'UChicago', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2130.png' },
-  { name: 'NYU', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2429.png' },
-  { name: 'Georgetown', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/46.png' },
-  { name: 'Cal Berkeley', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/25.png' },
-  { name: 'Washington', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/264.png' },
+  { id: 'harvard', name: 'Harvard', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/108.png' },
+  { id: 'yale', name: 'Yale', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/43.png' },
+  { id: 'princeton', name: 'Princeton', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/163.png' },
+  { id: 'columbia', name: 'Columbia', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/171.png' },
+  { id: 'penn', name: 'Penn', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/219.png' },
+  { id: 'brown', name: 'Brown', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/225.png' },
+  { id: 'dartmouth', name: 'Dartmouth', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/159.png' },
+  { id: 'cornell', name: 'Cornell', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/172.png' },
+  { id: 'stanford', name: 'Stanford', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/24.png' },
+  { id: 'duke', name: 'Duke', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/150.png' },
+  { id: 'jhu', name: 'Johns Hopkins', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2172.png' },
+  { id: 'northwestern', name: 'Northwestern', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/77.png' },
+  { id: 'ucla', name: 'UCLA', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/26.png' },
+  { id: 'michigan', name: 'Michigan', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/130.png' },
+  { id: 'vanderbilt', name: 'Vanderbilt', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/238.png' },
+  { id: 'uchicago', name: 'UChicago', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2130.png' },
+  { id: 'nyu', name: 'NYU', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2429.png' },
+  { id: 'georgetown', name: 'Georgetown', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/46.png' },
+  { id: 'berkeley', name: 'Cal Berkeley', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/25.png' },
+  { id: 'washington', name: 'Washington', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/264.png' },
 ]
 
 // Row 2: More Elite Medical Schools - ESPN CDN
 const row2Logos = [
-  { name: 'Emory', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2197.png' },
-  { name: 'USC', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/30.png' },
-  { name: 'UNC', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/153.png' },
-  { name: 'Virginia', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/258.png' },
-  { name: 'Pittsburgh', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/221.png' },
-  { name: 'Boston University', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/104.png' },
-  { name: 'Case Western', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2086.png' },
-  { name: 'Baylor', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/239.png' },
-  { name: 'Wake Forest', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/154.png' },
-  { name: 'Rice', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/242.png' },
-  { name: 'Tufts', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2610.png' },
-  { name: 'Rochester', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/235.png' },
-  { name: 'Tulane', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2655.png' },
-  { name: 'Boston College', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/103.png' },
-  { name: 'Notre Dame', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/87.png' },
-  { name: 'Wisconsin', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/275.png' },
-  { name: 'Colorado', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/38.png' },
-  { name: 'Ohio State', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/194.png' },
-  { name: 'Florida', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/57.png' },
-  { name: 'Texas', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/251.png' },
+  { id: 'emory', name: 'Emory', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2197.png' },
+  { id: 'usc', name: 'USC', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/30.png' },
+  { id: 'unc', name: 'UNC', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/153.png' },
+  { id: 'virginia', name: 'Virginia', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/258.png' },
+  { id: 'pitt', name: 'Pittsburgh', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/221.png' },
+  { id: 'bu', name: 'Boston University', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/104.png' },
+  { id: 'cwru', name: 'Case Western', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2086.png' },
+  { id: 'baylor', name: 'Baylor', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/239.png' },
+  { id: 'wakeforest', name: 'Wake Forest', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/154.png' },
+  { id: 'rice', name: 'Rice', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/242.png' },
+  { id: 'tufts', name: 'Tufts', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2610.png' },
+  { id: 'rochester', name: 'Rochester', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/235.png' },
+  { id: 'tulane', name: 'Tulane', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2655.png' },
+  { id: 'bc', name: 'Boston College', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/103.png' },
+  { id: 'notredame', name: 'Notre Dame', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/87.png' },
+  { id: 'wisconsin', name: 'Wisconsin', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/275.png' },
+  { id: 'colorado', name: 'Colorado', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/38.png' },
+  { id: 'osu', name: 'Ohio State', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/194.png' },
+  { id: 'florida', name: 'Florida', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/57.png' },
+  { id: 'texas', name: 'Texas', url: 'https://a.espncdn.com/i/teamlogos/ncaa/500/251.png' },
 ]
 
-export default function Hero() {
+const scrollToSection = (e, sectionId) => {
+  e.preventDefault()
+  document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' })
+}
 
+export default function Hero() {
   return (
     <section className="hero">
       <div className="hero-content">
@@ -65,13 +67,21 @@ export default function Hero() {
             Brutally honest feedback to push you towards excellence.
           </p>
           <div className="hero-buttons">
-            <a href="#book" className="cta-btn">
+            <a 
+              href="#book" 
+              className="cta-btn"
+              onClick={(e) => scrollToSection(e, 'book')}
+            >
               Book a Session
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <path d="M5 12h14M12 5l7 7-7 7"/>
               </svg>
             </a>
-            <a href="#packages" className="cta-btn-secondary">
+            <a 
+              href="#packages" 
+              className="cta-btn-secondary"
+              onClick={(e) => scrollToSection(e, 'packages')}
+            >
               View Packages
             </a>
           </div>
@@ -87,8 +97,13 @@ export default function Hero() {
             <div className="logos-row logos-row-1">
               <div className="logos-track">
                 {[...row1Logos, ...row1Logos].map((logo, index) => (
-                  <div className="logo-item" key={`row1-${index}`}>
-                    <img src={logo.url} alt={logo.name} />
+                  <div className="logo-item" key={`row1-${logo.id}-${index}`}>
+                    <img 
+                      src={logo.url} 
+                      alt={logo.name} 
+                      loading="lazy"
+                      onError={(e) => { e.target.style.display = 'none' }}
+                    />
                   </div>
                 ))}
               </div>
@@ -96,8 +111,13 @@ export default function Hero() {
             <div className="logos-row logos-row-2">
               <div className="logos-track reverse">
                 {[...row2Logos, ...row2Logos].map((logo, index) => (
-                  <div className="logo-item" key={`row2-${index}`}>
-                    <img src={logo.url} alt={logo.name} />
+                  <div className="logo-item" key={`row2-${logo.id}-${index}`}>
+                    <img 
+                      src={logo.url} 
+                      alt={logo.name} 
+                      loading="lazy"
+                      onError={(e) => { e.target.style.display = 'none' }}
+                    />
                   </div>
                 ))}
               </div>
@@ -112,4 +132,3 @@ export default function Hero() {
     </section>
   )
 }
-

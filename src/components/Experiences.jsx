@@ -1,42 +1,53 @@
+// Fallback avatar URL
+const getFallbackAvatar = (name) => 
+  `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0d9488&color=fff&size=400`
+
 export default function Experiences() {
   const testimonials = [
     {
+      id: 'sarah-m',
       name: "Sarah M.",
       school: "Accepted to Northwestern",
       image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=600&fit=crop&crop=face",
       review: "Ashley completely transformed my interview skills. After 3 sessions, I went from freezing up to confidently handling any question thrown at me."
     },
     {
+      id: 'james-l',
       name: "James L.",
       school: "Accepted to UCLA",
       image: "https://images.unsplash.com/photo-1552058544-f2b08422138a?w=400&h=600&fit=crop&crop=face",
       review: "The MMI practice was incredibly realistic. I felt like I had already done my interview by the time the real one came around."
     },
     {
+      id: 'priya-k',
       name: "Priya K.",
       school: "Accepted to Duke",
       image: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=400&h=600&fit=crop&crop=face",
       review: "Honest feedback that actually helped. Ashley doesn't sugarcoat things, and that's exactly what I needed to improve."
     },
     {
+      id: 'michael-t',
       name: "Michael T.",
       school: "Accepted to Emory",
       image: "https://images.unsplash.com/photo-1463453091185-61582044d556?w=400&h=600&fit=crop&crop=face",
       review: "Worth every penny. The take-home questions helped me practice on my own time and the recordings let me see exactly where I needed work."
     },
     {
+      id: 'emily-r',
       name: "Emily R.",
       school: "Accepted to UChicago",
       image: "https://images.unsplash.com/photo-1489424731084-a5d8b219a5bb?w=400&h=600&fit=crop&crop=face",
       review: "I was so nervous about interviews. After working with Ashley, I actually looked forward to them. She has a gift for making you feel prepared."
     },
     {
+      id: 'david-c',
       name: "David C.",
       school: "Accepted to WashU",
       image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=600&fit=crop&crop=face",
       review: "The structured approach from beginner to advanced really helped build my confidence gradually. By session 5, I was crushing it."
     },
     {
+      id: 'amanda-h',
       name: "Amanda H.",
       school: "Accepted to Michigan",
       image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=600&fit=crop&crop=face",
@@ -53,10 +64,18 @@ export default function Experiences() {
 
       <div className="experiences-scroll">
         <div className="experiences-track">
-          {testimonials.map((testimonial, index) => (
-            <div className="experience-card" key={index}>
+          {testimonials.map((testimonial) => (
+            <div className="experience-card" key={testimonial.id}>
               <div className="experience-image">
-                <img src={testimonial.image} alt={testimonial.name} />
+                <img 
+                  src={testimonial.image} 
+                  alt={testimonial.name}
+                  loading="lazy"
+                  onError={(e) => { 
+                    e.target.onerror = null
+                    e.target.src = getFallbackAvatar(testimonial.name) 
+                  }}
+                />
               </div>
               <div className="experience-content">
                 <div className="experience-header">
@@ -72,4 +91,3 @@ export default function Experiences() {
     </section>
   )
 }
-

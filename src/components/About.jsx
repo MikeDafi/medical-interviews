@@ -1,18 +1,22 @@
 export default function About() {
   const credentials = [
     {
+      id: 'current-m1',
       title: "Current M1 at Rosalind Franklin",
       description: "Part of the incoming M1 student panel for admissions review and interview feedback"
     },
     {
+      id: 'first-cycle',
       title: "Accepted First Cycle",
       description: "Successfully navigated the medical school admissions process"
     },
     {
+      id: 'real-experience',
       title: "Real Interview Experience",
       description: "Interviewed candidates for both job positions and medical school admissions"
     },
     {
+      id: 'mock-hours',
       title: "100s of Hours of Mock Interviews",
       description: "Extensive experience with both traditional and MMI formats"
     }
@@ -25,8 +29,8 @@ export default function About() {
           <h2>Your Interview Coach</h2>
           <p className="coach-name">Ashley Kumar</p>
           <div className="about-credentials">
-            {credentials.map((credential, index) => (
-              <div className="credential" key={index}>
+            {credentials.map((credential) => (
+              <div className="credential" key={credential.id}>
                 <div>
                   <strong>{credential.title}</strong>
                   <p>{credential.description}</p>
