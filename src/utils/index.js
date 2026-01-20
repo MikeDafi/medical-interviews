@@ -61,4 +61,3 @@ export function isValidEmail(email) {
 export function isValidPhone(phone) {
   return /^\d{10,15}$/.test(phone.replace(/\D/g, ''))
 }
-

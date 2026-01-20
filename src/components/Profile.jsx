@@ -18,6 +18,8 @@ export default function Profile({ onClose }) {
   const [concerns, setConcerns] = useState('')
   const [sessionCredits, setSessionCredits] = useState({ trial: 0, regular: 0, loading: true })
   const [purchasedPackages, setPurchasedPackages] = useState([])
+  const [editingName, setEditingName] = useState(false)
+  const [newName, setNewName] = useState('')
 
   useEffect(() => {
     fetchProfileData()
@@ -113,6 +115,37 @@ export default function Profile({ onClose }) {
     const localProfile = JSON.parse(localStorage.getItem('profileData') || '{}')
     localProfile.resources = updatedResources
     localStorage.setItem('profileData', JSON.stringify(localProfile))
+  }
+
+  const handleSaveName = async () => {
+    if (!newName.trim()) return
+    
+    try {
+      // Update in backend
+      await fetch('/api/profile/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          googleId: user.id,
+          email: user.email,
+          name: newName.trim()
+        })
+      })
+      
+      // Update local storage
+      const storedUser = JSON.parse(localStorage.getItem('authSession') || '{}')
+      if (storedUser.user) {
+        storedUser.user.name = newName.trim()
+        localStorage.setItem('authSession', JSON.stringify(storedUser))
+        sessionStorage.setItem('authSession', JSON.stringify(storedUser))
+      }
+      
+      // Update user object (would need context update in real app)
+      user.name = newName.trim()
+      setEditingName(false)
+    } catch (error) {
+      console.error('Failed to update name:', error)
+    }
   }
 
   // Coach-provided resources (static for now)
@@ -321,12 +354,12 @@ export default function Profile({ onClose }) {
               {/* Quick Stats */}
               <div className="overview-stats">
                 <div className="stat-card">
-                  <span className="stat-number">{bookings.past.length}</span>
+                  <span className="stat-number">{purchasedPackages.reduce((acc, p) => acc + (p.sessions_used || 0), 0)}</span>
                   <span className="stat-label">Sessions Completed</span>
                 </div>
                 <div className="stat-card">
-                  <span className="stat-number">{bookings.upcoming.length}</span>
-                  <span className="stat-label">Upcoming</span>
+                  <span className="stat-number">{sessionCredits.trial + sessionCredits.regular}</span>
+                  <span className="stat-label">Available</span>
                 </div>
                 <div className="stat-card">
                   <span className="stat-number">{profileData?.target_schools?.length || 0}</span>
@@ -334,22 +367,14 @@ export default function Profile({ onClose }) {
                 </div>
               </div>
 
-              {/* Next Session */}
-              {bookings.upcoming.length > 0 && (
+              {/* Book a Session CTA */}
+              {(sessionCredits.trial + sessionCredits.regular) > 0 && (
                 <div className="overview-card next-session">
-                  <h4>Next Session</h4>
-                  <div className="session-preview">
-                    <div className="session-date">
-                      <span className="date">{formatDate(bookings.upcoming[0].booking_date)}</span>
-                      <span className="time">{bookings.upcoming[0].booking_time}</span>
-                    </div>
-                    <span className="session-type">{bookings.upcoming[0].package_name}</span>
-                    {bookings.upcoming[0].zoom_link && (
-                      <a href={bookings.upcoming[0].zoom_link} className="zoom-link" target="_blank" rel="noopener noreferrer">
-                        Join Zoom
-                      </a>
-                    )}
-                  </div>
+                  <h4>Ready to Book?</h4>
+                  <p>You have sessions available!</p>
+                  <button className="book-session-btn" onClick={handleBookNow}>
+                    Book a Session
+                  </button>
                 </div>
               )}
 
@@ -393,45 +418,35 @@ export default function Profile({ onClose }) {
           {activeTab === 'bookings' && (
             <div className="tab-bookings">
               <div className="bookings-section">
-                <h4>Upcoming Sessions</h4>
-                {bookings.upcoming.length > 0 ? (
-                  <div className="bookings-list">
-                    {bookings.upcoming.map(booking => (
-                      <div className="booking-card" key={booking.id}>
-                        <div className="booking-info">
-                          <span className="booking-date">{formatDate(booking.booking_date)}</span>
-                          <span className="booking-time">{booking.booking_time}</span>
-                          <span className="booking-type">{booking.package_name}</span>
-                        </div>
-                        <span className={`booking-status ${booking.status}`}>{booking.status}</span>
-                      </div>
-                    ))}
-                  </div>
+                <h4>Available Sessions</h4>
+                {purchasedPackages.length > 0 ? (
+                  <>
+                    <div className="bookings-list">
+                      {purchasedPackages.map(pkg => {
+                        const remaining = (pkg.sessions_total || 1) - (pkg.sessions_used || 0)
+                        const packageName = pkg.package_id === 'trial' ? '30 Min Trial' : 
+                                           pkg.package_id === 'single' ? '1 Hour Session' : 
+                                           pkg.package_id === 'package3' ? 'Package of 3' : 
+                                           pkg.package_id === 'package5' ? 'Package of 5' : 'Session'
+                        return (
+                          <div className="booking-card" key={pkg.id}>
+                            <div className="booking-info">
+                              <span className="booking-type">{packageName}</span>
+                              <span className="booking-date">Purchased {new Date(pkg.purchase_date).toLocaleDateString()}</span>
+                            </div>
+                            <span className={`booking-status ${remaining > 0 ? 'active' : 'used'}`}>
+                              {remaining > 0 ? `${remaining} remaining` : 'Used'}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {(sessionCredits.trial + sessionCredits.regular) > 0 && (
+                      <button className="book-session-btn" onClick={handleBookNow}>Book a Session</button>
+                    )}
+                  </>
                 ) : (
-                  <p className="no-bookings">No upcoming sessions. <button className="link-btn" onClick={handleBookNow}>Book one now!</button></p>
-                )}
-              </div>
-
-              <div className="bookings-section">
-                <h4>Past Sessions</h4>
-                {bookings.past.length > 0 ? (
-                  <div className="bookings-list">
-                    {bookings.past.map(booking => (
-                      <div className="booking-card past" key={booking.id}>
-                        <div className="booking-info">
-                          <span className="booking-date">{formatDate(booking.booking_date)}</span>
-                          <span className="booking-type">{booking.package_name}</span>
-                        </div>
-                        {booking.session_recording_url && (
-                          <a href={booking.session_recording_url} className="recording-link" target="_blank" rel="noopener noreferrer">
-                            Watch Recording
-                          </a>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="no-bookings">No past sessions yet.</p>
+                  <p className="no-bookings">No sessions yet. <button className="link-btn" onClick={handleBookNow}>Purchase a package!</button></p>
                 )}
               </div>
             </div>
@@ -624,14 +639,27 @@ export default function Profile({ onClose }) {
                 <h4>Account Settings</h4>
                 <div className="settings-item">
                   <div className="settings-info">
-                    <span className="settings-label">Email</span>
-                    <span className="settings-value">{user.email}</span>
-                  </div>
-                </div>
-                <div className="settings-item">
-                  <div className="settings-info">
-                    <span className="settings-label">Connected via</span>
-                    <span className="settings-value">Google</span>
+                    <span className="settings-label">Display Name</span>
+                    {editingName ? (
+                      <div className="edit-name-form">
+                        <input
+                          type="text"
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          placeholder="Enter your name"
+                          className="edit-name-input"
+                        />
+                        <div className="edit-name-actions">
+                          <button className="save-name-btn" onClick={handleSaveName}>Save</button>
+                          <button className="cancel-name-btn" onClick={() => { setEditingName(false); setNewName(user.name || '') }}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="name-display">
+                        <span className="settings-value">{user.name || 'Not set'}</span>
+                        <button className="edit-name-btn" onClick={() => { setEditingName(true); setNewName(user.name || '') }}>Edit</button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <button 

@@ -251,12 +251,24 @@ export default function Calendar() {
   const canSelectTrial = sessionCredits.trial > 0 && !sessionCredits.trialUsed
   const canSelectRegular = sessionCredits.regular > 0 && selectedSlot?.canBookHour
 
+  // Get user's timezone
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
   return (
     <section className="calendar-section" id="book">
       <div className="section-header">
         <h2>Book Your Session</h2>
         <p>Select a date and time that works for you (next 2 weeks only)</p>
+        <p className="timezone-note">All times shown in {userTimezone}</p>
       </div>
+
+      {user && (
+        <div className="profile-reminder">
+          <p>
+            <strong>Tip:</strong> Before your session, make sure to update your <a href="#" onClick={(e) => { e.preventDefault(); document.querySelector('.header-avatar')?.click() }}>Profile</a> with your Main Concerns, Target Schools, and any helpful resources/files.
+          </p>
+        </div>
+      )}
 
       {user && (
         <div className="session-credits">

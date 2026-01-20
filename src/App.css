@@ -1149,6 +1149,40 @@ img {
   padding: 80px 0;
 }
 
+.calendar-section .timezone-note {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.profile-reminder {
+  max-width: 600px;
+  margin: 0 auto 24px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(45, 167, 167, 0.1), rgba(45, 167, 167, 0.05));
+  border: 1px solid rgba(45, 167, 167, 0.3);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.profile-reminder p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #444;
+  line-height: 1.5;
+}
+
+.profile-reminder a {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.profile-reminder a:hover {
+  text-decoration: underline;
+}
+
 /* Session Credits */
 .session-credits {
   max-width: 600px;
@@ -3273,8 +3307,8 @@ img {
 
 .settings-info {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .settings-label {
@@ -3286,6 +3320,82 @@ img {
   font-size: 14px;
   font-weight: 500;
   color: var(--dark-text);
+}
+
+.name-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.edit-name-btn {
+  background: transparent;
+  color: var(--primary-teal);
+  border: 1px solid var(--primary-teal);
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.edit-name-btn:hover {
+  background: var(--primary-teal);
+  color: white;
+}
+
+.edit-name-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.edit-name-input {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.edit-name-input:focus {
+  outline: none;
+  border-color: var(--primary-teal);
+}
+
+.edit-name-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.save-name-btn {
+  background: var(--primary-teal);
+  color: white;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.save-name-btn:hover {
+  background: #239696;
+}
+
+.cancel-name-btn {
+  background: transparent;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-name-btn:hover {
+  background: #f3f4f6;
 }
 
 .danger-zone {
