@@ -31,21 +31,36 @@ export function formatDate(dateStr, options = {}) {
 
 /**
  * Calculate session credits from purchases array
+ * Tracks by duration: 30-minute sessions vs 60-minute sessions
  */
 export function calculateSessionCredits(purchases = []) {
-  let trial = 0
-  let regular = 0
+  let thirtyMin = 0
+  let sixtyMin = 0
   
   purchases.forEach(p => {
+    if (p.status !== 'active') return
     const remaining = (p.sessions_total || 0) - (p.sessions_used || 0)
-    if (p.type === 'trial' || p.package_id === 'trial') {
-      trial += remaining
+    if (remaining <= 0) return
+    
+    // Check duration_minutes first (new format), fall back to type (legacy)
+    const duration = p.duration_minutes || (p.type === 'trial' ? 30 : 60)
+    
+    if (duration === 30) {
+      thirtyMin += remaining
     } else {
-      regular += remaining
+      sixtyMin += remaining
     }
   })
   
-  return { trial, regular, total: trial + regular }
+  // Return both new format and legacy format for backwards compatibility
+  return { 
+    thirtyMin, 
+    sixtyMin, 
+    total: thirtyMin + sixtyMin,
+    // Legacy names for backwards compatibility
+    trial: thirtyMin, 
+    regular: sixtyMin 
+  }
 }
 
 /**

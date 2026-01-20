@@ -4,6 +4,7 @@ import { rateLimit } from '../lib/auth.js';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Package definitions - organized by category
+// duration_minutes: 30 or 60 (used for booking validation)
 const PACKAGES = {
   // ============ INTERVIEW PREP ============
   trial: {
@@ -11,7 +12,7 @@ const PACKAGES = {
     price: 3000, // $30
     description: 'Brief introduction, one MMI question, immediate feedback',
     sessions: 1,
-    type: 'trial',
+    duration_minutes: 30,
     category: 'interview',
     mode: 'payment'
   },
@@ -20,7 +21,7 @@ const PACKAGES = {
     price: 10000, // $100
     description: 'Full prep & coaching, detailed feedback, take-home notes',
     sessions: 1,
-    type: 'regular',
+    duration_minutes: 60,
     category: 'interview',
     mode: 'payment'
   },
@@ -29,7 +30,7 @@ const PACKAGES = {
     price: 25000, // $250
     description: '3 one-hour sessions with progressive skill building',
     sessions: 3,
-    type: 'regular',
+    duration_minutes: 60,
     category: 'interview',
     mode: 'payment'
   },
@@ -38,7 +39,7 @@ const PACKAGES = {
     price: 45000, // $450
     description: '5 one-hour sessions, take-home questions, priority scheduling',
     sessions: 5,
-    type: 'regular',
+    duration_minutes: 60,
     category: 'interview',
     mode: 'payment'
   },
@@ -49,7 +50,7 @@ const PACKAGES = {
     price: 3000, // $30
     description: 'Quick assessment, high-level CV review, identify gaps, clear next steps',
     sessions: 1,
-    type: 'cv_trial',
+    duration_minutes: 30,
     category: 'cv',
     mode: 'payment'
   },
@@ -58,7 +59,7 @@ const PACKAGES = {
     price: 10000, // $100
     description: 'Full CV review, blunt assessment, prioritization guidance',
     sessions: 1,
-    type: 'cv_regular',
+    duration_minutes: 60,
     category: 'cv',
     mode: 'payment'
   },
@@ -67,7 +68,7 @@ const PACKAGES = {
     price: 25000, // $250
     description: 'Strategy + CV review, progress checks, refinement sessions',
     sessions: 3,
-    type: 'cv_regular',
+    duration_minutes: 60,
     category: 'cv',
     mode: 'payment'
   },
@@ -76,7 +77,7 @@ const PACKAGES = {
     price: 45000, // $450
     description: 'Mentorship-style advising across months or years',
     sessions: 5,
-    type: 'cv_regular',
+    duration_minutes: 60,
     category: 'cv',
     mode: 'payment'
   },
@@ -87,7 +88,7 @@ const PACKAGES = {
     price: 5000, // $50/month
     description: 'Email access for questions, opportunity evaluation, timing decisions',
     sessions: 0, // Unlimited email
-    type: 'advisory_email',
+    duration_minutes: 0,
     category: 'advisory',
     mode: 'subscription',
     interval: 'month'
@@ -97,7 +98,7 @@ const PACKAGES = {
     price: 6000, // $60/month
     description: 'One 30-minute Zoom call per month, progress review, priority adjustments',
     sessions: 1, // 1 call per month
-    type: 'advisory_checkin',
+    duration_minutes: 30,
     category: 'advisory',
     mode: 'subscription',
     interval: 'month'
@@ -107,7 +108,7 @@ const PACKAGES = {
     price: 10000, // $100/month
     description: 'Email access plus monthly 30-min Zoom check-in',
     sessions: 1, // 1 call per month + email
-    type: 'advisory_full',
+    duration_minutes: 30,
     category: 'advisory',
     mode: 'subscription',
     interval: 'month'
@@ -165,12 +166,12 @@ export default async function handler(req, res) {
       payment_method_types: ['card'],
       success_url: `${safeOrigin}?payment=success&session_id={CHECKOUT_SESSION_ID}&package=${packageId}`,
       cancel_url: `${safeOrigin}?payment=cancelled`,
-      customer_email: userEmail || undefined,
+      customer_email: userEmail,
       metadata: {
         packageId,
         userId: userId || 'anonymous',
         sessions: pkg.sessions,
-        type: pkg.type,
+        duration_minutes: pkg.duration_minutes,
         category: pkg.category
       },
     };
@@ -223,6 +224,3 @@ export default async function handler(req, res) {
     res.status(500).json({ error: 'Payment initialization failed' });
   }
 }
-
-// Export packages for other modules
-export { PACKAGES };

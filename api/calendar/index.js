@@ -1,6 +1,7 @@
 import { sql } from '@vercel/postgres';
 import { google } from 'googleapis';
 import { rateLimit } from '../lib/auth.js';
+import { sendCustomerBookingEmail, sendAdminBookingEmail } from '../lib/email.js';
 
 // Calendar IDs to check for busy times (Ashley's calendars)
 // Set these in environment variables, comma-separated
@@ -51,7 +52,6 @@ function getCacheAge() {
 
 function getCachedAvailability(dateStr) {
   if (!isCacheValid()) return null;
-  console.log(`Cache HIT for ${dateStr} (age: ${Math.round(getCacheAge() / 1000 / 60)}min)`);
   return batchCache.data.get(dateStr) || { availableSlots: [], timezone: BUSINESS_HOURS.timezone };
 }
 
@@ -103,9 +103,6 @@ async function getBusyTimes(calendar, date) {
   const endOfDay = new Date(date);
   endOfDay.setHours(23, 59, 59, 999);
 
-  console.log('Querying Events for calendars:', CALENDAR_IDS);
-  console.log('Date range:', startOfDay.toISOString(), 'to', endOfDay.toISOString());
-
   const allBusyPeriods = [];
 
   // Query each calendar for events
@@ -120,27 +117,19 @@ async function getBusyTimes(calendar, date) {
       });
 
       const events = response.data.items || [];
-      console.log(`Calendar ${calendarId}: ${events.length} events found`);
 
       for (const event of events) {
         // Skip events marked as "free" or "transparent"
-        if (event.transparency === 'transparent') {
-          console.log(`  Skipping (transparent): "${event.summary}"`);
-          continue;
-        }
+        if (event.transparency === 'transparent') continue;
 
         // Skip ignored events (like "Week #")
-        if (shouldIgnoreEvent(event.summary)) {
-          console.log(`  Skipping (ignored pattern): "${event.summary}"`);
-          continue;
-        }
+        if (shouldIgnoreEvent(event.summary)) continue;
 
         // Get event start/end times
         const start = event.start?.dateTime || event.start?.date;
         const end = event.end?.dateTime || event.end?.date;
 
         if (start && end) {
-          console.log(`  Busy: "${event.summary}" from ${start} to ${end}`);
           allBusyPeriods.push({ start, end });
         }
       }
@@ -150,7 +139,6 @@ async function getBusyTimes(calendar, date) {
     }
   }
 
-  console.log('Total busy periods (after filtering):', allBusyPeriods.length);
   return allBusyPeriods;
 }
 
@@ -206,7 +194,6 @@ function generateAvailableSlots(date, busyPeriods) {
 // Batch preload all availability for 4 weeks (only 4 API calls total!)
 async function batchPreloadAvailability() {
   if (batchCache.loading) {
-    console.log('Batch preload already in progress, waiting...');
     // Wait for current load to complete
     while (batchCache.loading) {
       await new Promise(r => setTimeout(r, 100));
@@ -214,7 +201,6 @@ async function batchPreloadAvailability() {
     return batchCache.data;
   }
 
-  console.log('=== BATCH PRELOAD: Loading 4 weeks of availability ===');
   batchCache.loading = true;
 
   try {
@@ -230,18 +216,16 @@ async function batchPreloadAvailability() {
     
     for (const calendarId of CALENDAR_IDS) {
       try {
-        console.log(`Fetching events from ${calendarId}...`);
         const response = await calendar.events.list({
           calendarId,
           timeMin: today.toISOString(),
           timeMax: endDate.toISOString(),
           singleEvents: true,
           orderBy: 'startTime',
-          maxResults: 500 // Should be plenty for 4 weeks
+          maxResults: 500
         });
 
         const events = response.data.items || [];
-        console.log(`  Found ${events.length} events`);
 
         for (const event of events) {
           // Skip transparent/free events
@@ -259,8 +243,6 @@ async function batchPreloadAvailability() {
         console.warn(`Error fetching from ${calendarId}:`, error.message);
       }
     }
-
-    console.log(`Total events loaded: ${allEvents.length}`);
 
     // Process events into daily availability
     const availabilityMap = new Map();
@@ -295,7 +277,6 @@ async function batchPreloadAvailability() {
     batchCache.timestamp = Date.now();
     batchCache.loading = false;
 
-    console.log(`=== BATCH PRELOAD COMPLETE: ${availabilityMap.size} days cached ===`);
     return availabilityMap;
   } catch (error) {
     batchCache.loading = false;
@@ -313,7 +294,7 @@ export default async function handler(req, res) {
 
   const { action } = req.query;
 
-  // GET preload - batch load all 4 weeks (call on page load)
+  // GET preload - batch load all 4 weeks and return ALL data (call on page load)
   if (req.method === 'GET' && action === 'preload') {
     try {
       // Check if Google Calendar is configured
@@ -321,25 +302,40 @@ export default async function handler(req, res) {
         return res.status(200).json({ 
           success: false,
           message: 'Calendar integration not configured',
-          configured: false
+          configured: false,
+          availability: {}
         });
       }
 
-      // If cache is valid, return cache info
-      if (isCacheValid()) {
+      // If cache is valid, return cached data
+      if (isCacheValid() && batchCache.data) {
         const cacheAgeMin = Math.round(getCacheAge() / 1000 / 60);
+        // Convert Map to plain object for JSON response
+        const availability = {};
+        batchCache.data.forEach((value, key) => {
+          availability[key] = value;
+        });
+        
         return res.status(200).json({
           success: true,
           cached: true,
           cacheAge: cacheAgeMin,
           cacheExpires: Math.round((CACHE_TTL - getCacheAge()) / 1000 / 60),
-          daysLoaded: batchCache.data?.size || 0,
-          configured: true
+          daysLoaded: batchCache.data.size,
+          configured: true,
+          timezone: BUSINESS_HOURS.timezone,
+          availability // All 28 days of availability data!
         });
       }
 
       // Preload all 4 weeks
       await batchPreloadAvailability();
+
+      // Convert Map to plain object for JSON response
+      const availability = {};
+      batchCache.data.forEach((value, key) => {
+        availability[key] = value;
+      });
 
       return res.status(200).json({
         success: true,
@@ -347,7 +343,9 @@ export default async function handler(req, res) {
         cacheAge: 0,
         cacheExpires: Math.round(CACHE_TTL / 1000 / 60),
         daysLoaded: batchCache.data?.size || 0,
-        configured: true
+        configured: true,
+        timezone: BUSINESS_HOURS.timezone,
+        availability // All 28 days of availability data!
       });
     } catch (error) {
       console.error('Preload error:', error);
@@ -355,7 +353,87 @@ export default async function handler(req, res) {
     }
   }
 
-  // GET availability for a date (uses batch cache)
+  // GET availability for specific dates (fetch only what's missing)
+  // Usage: /api/calendar?action=range&dates=2026-01-21,2026-01-22,2026-01-23
+  if (req.method === 'GET' && action === 'range') {
+    const { dates } = req.query;
+    
+    if (!dates) {
+      return res.status(400).json({ error: 'dates parameter required (comma-separated YYYY-MM-DD)' });
+    }
+
+    const dateList = dates.split(',').map(d => d.trim()).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+    
+    if (dateList.length === 0) {
+      return res.status(400).json({ error: 'No valid dates provided' });
+    }
+
+    try {
+      // Check if Google Calendar is configured
+      if (!process.env.GOOGLE_SERVICE_ACCOUNT_KEY || CALENDAR_IDS.length === 0) {
+        return res.status(200).json({ 
+          availability: {},
+          configured: false
+        });
+      }
+
+      // Ensure cache is loaded
+      if (!isCacheValid()) {
+        await batchPreloadAvailability();
+      }
+
+      // Return availability for requested dates only
+      const availability = {};
+      for (const dateStr of dateList) {
+        const cached = getCachedAvailability(dateStr);
+        if (cached) {
+          availability[dateStr] = cached;
+        } else {
+          // Date not in cache (maybe outside 4-week range)
+          availability[dateStr] = { availableSlots: [], message: 'Date not available' };
+        }
+      }
+
+      return res.status(200).json({
+        availability,
+        timezone: BUSINESS_HOURS.timezone,
+        cacheAge: Math.round(getCacheAge() / 1000 / 60),
+        configured: true
+      });
+    } catch (error) {
+      console.error('Range availability error:', error);
+      return res.status(500).json({ error: 'Failed to fetch availability' });
+    }
+  }
+
+  // GET refresh a single date (force refresh from Google Calendar)
+  // Used after booking failure to get fresh data
+  if (req.method === 'GET' && action === 'refresh') {
+    const { date } = req.query;
+    
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'Valid date required (YYYY-MM-DD)' });
+    }
+
+    try {
+      console.log(`Force refreshing availability for ${date}`);
+      
+      // Force a full refresh of the cache
+      await batchPreloadAvailability();
+      
+      const cached = getCachedAvailability(date);
+      return res.status(200).json({
+        ...cached,
+        refreshed: true,
+        cacheAge: 0
+      });
+    } catch (error) {
+      console.error('Refresh error:', error);
+      return res.status(500).json({ error: 'Failed to refresh availability' });
+    }
+  }
+
+  // GET availability for a single date (uses batch cache)
   if (req.method === 'GET' && action === 'availability') {
     const { date } = req.query;
     
@@ -392,7 +470,6 @@ export default async function handler(req, res) {
       }
 
       // Cache expired or missing - trigger batch preload
-      console.log('Cache expired or missing, triggering batch preload...');
       await batchPreloadAvailability();
       
       const cached = getCachedAvailability(date);
@@ -408,19 +485,37 @@ export default async function handler(req, res) {
 
   // POST to book a session
   if (req.method === 'POST' && action === 'book') {
-    const { date, time, userId, userEmail, userName, sessionType, duration } = req.body;
+    const { date, time, userId, userEmail, userName, duration } = req.body;
 
-    if (!date || !time || !userId || !sessionType) {
+    if (!date || !time || !userId || !duration) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    if (!['trial', 'regular'].includes(sessionType)) {
-      return res.status(400).json({ error: 'Invalid session type' });
+    if (![30, 60].includes(duration)) {
+      return res.status(400).json({ error: 'Invalid duration (must be 30 or 60 minutes)' });
+    }
+
+    // SECURITY: Reject same-day bookings
+    const bookingDate = new Date(date + 'T00:00:00');
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    
+    if (bookingDate.getTime() === todayStart.getTime()) {
+      return res.status(400).json({ 
+        error: 'Same-day bookings are not available. Please book at least 1 day in advance.',
+        code: 'SAME_DAY_BOOKING'
+      });
+    }
+
+    if (bookingDate < todayStart) {
+      return res.status(400).json({ 
+        error: 'Cannot book sessions in the past.',
+        code: 'PAST_DATE'
+      });
     }
 
     // IMPORTANT: Check if cache is valid before allowing booking
     if (!isCacheValid()) {
-      console.log('Booking rejected: cache expired, needs refresh');
       return res.status(409).json({ 
         error: 'Availability data has expired. Please refresh and try again.',
         code: 'CACHE_EXPIRED',
@@ -431,7 +526,6 @@ export default async function handler(req, res) {
     // Verify the selected time is still available in cache
     const cachedDay = getCachedAvailability(date);
     if (!cachedDay || !cachedDay.availableSlots?.includes(time)) {
-      console.log(`Booking rejected: time ${time} not available on ${date}`);
       return res.status(409).json({
         error: 'This time slot is no longer available. Please select another time.',
         code: 'SLOT_UNAVAILABLE',
@@ -445,27 +539,37 @@ export default async function handler(req, res) {
       const result = await sql.begin(async (tx) => {
         // Lock the user row to prevent concurrent modifications
         const userResult = await tx`
-          SELECT id, purchases FROM users 
+          SELECT id, purchases, phone, application_stage, main_concerns, target_schools FROM users 
           WHERE google_id = ${userId} OR email = ${userEmail}
           FOR UPDATE
-        `;
+      `;
 
-        if (userResult.rows.length === 0) {
+      if (userResult.rows.length === 0) {
           throw { status: 404, message: 'User not found' };
-        }
+      }
 
-        const user = userResult.rows[0];
-        const purchases = user.purchases || [];
+      const user = userResult.rows[0];
+      const purchases = user.purchases || [];
+      const userProfile = {
+        phone: user.phone,
+        application_stage: user.application_stage,
+        main_concerns: user.main_concerns,
+        target_schools: user.target_schools
+      };
 
-        // Find an active package with available sessions
-        const packageIndex = purchases.findIndex(p => 
-          p.status === 'active' && 
-          p.type === sessionType &&
-          (p.sessions_total - (p.sessions_used || 0)) > 0
-        );
+        // Find an active package with matching duration and available sessions
+        const packageIndex = purchases.findIndex(p => {
+          if (p.status !== 'active') return false;
+          const remaining = (p.sessions_total || 0) - (p.sessions_used || 0);
+          if (remaining <= 0) return false;
+          
+          // Check duration_minutes (new format) or fall back to type (legacy)
+          const pkgDuration = p.duration_minutes || (p.type === 'trial' ? 30 : 60);
+          return pkgDuration === duration;
+        });
 
-        if (packageIndex === -1) {
-          throw { status: 400, message: `No ${sessionType} sessions available` };
+      if (packageIndex === -1) {
+          throw { status: 400, message: `No ${duration}-minute sessions available` };
         }
 
         // Create booking in Google Calendar if configured
@@ -473,7 +577,6 @@ export default async function handler(req, res) {
         if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY && BOOKINGS_CALENDAR_ID) {
           try {
             const calendar = getCalendarClient();
-            const sessionDuration = duration || (sessionType === 'trial' ? 30 : 60);
             
             // Parse time and create event
             const [timePart, ampm] = time.split(' ');
@@ -483,13 +586,14 @@ export default async function handler(req, res) {
             if (ampm === 'AM' && hours === 12) hour24 = 0;
 
             const startDateTime = new Date(`${date}T${hour24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`);
-            const endDateTime = new Date(startDateTime.getTime() + sessionDuration * 60 * 1000);
+            const endDateTime = new Date(startDateTime.getTime() + duration * 60 * 1000);
 
+            const sessionLabel = duration === 30 ? '30-min Session' : '1-hour Session';
             const event = await calendar.events.insert({
               calendarId: BOOKINGS_CALENDAR_ID,
               requestBody: {
-                summary: `${sessionType === 'trial' ? 'Trial' : 'Interview Prep'} - ${userName || userEmail}`,
-                description: `Session with ${userName || userEmail}\nEmail: ${userEmail}\nType: ${sessionType === 'trial' ? '30-min Trial' : '1-hour Session'}`,
+                summary: `${sessionLabel} - ${userName || userEmail}`,
+                description: `Session with ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes`,
                 start: {
                   dateTime: startDateTime.toISOString(),
                   timeZone: BUSINESS_HOURS.timezone
@@ -517,32 +621,67 @@ export default async function handler(req, res) {
         }
 
         // Create booking record
-        const booking = {
+      const booking = {
           id: `booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          date,
-          time,
-          duration: duration || (sessionType === 'trial' ? 30 : 60),
-          status: 'confirmed',
+        date,
+        time,
+          duration,
+        status: 'confirmed',
           booked_at: new Date().toISOString(),
           calendar_event_link: eventLink
-        };
+      };
 
         // Update the package atomically
-        purchases[packageIndex].sessions_used = (purchases[packageIndex].sessions_used || 0) + 1;
-        purchases[packageIndex].bookings = purchases[packageIndex].bookings || [];
-        purchases[packageIndex].bookings.push(booking);
+      purchases[packageIndex].sessions_used = (purchases[packageIndex].sessions_used || 0) + 1;
+      purchases[packageIndex].bookings = purchases[packageIndex].bookings || [];
+      purchases[packageIndex].bookings.push(booking);
 
         // Save back to DB within the transaction
         await tx`
-          UPDATE users SET purchases = ${JSON.stringify(purchases)}::jsonb WHERE id = ${user.id}
-        `;
+        UPDATE users SET purchases = ${JSON.stringify(purchases)}::jsonb WHERE id = ${user.id}
+      `;
 
-        return { booking, eventLink, sessionType, date, time };
+        return { booking, eventLink, duration, date, time, dbUserId: user.id, userProfile };
+      });
+
+      // Send confirmation emails (don't block the response)
+      const emailPromises = [];
+      
+      // Email to customer
+      emailPromises.push(
+        sendCustomerBookingEmail({
+          customerEmail: userEmail,
+          customerName: userName,
+          date: result.date,
+          time: result.time,
+          duration: result.duration,
+          eventLink: result.eventLink,
+          timezone: 'Central Time'
+        }).catch(err => console.error('Customer email error:', err))
+      );
+      
+      // Email to admin
+      emailPromises.push(
+        sendAdminBookingEmail({
+          customerEmail: userEmail,
+          customerName: userName,
+          customerId: result.dbUserId,
+          date: result.date,
+          time: result.time,
+          duration: result.duration,
+          eventLink: result.eventLink,
+          userProfile: result.userProfile
+        }).catch(err => console.error('Admin email error:', err))
+      );
+
+      // Fire and forget - don't wait for emails to complete
+      Promise.all(emailPromises).then(() => {
+        console.log('Booking emails sent successfully');
       });
 
       return res.status(200).json({ 
         success: true, 
-        message: `${result.sessionType === 'trial' ? 'Trial' : 'Regular'} session booked for ${result.date} at ${result.time}`,
+        message: `${result.duration}-minute session booked for ${result.date} at ${result.time}`,
         booking: result.booking,
         eventLink: result.eventLink
       });

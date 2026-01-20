@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { calculateSessionCredits, formatDate } from '../utils'
 
+// Constants
+const DELETE_CONFIRMATION_TEXT = 'DELETE'
+
 export default function Profile({ onClose }) {
   const { user, signOut } = useAuth()
   const [activeTab, setActiveTab] = useState('overview')
@@ -16,7 +19,7 @@ export default function Profile({ onClose }) {
   const [newSchool, setNewSchool] = useState({ name: '', interviewType: 'MMI', interviewDate: '' })
   const [editingConcerns, setEditingConcerns] = useState(false)
   const [concerns, setConcerns] = useState('')
-  const [sessionCredits, setSessionCredits] = useState({ trial: 0, regular: 0, loading: true })
+  const [sessionCredits, setSessionCredits] = useState({ thirtyMin: 0, sixtyMin: 0, total: 0, loading: true })
   const [purchasedPackages, setPurchasedPackages] = useState([])
   const [editingName, setEditingName] = useState(false)
   const [newName, setNewName] = useState('')
@@ -46,11 +49,11 @@ export default function Profile({ onClose }) {
         setSessionCredits({ ...credits, loading: false })
         setPurchasedPackages(purchases)
       } else {
-        setSessionCredits({ trial: 0, regular: 0, loading: false })
+        setSessionCredits({ thirtyMin: 0, sixtyMin: 0, total: 0, loading: false })
       }
     } catch (error) {
       console.error('Could not fetch session data:', error)
-      setSessionCredits({ trial: 0, regular: 0, loading: false })
+      setSessionCredits({ thirtyMin: 0, sixtyMin: 0, total: 0, loading: false })
     }
   }
 
@@ -251,7 +254,7 @@ export default function Profile({ onClose }) {
   }
 
   const handleDeleteAccount = async () => {
-    if (deleteConfirmText !== 'DELETE') return
+    if (deleteConfirmText !== DELETE_CONFIRMATION_TEXT) return
     
     try {
       // SECURITY: Include email confirmation for deletion
@@ -359,7 +362,6 @@ export default function Profile({ onClose }) {
                       const total = pkg.sessions_total || pkg.sessionsTotal || 1
                       const used = pkg.sessions_used || pkg.sessionsUsed || 0
                       const remaining = total - used
-                      const packageType = pkg.type === 'trial' ? 'Trial' : 'Regular'
                       return (
                         <div className="package-item" key={pkg.id}>
                           <div className="package-info">
@@ -367,7 +369,7 @@ export default function Profile({ onClose }) {
                             <span className="package-date">Purchased {new Date(pkg.purchase_date || pkg.purchaseDate).toLocaleDateString()}</span>
                           </div>
                           <div className="package-sessions">
-                            <span className="sessions-remaining">{remaining} {packageType}</span>
+                            <span className="sessions-remaining">{remaining}</span>
                             <span className="sessions-label">{remaining === 1 ? 'session left' : 'sessions left'}</span>
                           </div>
                         </div>
@@ -384,8 +386,8 @@ export default function Profile({ onClose }) {
                   <span className="stat-label">Sessions Completed</span>
                 </div>
                 <div className="stat-card">
-                  <span className="stat-number">{sessionCredits.trial + sessionCredits.regular}</span>
-                  <span className="stat-label">{(sessionCredits.trial + sessionCredits.regular) === 1 ? 'Session Available' : 'Sessions Available'}</span>
+                  <span className="stat-number">{sessionCredits.total || 0}</span>
+                  <span className="stat-label">{(sessionCredits.total || 0) === 1 ? 'Session Available' : 'Sessions Available'}</span>
                 </div>
                 <div className="stat-card">
                   <span className="stat-number">{profileData?.target_schools?.length || 0}</span>
@@ -394,7 +396,7 @@ export default function Profile({ onClose }) {
               </div>
 
               {/* Small Book Button below stats */}
-              {(sessionCredits.trial + sessionCredits.regular) > 0 && (
+              {(sessionCredits.total || 0) > 0 && (
                 <button className="book-session-btn-small" onClick={handleBookNow}>
                   Book Your Session →
                 </button>
@@ -444,19 +446,19 @@ export default function Profile({ onClose }) {
                 <h4>Available Sessions</h4>
                 <div className="session-credits-display">
                   <div className="credit-box">
-                    <span className="credit-number">{sessionCredits.trial}</span>
-                    <span className="credit-type">Trial Sessions</span>
+                    <span className="credit-number">{sessionCredits.thirtyMin || 0}</span>
+                    <span className="credit-type">30-min Sessions</span>
                   </div>
                   <div className="credit-box">
-                    <span className="credit-number">{sessionCredits.regular}</span>
-                    <span className="credit-type">Regular Sessions</span>
+                    <span className="credit-number">{sessionCredits.sixtyMin || 0}</span>
+                    <span className="credit-type">60-min Sessions</span>
                   </div>
                   <div className="credit-box total">
-                    <span className="credit-number">{sessionCredits.trial + sessionCredits.regular}</span>
+                    <span className="credit-number">{sessionCredits.total || 0}</span>
                     <span className="credit-type">Total</span>
                   </div>
                 </div>
-                {sessionCredits.trial + sessionCredits.regular === 0 && (
+                {(sessionCredits.total || 0) === 0 && (
                   <p className="no-sessions-msg">No sessions available. <a href="#packages" onClick={onClose}>Purchase a package</a></p>
                 )}
               </div>
@@ -468,7 +470,7 @@ export default function Profile({ onClose }) {
                     <div className="bookings-list">
                       {purchasedPackages.map(pkg => {
                         const remaining = (pkg.sessions_total || 1) - (pkg.sessions_used || 0)
-                        const packageName = pkg.package_id === 'trial' ? '30 Min Trial' : 
+                        const packageName = pkg.package_id === 'trial' ? '30 Min Session' : 
                                            pkg.package_id === 'single' ? '1 Hour Session' : 
                                            pkg.package_id === 'package3' ? 'Package of 3' : 
                                            pkg.package_id === 'package5' ? 'Package of 5' : 'Session'
@@ -485,7 +487,7 @@ export default function Profile({ onClose }) {
                         )
                       })}
                     </div>
-                    {(sessionCredits.trial + sessionCredits.regular) > 0 && (
+                    {(sessionCredits.total || 0) > 0 && (
                       <button className="book-session-btn" onClick={handleBookNow}>Book a Session</button>
                     )}
                   </>
@@ -543,7 +545,7 @@ export default function Profile({ onClose }) {
               {profileData?.target_schools?.length > 0 ? (
                 <div className="schools-list">
                   {profileData.target_schools.map((school, index) => (
-                    <div className="school-card" key={index}>
+                    <div className="school-card" key={school.school_name || `school-${index}`}>
                       <div className="school-info">
                         <span className="school-name">{school.school_name}</span>
                         <span className="school-type">{school.interview_type} Interview</span>
@@ -706,6 +708,40 @@ export default function Profile({ onClose }) {
                     )}
                   </div>
                 </div>
+
+                {/* Phone Number Setting */}
+                <div className="settings-item">
+                  <div className="settings-info">
+                    <span className="settings-label">Phone Number</span>
+                    {editingPhone ? (
+                      <div className="edit-name-form">
+                        <input
+                          type="tel"
+                          value={newPhone}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '')
+                            setNewPhone(value)
+                            setPhoneError('')
+                          }}
+                          placeholder="Enter phone number"
+                          className="edit-name-input"
+                          maxLength={15}
+                        />
+                        {phoneError && <span className="phone-error">{phoneError}</span>}
+                        <div className="edit-name-actions">
+                          <button className="save-name-btn" onClick={handleSavePhone}>Save</button>
+                          <button className="cancel-name-btn" onClick={() => { setEditingPhone(false); setNewPhone(profileData?.phone || ''); setPhoneError('') }}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="name-display">
+                        <span className="settings-value">{profileData?.phone || 'Not set'}</span>
+                        <button className="edit-name-btn" onClick={() => { setEditingPhone(true); setNewPhone(profileData?.phone || '') }}>Edit</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <button 
                   className="sign-out-btn"
                   onClick={() => {
@@ -730,16 +766,17 @@ export default function Profile({ onClose }) {
                   </button>
                 ) : (
                   <div className="delete-confirm-box">
-                    <p>Type <strong>DELETE</strong> to confirm:</p>
+                    <p>Type <strong>{DELETE_CONFIRMATION_TEXT}</strong> to confirm:</p>
                     <input
                       type="text"
                       value={deleteConfirmText}
                       onChange={(e) => setDeleteConfirmText(e.target.value)}
-                      placeholder="Type DELETE"
+                      placeholder={`Type ${DELETE_CONFIRMATION_TEXT}`}
                       className="delete-confirm-input"
                     />
                     <div className="delete-confirm-actions">
                       <button 
+                        type="button"
                         className="cancel-delete-btn"
                         onClick={() => {
                           setShowDeleteConfirm(false)
@@ -749,9 +786,10 @@ export default function Profile({ onClose }) {
                         Cancel
                       </button>
                       <button 
+                        type="button"
                         className="confirm-delete-btn"
                         onClick={handleDeleteAccount}
-                        disabled={deleteConfirmText !== 'DELETE'}
+                        disabled={deleteConfirmText !== DELETE_CONFIRMATION_TEXT}
                       >
                         Permanently Delete
                       </button>

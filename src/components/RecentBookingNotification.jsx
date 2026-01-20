@@ -12,8 +12,8 @@ function readCache(key) {
       const { data } = JSON.parse(cached)
       if (data?.length > 0) return data
     }
-  } catch {
-    // localStorage unavailable or corrupt - gracefully degrade
+  } catch (e) {
+    console.warn('Cache read error:', e.message)
   }
   return null
 }
@@ -22,8 +22,8 @@ function readCache(key) {
 function writeCache(key, data) {
   try {
     localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }))
-  } catch {
-    // localStorage full or unavailable - gracefully degrade
+  } catch (e) {
+    console.warn('Cache write error:', e.message)
   }
 }
 
@@ -59,8 +59,8 @@ export default function RecentBookingNotification() {
         }
       }
       // Non-200 or no data: don't show notification (silent degradation)
-    } catch {
-      // Network error: don't show notification (silent degradation)
+    } catch (e) {
+      console.warn('Failed to fetch recent purchase:', e.message)
     }
   }
 
@@ -79,7 +79,7 @@ export default function RecentBookingNotification() {
   return (
     <div className="booking-notification" onClick={handleClick}>
       <div className="notification-avatar">
-        {notification.first_name?.charAt(0) || 'U'}
+        {(notification.first_name || 'U').charAt(0)}
       </div>
       <div className="notification-content">
         <p className="notification-name">
@@ -89,7 +89,12 @@ export default function RecentBookingNotification() {
           {notification.package_name} • {getTimeAgo(notification.created_at)}
         </p>
       </div>
-      <button className="notification-close" onClick={handleClose}>
+      <button 
+        type="button"
+        className="notification-close" 
+        onClick={handleClose}
+        aria-label="Close notification"
+      >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M18 6L6 18M6 6l12 12"/>
         </svg>

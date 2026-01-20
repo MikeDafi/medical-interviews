@@ -14,7 +14,9 @@ export default function Admin() {
   const [newResource, setNewResource] = useState({ title: '', url: '', description: '', type: 'article' })
   const [addingResourceFor, setAddingResourceFor] = useState(null)
   const [addingSessionFor, setAddingSessionFor] = useState(null)
-  const [newSession, setNewSession] = useState({ type: 'regular', sessions: 1 })
+  const [newSession, setNewSession] = useState({ duration: 60, sessions: 1 })
+  const [editingUser, setEditingUser] = useState(null)
+  const [editForm, setEditForm] = useState({ name: '', phone: '' })
 
   useEffect(() => {
     if (!authLoading && isAdmin) {
@@ -104,11 +106,11 @@ export default function Admin() {
     }
   }
 
-  const handleCancelPackage = async (userId, packageId) => {
-    if (!confirm('Cancel this package? This will remove the remaining sessions.')) return
+  const handleDeletePackage = async (userId, packageId) => {
+    if (!confirm('Delete this package? This will permanently remove it from the user.')) return
 
     try {
-      const response = await fetch(`/api/admin?action=cancelPackage&googleId=${user?.id || ''}`, {
+      const response = await fetch(`/api/admin?action=deletePackage&googleId=${user?.id || ''}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -121,7 +123,7 @@ export default function Admin() {
         fetchUsers()
       }
     } catch (error) {
-      console.error('Error cancelling package:', error)
+      console.error('Error deleting package:', error)
     }
   }
 
@@ -137,19 +139,49 @@ export default function Admin() {
         },
         body: JSON.stringify({
           userId,
-          type: newSession.type,
+          duration: parseInt(newSession.duration),
           sessions: parseInt(newSession.sessions)
         })
       })
 
       if (response.ok) {
-        setNewSession({ type: 'regular', sessions: 1 })
+        setNewSession({ duration: 60, sessions: 1 })
         setAddingSessionFor(null)
         fetchUsers()
       }
     } catch (error) {
       console.error('Error adding session:', error)
     }
+  }
+
+  const handleEditUser = async (userId) => {
+    try {
+      const response = await fetch(`/api/admin?action=editUser&googleId=${user?.id || ''}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.id || ''}`
+        },
+        body: JSON.stringify({
+          userId,
+          name: editForm.name,
+          phone: editForm.phone
+        })
+      })
+
+      if (response.ok) {
+        setEditingUser(null)
+        setEditForm({ name: '', phone: '' })
+        fetchUsers()
+      }
+    } catch (error) {
+      console.error('Error editing user:', error)
+    }
+  }
+
+  const startEditingUser = (u) => {
+    setEditingUser(u.id)
+    setEditForm({ name: u.name || '', phone: u.phone || '' })
   }
 
   const filteredUsers = users.filter(u => 
@@ -325,15 +357,49 @@ export default function Admin() {
                       <div className="admin-expanded-grid">
                         {/* User Details */}
                         <div className="admin-expanded-section">
-                          <h4>User Details</h4>
-                          <div className="admin-detail-list">
-                            <div><strong>Phone:</strong> {u.phone || 'Not provided'}</div>
-                            <div><strong>Application Stage:</strong> {u.application_stage || 'Not set'}</div>
-                            <div><strong>Profile Complete:</strong> {u.profile_complete ? 'Yes' : 'No'}</div>
-                            {u.main_concerns && (
-                              <div><strong>Concerns:</strong> {u.main_concerns}</div>
-                            )}
+                          <div className="admin-section-header">
+                            <h4>User Details</h4>
+                            <button 
+                              className="admin-add-resource-btn"
+                              onClick={() => editingUser === u.id ? setEditingUser(null) : startEditingUser(u)}
+                            >
+                              {editingUser === u.id ? 'Cancel' : 'Edit'}
+                            </button>
                           </div>
+                          
+                          {editingUser === u.id ? (
+                            <div className="admin-edit-user-form">
+                              <div className="edit-field">
+                                <label>Name:</label>
+                                <input
+                                  type="text"
+                                  value={editForm.name}
+                                  onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                                  placeholder="User name"
+                                />
+                              </div>
+                              <div className="edit-field">
+                                <label>Phone:</label>
+                                <input
+                                  type="text"
+                                  value={editForm.phone}
+                                  onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                                  placeholder="Phone number"
+                                />
+                              </div>
+                              <button 
+                                className="admin-save-resource-btn"
+                                onClick={() => handleEditUser(u.id)}
+                              >
+                                Save Changes
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="admin-detail-list">
+                              <div><strong>Phone:</strong> {u.phone || 'Not provided'}</div>
+                              <div><strong>Main Concerns:</strong> {u.main_concerns || 'None specified'}</div>
+                            </div>
+                          )}
                         </div>
 
                         {/* Target Schools */}
@@ -341,8 +407,8 @@ export default function Admin() {
                           <h4>Target Schools ({u.target_schools?.length || 0})</h4>
                           {u.target_schools?.length > 0 ? (
                             <ul className="admin-schools-list">
-                              {u.target_schools.map((school, i) => (
-                                <li key={i}>
+                              {u.target_schools.map((school) => (
+                                <li key={school.school_name || school.id}>
                                   {school.school_name}
                                   {school.interview_date && (
                                     <span className="school-date">
@@ -360,7 +426,7 @@ export default function Admin() {
                         {/* Packages / Sessions */}
                         <div className="admin-expanded-section">
                           <div className="admin-section-header">
-                            <h4>Packages ({u.purchases?.length || 0})</h4>
+                            <h4>Packages ({u.purchases?.filter(p => p.status === 'active').length || 0})</h4>
                             <button 
                               className="admin-add-resource-btn"
                               onClick={() => setAddingSessionFor(addingSessionFor === u.id ? null : u.id)}
@@ -373,11 +439,11 @@ export default function Admin() {
                           {addingSessionFor === u.id && (
                             <div className="admin-add-session-form">
                               <select
-                                value={newSession.type}
-                                onChange={e => setNewSession({ ...newSession, type: e.target.value })}
+                                value={newSession.duration}
+                                onChange={e => setNewSession({ ...newSession, duration: e.target.value })}
                               >
-                                <option value="trial">Trial</option>
-                                <option value="regular">Regular</option>
+                                <option value="30">30-minute</option>
+                                <option value="60">60-minute</option>
                               </select>
                               <input
                                 type="number"
@@ -396,38 +462,36 @@ export default function Admin() {
                             </div>
                           )}
 
-                          {u.purchases?.length > 0 ? (
+                          {u.purchases?.filter(p => p.status === 'active').length > 0 ? (
                             <ul className="admin-packages-list">
-                              {u.purchases.map((pkg, i) => (
-                                <li key={i} className="admin-package-item">
+                              {u.purchases.filter(p => p.status === 'active').map((pkg) => (
+                                <li key={pkg.id} className="admin-package-item">
                                   <div className="package-info">
-                                    <span className={`package-type ${pkg.type === 'trial' ? 'trial' : 'regular'}`}>
-                                      {pkg.type === 'trial' ? 'Trial' : 'Regular'}
+                                    <span className={`package-type ${pkg.duration_minutes === 30 ? 'trial' : 'regular'}`}>
+                                      {pkg.duration_minutes || (pkg.type === 'trial' ? 30 : 60)}-min
                                     </span>
                                     <span className="package-sessions">
                                       {(pkg.sessions_total || 0) - (pkg.sessions_used || 0)} / {pkg.sessions_total || 0} sessions left
                                     </span>
-                                    <span className={`package-status ${pkg.status}`}>{pkg.status}</span>
                                   </div>
                                   <div className="package-meta">
-                                    <span className="package-date">Purchased: {formatDate(pkg.purchase_date)}</span>
+                                    <span className="package-date">Added: {formatDate(pkg.purchase_date)}</span>
+                                    {pkg.added_by_admin && <span className="admin-added-badge">Admin</span>}
                                   </div>
-                                  {pkg.status === 'active' && (
-                                    <button 
-                                      className="admin-cancel-package-btn"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleCancelPackage(u.id, pkg.id)
-                                      }}
-                                    >
-                                      Cancel
-                                    </button>
-                                  )}
+                                  <button 
+                                    className="admin-delete-package-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleDeletePackage(u.id, pkg.id)
+                                    }}
+                                  >
+                                    Delete
+                                  </button>
                                 </li>
                               ))}
                             </ul>
                           ) : (
-                            <p className="admin-empty">No packages purchased</p>
+                            <p className="admin-empty">No active packages</p>
                           )}
                         </div>
 
@@ -482,32 +546,61 @@ export default function Admin() {
                             </div>
                           )}
 
-                          {/* Resources List */}
-                          {u.resources?.length > 0 ? (
-                            <ul className="admin-resources-list">
-                              {u.resources.map((resource, i) => (
-                                <li key={i} className="admin-resource-item">
-                                  <div className="resource-info">
-                                    <a href={resource.url} target="_blank" rel="noopener noreferrer">
-                                      {resource.title}
-                                    </a>
-                                    <span className="resource-type">{resource.resource_type}</span>
-                                    {resource.added_by_admin && (
-                                      <span className="admin-added-badge">Added by Admin</span>
-                                    )}
-                                  </div>
-                                  <button 
-                                    className="admin-remove-resource-btn"
-                                    onClick={() => handleRemoveResource(resource.id)}
-                                  >
-                                    ×
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="admin-empty">No resources</p>
-                          )}
+                          {/* User-Provided Resources */}
+                          <div className="admin-resources-group">
+                            <h5 className="resources-group-title user-resources">
+                              Their Resources ({u.resources?.filter(r => !r.added_by_admin).length || 0})
+                            </h5>
+                            {u.resources?.filter(r => !r.added_by_admin).length > 0 ? (
+                              <ul className="admin-resources-list">
+                                {u.resources.filter(r => !r.added_by_admin).map((resource) => (
+                                  <li key={resource.id || resource.url} className="admin-resource-item user-resource">
+                                    <div className="resource-info">
+                                      <a href={resource.url} target="_blank" rel="noopener noreferrer">
+                                        {resource.title}
+                                      </a>
+                                      {resource.resource_type && (
+                                        <span className="resource-type">{resource.resource_type}</span>
+                                      )}
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="admin-empty">No resources from user</p>
+                            )}
+                          </div>
+
+                          {/* Coach-Provided Resources */}
+                          <div className="admin-resources-group">
+                            <h5 className="resources-group-title coach-resources">
+                              Your Resources ({u.resources?.filter(r => r.added_by_admin).length || 0})
+                            </h5>
+                            {u.resources?.filter(r => r.added_by_admin).length > 0 ? (
+                              <ul className="admin-resources-list">
+                                {u.resources.filter(r => r.added_by_admin).map((resource) => (
+                                  <li key={resource.id || resource.url} className="admin-resource-item coach-resource">
+                                    <div className="resource-info">
+                                      <a href={resource.url} target="_blank" rel="noopener noreferrer">
+                                        {resource.title}
+                                      </a>
+                                      {resource.resource_type && (
+                                        <span className="resource-type">{resource.resource_type}</span>
+                                      )}
+                                    </div>
+                                    <button 
+                                      className="admin-remove-resource-btn"
+                                      onClick={() => handleRemoveResource(resource.id)}
+                                    >
+                                      ×
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="admin-empty">No resources added by you</p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

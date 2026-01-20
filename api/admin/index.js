@@ -34,6 +34,35 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: error || 'Admin access required' });
   }
 
+  // Get a single user by ID
+  if (action === 'getUser' && req.method === 'GET') {
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId required' });
+    }
+
+    try {
+      const result = await sql`
+        SELECT 
+          id, email, name, picture, phone,
+          application_stage, main_concerns, target_schools,
+          purchases, resources, profile_complete, is_admin, 
+          created_at, updated_at
+        FROM users
+        WHERE id = ${parseInt(userId)}
+      `;
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      return res.status(200).json({ user: result.rows[0] });
+    } catch {
+      return res.status(500).json({ error: 'Failed to fetch user' });
+    }
+  }
+
   // Manage resources for a user
   if (action === 'resources') {
     if (req.method === 'POST') {
@@ -96,8 +125,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Cancel a package for a user
-  if (action === 'cancelPackage') {
+  // Delete a package for a user (completely removes it)
+  if (action === 'deletePackage') {
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Method not allowed' });
     }
@@ -112,17 +141,13 @@ export default async function handler(req, res) {
       const userResult = await sql`SELECT purchases FROM users WHERE id = ${parseInt(userId)}`;
       if (userResult.rows.length > 0) {
         const purchases = userResult.rows[0].purchases || [];
-        const updatedPurchases = purchases.map(p => {
-          if (p.id === packageId) {
-            return { ...p, status: 'cancelled', cancelled_at: new Date().toISOString() };
-          }
-          return p;
-        });
+        // Filter out the package completely (delete, don't cancel)
+        const updatedPurchases = purchases.filter(p => p.id !== packageId);
         await sql`UPDATE users SET purchases = ${JSON.stringify(updatedPurchases)}::jsonb WHERE id = ${parseInt(userId)}`;
       }
-      return res.status(200).json({ success: true, message: 'Package cancelled' });
+      return res.status(200).json({ success: true, message: 'Package deleted' });
     } catch {
-      return res.status(500).json({ error: 'Failed to cancel package' });
+      return res.status(500).json({ error: 'Failed to delete package' });
     }
   }
 
@@ -132,15 +157,16 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { userId, type, sessions } = req.body;
+    const { userId, duration, sessions } = req.body;
 
-    if (!userId || !type || !sessions) {
-      return res.status(400).json({ error: 'userId, type, and sessions required' });
+    if (!userId || !duration || !sessions) {
+      return res.status(400).json({ error: 'userId, duration, and sessions required' });
     }
 
-    const validTypes = ['trial', 'regular'];
-    if (!validTypes.includes(type)) {
-      return res.status(400).json({ error: 'Invalid session type' });
+    const validDurations = [30, 60];
+    const durationNum = parseInt(duration);
+    if (!validDurations.includes(durationNum)) {
+      return res.status(400).json({ error: 'Invalid duration (must be 30 or 60)' });
     }
 
     const sessionCount = parseInt(sessions);
@@ -151,9 +177,10 @@ export default async function handler(req, res) {
     try {
       const newPackage = {
         id: `admin_${Date.now()}`,
-        type: type,
+        duration_minutes: durationNum,
         status: 'active',
-        package_id: type === 'trial' ? 'trial' : 'regular',
+        package_id: `admin_${durationNum}min`,
+        name: `${durationNum}-Min Session (Admin)`,
         purchase_date: new Date().toISOString(),
         sessions_total: sessionCount,
         sessions_used: 0,
@@ -166,9 +193,37 @@ export default async function handler(req, res) {
         WHERE id = ${parseInt(userId)}
       `;
       
-      return res.status(201).json({ success: true, message: `Added ${sessionCount} ${type} session(s)` });
+      return res.status(201).json({ success: true, message: `Added ${sessionCount} ${durationNum}-min session(s)` });
     } catch {
       return res.status(500).json({ error: 'Failed to add session' });
+    }
+  }
+
+  // Edit user details (admin only)
+  if (action === 'editUser') {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    const { userId, name, phone } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId required' });
+    }
+
+    try {
+      // Update name and phone (preserve existing if not provided)
+      await sql`
+        UPDATE users 
+        SET name = CASE WHEN ${name || ''} = '' THEN name ELSE ${String(name || '').slice(0, 100)} END,
+            phone = ${String(phone || '').slice(0, 20)},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${parseInt(userId)}
+      `;
+      
+      return res.status(200).json({ success: true, message: 'User updated' });
+    } catch {
+      return res.status(500).json({ error: 'Failed to update user' });
     }
   }
 

@@ -16,13 +16,46 @@ async function getRawBody(req) {
   return Buffer.concat(chunks);
 }
 
+// Helper to find user by subscription ID efficiently using JSONB containment
+async function findUserBySubscriptionId(subscriptionId) {
+  // Use JSONB containment operator to find user with this subscription
+  const result = await sql`
+    SELECT * FROM users 
+    WHERE purchases @> ${JSON.stringify([{ subscription_id: subscriptionId }])}::jsonb
+    LIMIT 1
+  `;
+  return result.rows[0] || null;
+}
+
+// Helper to update subscription in user's purchases
+async function updateSubscriptionStatus(userId, subscriptionId, updates) {
+  const userResult = await sql`SELECT purchases FROM users WHERE id = ${userId}`;
+  if (userResult.rows.length === 0) return false;
+
+  const purchases = userResult.rows[0].purchases || [];
+  const updatedPurchases = purchases.map(p => {
+    if (p.subscription_id === subscriptionId) {
+      return { ...p, ...updates };
+    }
+    return p;
+  });
+
+  await sql`
+    UPDATE users 
+    SET purchases = ${JSON.stringify(updatedPurchases)}::jsonb,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${userId}
+  `;
+  return true;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   if (!webhookSecret) {
-    console.log('Webhook secret not configured');
+    console.error('Webhook secret not configured');
     return res.status(500).json({ error: 'Webhook not configured' });
   }
 
@@ -42,17 +75,14 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
-    console.log('Processing webhook event:', event.type);
-
     // Handle checkout session completed (one-time payments and new subscriptions)
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
-      const { packageId, userId, sessions, type, category } = session.metadata || {};
+      const { packageId, userId, sessions, duration_minutes, category } = session.metadata || {};
       const customerEmail = session.customer_email;
-      const mode = session.mode; // 'payment' or 'subscription'
+      const mode = session.mode;
 
       if (!customerEmail && !userId) {
-        console.log('No customer email or userId in session');
         return res.status(200).json({ received: true });
       }
 
@@ -78,16 +108,18 @@ export default async function handler(req, res) {
         }
       }
 
-      // Create purchase record
+      // Create purchase record using metadata directly
+      const durationMins = parseInt(duration_minutes) || (packageId?.includes('trial') || packageId?.includes('snapshot') ? 30 : 60);
       const newPurchase = {
         id: session.id,
         package_id: packageId,
-        type: type || (packageId === 'trial' ? 'trial' : 'regular'),
+        duration_minutes: durationMins,
         category: category || 'interview',
         sessions_total: parseInt(sessions) || 1,
         sessions_used: 0,
         purchase_date: new Date().toISOString(),
-        status: 'active'
+        status: 'active',
+        bookings: []
       };
 
       // For subscriptions, add subscription-specific fields
@@ -96,8 +128,6 @@ export default async function handler(req, res) {
         newPurchase.is_subscription = true;
         newPurchase.subscription_status = 'active';
         newPurchase.current_period_start = new Date().toISOString();
-        // Sessions reset monthly for subscriptions
-        newPurchase.sessions_total = parseInt(sessions) || 1;
       }
 
       await sql`
@@ -106,8 +136,6 @@ export default async function handler(req, res) {
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ${dbUser.id}
       `;
-
-      console.log(`Purchase recorded for ${customerEmail}: ${packageId}`);
     }
 
     // Handle recurring subscription payments
@@ -120,72 +148,52 @@ export default async function handler(req, res) {
         return res.status(200).json({ received: true });
       }
 
-      // Find user with this subscription
+      // Find user directly by email (efficient)
       const userResult = await sql`SELECT * FROM users WHERE email = ${customerEmail}`;
       
       if (userResult.rows.length > 0) {
         const dbUser = userResult.rows[0];
-        const purchases = dbUser.purchases || [];
-        
-        // Find the subscription purchase and reset sessions for the new period
-        const updatedPurchases = purchases.map(p => {
-          if (p.subscription_id === subscriptionId && p.is_subscription) {
-            return {
-              ...p,
-              sessions_used: 0, // Reset sessions for new billing period
-              current_period_start: new Date().toISOString(),
-              subscription_status: 'active'
-            };
-          }
-          return p;
+        await updateSubscriptionStatus(dbUser.id, subscriptionId, {
+          sessions_used: 0,
+          current_period_start: new Date().toISOString(),
+          subscription_status: 'active'
         });
-
-        await sql`
-          UPDATE users 
-          SET purchases = ${JSON.stringify(updatedPurchases)}::jsonb,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE id = ${dbUser.id}
-        `;
-
-        console.log(`Subscription renewed for ${customerEmail}`);
       }
     }
 
-    // Handle subscription cancellation
+    // Handle subscription cancellation - use efficient lookup
     if (event.type === 'customer.subscription.deleted') {
       const subscription = event.data.object;
       const subscriptionId = subscription.id;
 
-      // Find user with this subscription and mark as cancelled
-      const usersResult = await sql`SELECT * FROM users WHERE purchases IS NOT NULL`;
-      
-      for (const dbUser of usersResult.rows) {
-        const purchases = dbUser.purchases || [];
-        let updated = false;
-        
-        const updatedPurchases = purchases.map(p => {
-          if (p.subscription_id === subscriptionId) {
-            updated = true;
-            return {
-              ...p,
-              subscription_status: 'cancelled',
-              status: 'cancelled',
-              cancelled_at: new Date().toISOString()
-            };
-          }
-          return p;
-        });
-
-        if (updated) {
-          await sql`
-            UPDATE users 
-            SET purchases = ${JSON.stringify(updatedPurchases)}::jsonb,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ${dbUser.id}
-          `;
-          console.log(`Subscription cancelled for user ${dbUser.id}`);
-          break;
+      // Try to get customer email from Stripe
+      let customerEmail = null;
+      if (subscription.customer) {
+        try {
+          const customer = await stripe.customers.retrieve(subscription.customer);
+          customerEmail = customer.email;
+        } catch {
+          // Customer lookup failed, fall back to JSONB search
         }
+      }
+
+      let dbUser = null;
+      if (customerEmail) {
+        const result = await sql`SELECT * FROM users WHERE email = ${customerEmail}`;
+        dbUser = result.rows[0];
+      }
+      
+      // Fallback: search by subscription ID in JSONB (still more efficient than SELECT *)
+      if (!dbUser) {
+        dbUser = await findUserBySubscriptionId(subscriptionId);
+      }
+
+      if (dbUser) {
+        await updateSubscriptionStatus(dbUser.id, subscriptionId, {
+          subscription_status: 'cancelled',
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString()
+        });
       }
     }
 
@@ -193,35 +201,34 @@ export default async function handler(req, res) {
     if (event.type === 'customer.subscription.updated') {
       const subscription = event.data.object;
       const subscriptionId = subscription.id;
-      const status = subscription.status; // 'active', 'past_due', 'unpaid', 'canceled', etc.
+      const status = subscription.status;
 
-      const usersResult = await sql`SELECT * FROM users WHERE purchases IS NOT NULL`;
-      
-      for (const dbUser of usersResult.rows) {
-        const purchases = dbUser.purchases || [];
-        let updated = false;
-        
-        const updatedPurchases = purchases.map(p => {
-          if (p.subscription_id === subscriptionId) {
-            updated = true;
-            return {
-              ...p,
-              subscription_status: status
-            };
-          }
-          return p;
-        });
-
-        if (updated) {
-          await sql`
-            UPDATE users 
-            SET purchases = ${JSON.stringify(updatedPurchases)}::jsonb,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ${dbUser.id}
-          `;
-          console.log(`Subscription status updated to ${status} for user ${dbUser.id}`);
-          break;
+      // Try to get customer email from Stripe
+      let customerEmail = null;
+      if (subscription.customer) {
+        try {
+          const customer = await stripe.customers.retrieve(subscription.customer);
+          customerEmail = customer.email;
+        } catch {
+          // Customer lookup failed
         }
+      }
+
+      let dbUser = null;
+      if (customerEmail) {
+        const result = await sql`SELECT * FROM users WHERE email = ${customerEmail}`;
+        dbUser = result.rows[0];
+      }
+      
+      // Fallback: search by subscription ID
+      if (!dbUser) {
+        dbUser = await findUserBySubscriptionId(subscriptionId);
+      }
+
+      if (dbUser) {
+        await updateSubscriptionStatus(dbUser.id, subscriptionId, {
+          subscription_status: status
+        });
       }
     }
 

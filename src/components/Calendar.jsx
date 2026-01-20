@@ -2,23 +2,26 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { calculateSessionCredits } from '../utils'
 import RecentBookings from './RecentBookings'
+import Login from './Login'
 
 export default function Calendar() {
   const { user } = useAuth()
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTime, setSelectedTime] = useState(null)
-  const [selectedSessionType, setSelectedSessionType] = useState(null) // 'trial' or 'regular'
+  const [selectedDuration, setSelectedDuration] = useState(null) // 30 or 60 minutes
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [availableSlots, setAvailableSlots] = useState([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [businessTimezone, setBusinessTimezone] = useState('America/Chicago')
   const [cacheStatus, setCacheStatus] = useState({ loaded: false, loading: false, expiresIn: 0 })
+  const [preloadedAvailability, setPreloadedAvailability] = useState({}) // All 28 days cached locally
   
   // Get user's timezone
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const [booking, setBooking] = useState(false)
   const [bookingResult, setBookingResult] = useState(null)
-  const [sessionCredits, setSessionCredits] = useState({ trial: 0, regular: 0, trialUsed: false, loading: true })
+  const [sessionCredits, setSessionCredits] = useState({ thirtyMin: 0, sixtyMin: 0, loading: true })
+  const [showLogin, setShowLogin] = useState(false)
 
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 
@@ -38,7 +41,7 @@ export default function Calendar() {
     if (user) {
       fetchSessionCredits()
     } else {
-      setSessionCredits({ trial: 0, regular: 0, trialUsed: false, loading: false })
+      setSessionCredits({ thirtyMin: 0, sixtyMin: 0, loading: false })
     }
     
     const handlePaymentCompleted = () => {
@@ -62,7 +65,15 @@ export default function Calendar() {
           expiresIn: data.cacheExpires || 60,
           daysLoaded: data.daysLoaded || 0
         })
-        console.log(`Availability preloaded: ${data.daysLoaded} days, expires in ${data.cacheExpires}min`)
+        
+        // Store ALL availability data locally - instant date switching!
+        if (data.availability) {
+          setPreloadedAvailability(data.availability)
+          console.log(`✓ Preloaded ${Object.keys(data.availability).length} days of availability`)
+        }
+        if (data.timezone) {
+          setBusinessTimezone(data.timezone)
+        }
       }
     } catch (error) {
       console.error('Failed to preload availability:', error)
@@ -70,12 +81,12 @@ export default function Calendar() {
     }
   }
 
-  // Fetch available slots when date is selected
+  // Fetch available slots when date is selected OR when preload completes
   useEffect(() => {
     if (selectedDate) {
       fetchAvailability(selectedDate)
     }
-  }, [selectedDate])
+  }, [selectedDate, cacheStatus.loaded]) // Re-run when preload completes!
 
   const fetchSessionCredits = async () => {
     try {
@@ -83,17 +94,13 @@ export default function Calendar() {
       if (response.ok) {
         const data = await response.json()
         const credits = calculateSessionCredits(data.profile?.purchases)
-        // Check if trial has been used (trial sessions_used > 0 or no trial remaining)
-        const purchases = data.profile?.purchases || []
-        const trialPkg = purchases.find(p => p.type === 'trial' || p.package_id === 'trial')
-        const trialUsed = trialPkg ? (trialPkg.sessions_used || 0) > 0 : false
-        setSessionCredits({ ...credits, trialUsed, loading: false })
+        setSessionCredits({ ...credits, loading: false })
       } else {
-        setSessionCredits({ trial: 0, regular: 0, trialUsed: false, loading: false })
+        setSessionCredits({ thirtyMin: 0, sixtyMin: 0, loading: false })
       }
     } catch (error) {
       console.error('Could not fetch session credits:', error)
-      setSessionCredits({ trial: 0, regular: 0, trialUsed: false, loading: false })
+      setSessionCredits({ thirtyMin: 0, sixtyMin: 0, loading: false })
     }
   }
 
@@ -122,12 +129,42 @@ export default function Calendar() {
     return localTime
   }
 
+  // Process slots data into display format
+  const processSlotsData = (slotsData, dateStr, tz) => {
+    return slotsData.map(time => {
+      const canBookHour = canBookHourSession(time, slotsData)
+      const localTime = convertToLocalTime(time, dateStr, tz)
+      return { time, localTime, canBookHour }
+    })
+  }
+
   const fetchAvailability = async (date) => {
+    const dateStr = date.toISOString().split('T')[0]
+    
+    // Check if we have preloaded data for this date (INSTANT - no API call!)
+    if (preloadedAvailability[dateStr]) {
+      console.log(`✓ Using local cache for ${dateStr}`)
+      const data = preloadedAvailability[dateStr]
+      const slotsData = data.availableSlots || []
+      setAvailableSlots(processSlotsData(slotsData, dateStr, businessTimezone))
+      setLoadingSlots(false)
+      return
+    }
+    
+    // If preload is still loading, show loading state and wait for it
+    if (cacheStatus.loading) {
+      console.log(`⏳ Waiting for preload to complete for ${dateStr}`)
+      setLoadingSlots(true)
+      setAvailableSlots([])
+      return // useEffect will re-trigger when preloadedAvailability updates
+    }
+    
+    // Fallback: fetch from API and store locally
+    console.log(`⚠ Fetching from API for ${dateStr} (not in local cache)`)
     setLoadingSlots(true)
     setAvailableSlots([])
     
     try {
-      const dateStr = date.toISOString().split('T')[0]
       const response = await fetch(`/api/calendar?action=availability&date=${dateStr}`)
       
       if (response.ok) {
@@ -136,26 +173,47 @@ export default function Calendar() {
         const tz = data.timezone || 'America/Chicago'
         setBusinessTimezone(tz)
         
-        // Store slots with both business time and local time
-        const slots = slotsData.map(time => {
-          const canBookHour = canBookHourSession(time, slotsData)
-          const localTime = convertToLocalTime(time, dateStr, tz)
-          return { 
-            time,  // Original business timezone time (for booking)
-            localTime, // User's local timezone time (for display)
-            canBookHour 
-          }
-        })
-        setAvailableSlots(slots)
+        // Store in local cache for instant access later
+        setPreloadedAvailability(prev => ({
+          ...prev,
+          [dateStr]: { availableSlots: slotsData, timezone: tz }
+        }))
+        
+        setAvailableSlots(processSlotsData(slotsData, dateStr, tz))
       } else {
-        // API error - no slots available
         setAvailableSlots([])
       }
     } catch (error) {
-      console.log('Error fetching availability:', error)
+      console.error('Error fetching availability:', error)
       setAvailableSlots([])
     } finally {
       setLoadingSlots(false)
+    }
+  }
+
+  // Force refresh a specific date (used after booking failure)
+  const refreshDateAvailability = async (date) => {
+    const dateStr = date.toISOString().split('T')[0]
+    console.log(`🔄 Force refreshing ${dateStr}`)
+    
+    try {
+      const response = await fetch(`/api/calendar?action=refresh&date=${dateStr}`)
+      if (response.ok) {
+        const data = await response.json()
+        const slotsData = data.availableSlots || []
+        const tz = data.timezone || businessTimezone
+        
+        // Update local cache with fresh data
+        setPreloadedAvailability(prev => ({
+          ...prev,
+          [dateStr]: { availableSlots: slotsData, timezone: tz }
+        }))
+        
+        setAvailableSlots(processSlotsData(slotsData, dateStr, tz))
+        console.log(`✓ Refreshed ${dateStr} with ${slotsData.length} slots`)
+      }
+    } catch (error) {
+      console.error('Error refreshing availability:', error)
     }
   }
 
@@ -186,14 +244,13 @@ export default function Calendar() {
   }
 
   const handleBooking = async () => {
-    if (!selectedDate || !selectedTime || !user || !selectedSessionType) return
+    if (!selectedDate || !selectedTime || !user || !selectedDuration) return
     
     setBooking(true)
     setBookingResult(null)
     
     try {
       const dateStr = selectedDate.toISOString().split('T')[0]
-      const duration = selectedSessionType === 'trial' ? 30 : 60
       
       const response = await fetch('/api/calendar?action=book', {
         method: 'POST',
@@ -204,8 +261,7 @@ export default function Calendar() {
           userId: user.id,
           userEmail: user.email,
           userName: user.name || user.email.split('@')[0],
-          sessionType: selectedSessionType,
-          duration
+          duration: selectedDuration
         })
       })
       
@@ -219,19 +275,20 @@ export default function Calendar() {
         })
         fetchSessionCredits()
         setSelectedTime(null)
-        setSelectedSessionType(null)
+        setSelectedDuration(null)
         fetchAvailability(selectedDate)
       } else {
-        // Handle cache expired or slot unavailable - refresh and retry
+        // Handle cache expired or slot unavailable - refresh just this date
         if (data.needsRefresh || data.code === 'CACHE_EXPIRED' || data.code === 'SLOT_UNAVAILABLE') {
           setBookingResult({
             success: false,
-            message: 'Availability changed. Refreshing times...',
+            message: 'Availability changed. Refreshing...',
             refreshing: true
           })
-          // Refresh cache and reload slots
-          await preloadAvailability()
-          await fetchAvailability(selectedDate)
+          // Refresh only this date (not entire cache)
+          await refreshDateAvailability(selectedDate)
+          setSelectedTime(null)
+          setSelectedDuration(null)
           setBookingResult({
             success: false,
             message: data.error || 'Please select a new time slot.'
@@ -268,16 +325,21 @@ export default function Calendar() {
     }
     
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    // Tomorrow is the first bookable day (no same-day bookings)
+    const tomorrowStart = new Date(todayStart)
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1)
     
     for (let i = 1; i <= daysInMonth; i++) {
       const thisDate = new Date(year, month, i)
       const isPast = thisDate < todayStart
+      const isToday = thisDate.getTime() === todayStart.getTime()
       const isBeyondLimit = thisDate > fourWeeksFromNow
       days.push({ 
         day: i, 
-        disabled: isPast || isBeyondLimit, 
+        disabled: isPast || isToday || isBeyondLimit, // Today is disabled (no same-day)
         date: thisDate,
-        beyondLimit: isBeyondLimit
+        beyondLimit: isBeyondLimit,
+        isToday: isToday
       })
     }
     
@@ -285,13 +347,13 @@ export default function Calendar() {
   }
 
   const days = getDaysInMonth(currentMonth)
-  const totalSessions = sessionCredits.trial + sessionCredits.regular
+  const totalSessions = sessionCredits.total || (sessionCredits.thirtyMin + sessionCredits.sixtyMin)
 
   const prevMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))
     setSelectedDate(null)
     setSelectedTime(null)
-    setSelectedSessionType(null)
+    setSelectedDuration(null)
     setAvailableSlots([])
     setBookingResult(null)
   }
@@ -300,7 +362,7 @@ export default function Calendar() {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))
     setSelectedDate(null)
     setSelectedTime(null)
-    setSelectedSessionType(null)
+    setSelectedDuration(null)
     setAvailableSlots([])
     setBookingResult(null)
   }
@@ -309,14 +371,14 @@ export default function Calendar() {
     if (!dayObj.disabled && dayObj.day) {
       setSelectedDate(dayObj.date)
       setSelectedTime(null)
-      setSelectedSessionType(null)
+      setSelectedDuration(null)
       setBookingResult(null)
     }
   }
 
   const handleTimeClick = (slot) => {
     setSelectedTime(slot.time)
-    setSelectedSessionType(null) // Reset session type when time changes
+    setSelectedDuration(null) // Reset duration when time changes
     setBookingResult(null)
   }
 
@@ -327,8 +389,8 @@ export default function Calendar() {
 
   // Get the selected slot info
   const selectedSlot = availableSlots.find(s => s.time === selectedTime)
-  const canSelectTrial = sessionCredits.trial > 0 && !sessionCredits.trialUsed
-  const canSelectRegular = sessionCredits.regular > 0 && selectedSlot?.canBookHour
+  const canSelect30Min = sessionCredits.thirtyMin > 0
+  const canSelect60Min = sessionCredits.sixtyMin > 0 && selectedSlot?.canBookHour
 
   // Format timezone for display (e.g., "America/Chicago" -> "Central Time")
   const formatTimezone = (tz) => {
@@ -346,7 +408,8 @@ export default function Calendar() {
     <section className="calendar-section" id="book">
       <div className="section-header">
         <h2>Book Your Session</h2>
-        <p>Select a date and time that works for you (next 4 weeks)</p>
+        <p>Select a date and time that works for you</p>
+        <p className="booking-notice">Same-day bookings not available • Book at least 1 day in advance (up to 4 weeks)</p>
         <p className="timezone-note">Times shown in your timezone ({formatTimezone(userTimezone)}) • Sessions held in {formatTimezone(businessTimezone)}</p>
       </div>
 
@@ -362,18 +425,17 @@ export default function Calendar() {
         <div className="session-credits">
           <div className="credits-card">
             <div className="credit-item">
-              <span className="credit-count">{sessionCredits.trial}</span>
-              <span className="credit-label">Trial Sessions</span>
-              {sessionCredits.trialUsed && <span className="credit-note">(Used)</span>}
+              <span className="credit-count">{sessionCredits.thirtyMin}</span>
+              <span className="credit-label">30-min Sessions</span>
             </div>
             <div className="credit-divider"></div>
             <div className="credit-item">
-              <span className="credit-count">{sessionCredits.regular}</span>
-              <span className="credit-label">Regular Sessions</span>
+              <span className="credit-count">{sessionCredits.sixtyMin}</span>
+              <span className="credit-label">60-min Sessions</span>
             </div>
             <div className="credit-divider"></div>
             <div className="credit-item total">
-              <span className="credit-count">{totalSessions}</span>
+              <span className="credit-count">{sessionCredits.total}</span>
               <span className="credit-label">Total Available</span>
             </div>
           </div>
@@ -387,7 +449,9 @@ export default function Calendar() {
 
       {!user && (
         <div className="session-credits">
-          <p className="sign-in-prompt">Sign in to see your available sessions and book</p>
+          <p className="sign-in-prompt">
+            <button type="button" className="sign-in-link" onClick={() => setShowLogin(true)}>Sign in</button> to see your available sessions and book
+          </p>
         </div>
       )}
 
@@ -416,14 +480,14 @@ export default function Calendar() {
           <div className="calendar-days">
             {days.map((dayObj, index) => (
               <button
-                key={index}
-                className={`calendar-day ${dayObj.disabled ? 'disabled' : ''} ${dayObj.beyondLimit ? 'beyond-limit' : ''} ${
+                key={dayObj.date ? dayObj.date.toISOString() : `empty-${index}`}
+                className={`calendar-day ${dayObj.disabled ? 'disabled' : ''} ${dayObj.beyondLimit ? 'beyond-limit' : ''} ${dayObj.isToday ? 'is-today' : ''} ${
                   selectedDate && dayObj.date && 
                   selectedDate.toDateString() === dayObj.date.toDateString() ? 'selected' : ''
                 }`}
                 onClick={() => handleDateClick(dayObj)}
                 disabled={dayObj.disabled}
-                title={dayObj.beyondLimit ? 'Only booking within 4 weeks' : ''}
+                title={dayObj.isToday ? 'Same-day bookings not available' : dayObj.beyondLimit ? 'Only booking within 4 weeks' : ''}
               >
                 {dayObj.day}
               </button>
@@ -463,30 +527,29 @@ export default function Calendar() {
             <p className="select-date-prompt">Select a date to see available times</p>
           )}
 
-          {/* Session Type Selection */}
+          {/* Session Duration Selection */}
           {selectedTime && user && totalSessions > 0 && (
             <div className="session-type-selection">
-              <h4>Choose Session Type</h4>
+              <h4>Choose Session Duration</h4>
               <div className="session-type-options">
                 <button
-                  className={`session-type-btn trial ${selectedSessionType === 'trial' ? 'selected' : ''} ${!canSelectTrial ? 'disabled' : ''}`}
-                  onClick={() => canSelectTrial && setSelectedSessionType('trial')}
-                  disabled={!canSelectTrial}
+                  className={`session-type-btn thirty-min ${selectedDuration === 30 ? 'selected' : ''} ${!canSelect30Min ? 'disabled' : ''}`}
+                  onClick={() => canSelect30Min && setSelectedDuration(30)}
+                  disabled={!canSelect30Min}
                 >
-                  <span className="type-name">Trial Session</span>
-                  <span className="type-duration">30 minutes</span>
-                  {sessionCredits.trialUsed && <span className="type-note">Already used</span>}
-                  {!sessionCredits.trialUsed && sessionCredits.trial === 0 && <span className="type-note">None available</span>}
+                  <span className="type-name">30-Minute Session</span>
+                  <span className="type-duration">{sessionCredits.thirtyMin} available</span>
+                  {sessionCredits.thirtyMin === 0 && <span className="type-note">None available</span>}
                 </button>
                 <button
-                  className={`session-type-btn regular ${selectedSessionType === 'regular' ? 'selected' : ''} ${!canSelectRegular ? 'disabled' : ''}`}
-                  onClick={() => canSelectRegular && setSelectedSessionType('regular')}
-                  disabled={!canSelectRegular}
+                  className={`session-type-btn sixty-min ${selectedDuration === 60 ? 'selected' : ''} ${!canSelect60Min ? 'disabled' : ''}`}
+                  onClick={() => canSelect60Min && setSelectedDuration(60)}
+                  disabled={!canSelect60Min}
                 >
-                  <span className="type-name">Regular Session</span>
-                  <span className="type-duration">1 hour</span>
-                  {!selectedSlot?.canBookHour && <span className="type-note">Not enough time</span>}
-                  {selectedSlot?.canBookHour && sessionCredits.regular === 0 && <span className="type-note">None available</span>}
+                  <span className="type-name">60-Minute Session</span>
+                  <span className="type-duration">{sessionCredits.sixtyMin} available</span>
+                  {!selectedSlot?.canBookHour && <span className="type-note">Not enough time in slot</span>}
+                  {selectedSlot?.canBookHour && sessionCredits.sixtyMin === 0 && <span className="type-note">None available</span>}
                 </button>
               </div>
             </div>
@@ -503,14 +566,14 @@ export default function Calendar() {
             </div>
           )}
 
-          {selectedDate && selectedTime && selectedSessionType && !bookingResult?.success && (
+          {selectedDate && selectedTime && selectedDuration && !bookingResult?.success && (
             <div className="booking-summary">
               <p>
                 <strong>Selected:</strong> {formatSelectedDate()} at {selectedSlot?.localTime || selectedTime}
                 <br />
                 <span className="timezone-detail">({selectedTime} {formatTimezone(businessTimezone)})</span>
                 <br />
-                <strong>Type:</strong> {selectedSessionType === 'trial' ? 'Trial (30 min)' : 'Regular (1 hour)'}
+                <strong>Duration:</strong> {selectedDuration} minutes
               </p>
               <button 
                 className="confirm-booking-btn" 
@@ -522,8 +585,8 @@ export default function Calendar() {
             </div>
           )}
 
-          {selectedDate && selectedTime && !selectedSessionType && user && totalSessions > 0 && (
-            <p className="select-session-prompt">Select a session type above to continue</p>
+          {selectedDate && selectedTime && !selectedDuration && user && totalSessions > 0 && (
+            <p className="select-session-prompt">Select a session duration above to continue</p>
           )}
 
           {selectedDate && selectedTime && user && totalSessions === 0 && (
@@ -541,6 +604,8 @@ export default function Calendar() {
       </div>
 
       <RecentBookings />
+
+      {showLogin && <Login onClose={() => setShowLogin(false)} />}
     </section>
   )
 }

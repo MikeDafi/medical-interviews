@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { loadStripe } from '@stripe/stripe-js'
 import { useAuth } from '../context/AuthContext'
 import GoogleIcon from './icons/GoogleIcon'
@@ -12,7 +12,16 @@ export default function Packages() {
   const [loading, setLoading] = useState(null)
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
   const [activeCategory, setActiveCategory] = useState('interviews')
+  const [error, setError] = useState(null)
   const { user, signInWithGoogle } = useAuth()
+
+  // Auto-dismiss error after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [error])
 
   const handlePurchase = async (packageId) => {
     // Require login before purchasing
@@ -22,6 +31,7 @@ export default function Packages() {
     }
     
     setLoading(packageId)
+    setError(null)
     
     try {
       const response = await fetch('/api/stripe/create-checkout', {
@@ -50,9 +60,9 @@ export default function Packages() {
       console.error('API response:', response.status, data)
       throw new Error(data.error || 'Failed to create checkout session')
       
-    } catch (error) {
-      console.error('Payment error:', error)
-      alert(`Payment error: ${error.message}. Please try again.`)
+    } catch (err) {
+      console.error('Payment error:', err)
+      setError('Unable to process payment. Please try again.')
     }
     
     setLoading(null)
@@ -71,14 +81,22 @@ export default function Packages() {
         <p>(Interviews, Advice, or Resume Review)</p>
       </div>
       
+      {/* Error Toast */}
+      {error && (
+        <div className="packages-error-toast" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={() => setError(null)} aria-label="Dismiss">×</button>
+        </div>
+      )}
+
       {/* Login Prompt Modal */}
       {showLoginPrompt && (
         <div className="login-prompt-overlay" onClick={() => setShowLoginPrompt(false)}>
           <div className="login-prompt-modal" onClick={e => e.stopPropagation()}>
-            <button className="login-prompt-close" onClick={() => setShowLoginPrompt(false)}>×</button>
+            <button type="button" className="login-prompt-close" onClick={() => setShowLoginPrompt(false)} aria-label="Close">×</button>
             <h3>Sign in to Purchase</h3>
             <p>Please sign in with Google to purchase a session package.</p>
-            <button className="login-prompt-btn" onClick={() => { signInWithGoogle(); setShowLoginPrompt(false); }}>
+            <button type="button" className="login-prompt-btn" onClick={() => { signInWithGoogle(); setShowLoginPrompt(false); }}>
               <GoogleIcon />
               Sign in with Google
             </button>
@@ -87,10 +105,13 @@ export default function Packages() {
       )}
 
       {/* Category Tabs */}
-      <div className="packages-tabs">
+      <div className="packages-tabs" role="tablist">
         {categories.map(cat => (
           <button
+            type="button"
             key={cat.id}
+            role="tab"
+            aria-selected={activeCategory === cat.id}
             className={`packages-tab ${activeCategory === cat.id ? 'active' : ''}`}
             onClick={() => setActiveCategory(cat.id)}
           >
@@ -129,6 +150,23 @@ export default function Packages() {
               "Detailed feedback & review",
               "Take-home notes on improvement areas"
             ]}
+            sessionStructure={{
+              title: "Tailored to Your Level",
+              levels: [
+                {
+                  name: "Beginner",
+                  items: ["Tips & tricks intro", "Guided walkthrough", "Double-time practice", "Real 7-min mock"]
+                },
+                {
+                  name: "Intermediate",
+                  items: ["Target weak categories", "3 back-to-back mocks", "Detailed feedback"]
+                },
+                {
+                  name: "Advanced",
+                  items: ["Full 6-7 mock simulation", "Complete scoring", "Final prep strategies"]
+                }
+              ]
+            }}
             buttonText="Book Session"
             packageId="single"
             onPurchase={handlePurchase}
@@ -143,9 +181,25 @@ export default function Packages() {
             features={[
               "3 one-hour sessions",
               "Progressive skill building",
-              "Beginner → Intermediate → Advanced",
               "Comprehensive feedback after each"
             ]}
+            sessionStructure={{
+              title: "Tailored to Your Level",
+              levels: [
+                {
+                  name: "Session 1: Beginner",
+                  items: ["Assess comfort level", "Core tips & tricks", "Guided mock at double-time", "First real 7-min mock"]
+                },
+                {
+                  name: "Session 2: Intermediate",
+                  items: ["Target weak MMI categories", "3 back-to-back mocks", "Detailed review & plan"]
+                },
+                {
+                  name: "Session 3: Advanced",
+                  items: ["Full 6-7 mock simulation", "Complete scoring", "Final refinement"]
+                }
+              ]
+            }}
             buttonText="Get Package"
             variant="popular"
             packageId="package3"
@@ -162,9 +216,25 @@ export default function Packages() {
               "5 one-hour sessions",
               "Full interview mastery program",
               "Take-home interview questions",
-              "Priority scheduling",
               "Session recordings available"
             ]}
+            sessionStructure={{
+              title: "Complete Mastery Program",
+              levels: [
+                {
+                  name: "Sessions 1-2: Foundation",
+                  items: ["Full beginner curriculum", "Core techniques mastered", "Build confidence base"]
+                },
+                {
+                  name: "Sessions 3-4: Refinement",
+                  items: ["Target all weak areas", "Multiple mock formats", "School-specific prep"]
+                },
+                {
+                  name: "Session 5: Mastery",
+                  items: ["Full simulation under pressure", "Complete scoring & review", "Final strategies"]
+                }
+              ]
+            }}
             buttonText="Get Premium"
             variant="premium"
             packageId="package5"
@@ -186,10 +256,6 @@ export default function Packages() {
               "High-level CV review or verbal walkthrough",
               "Identify major gaps & misprioritized activities",
               "Clear actionable next steps"
-            ]}
-            notIncluded={[
-              "Detailed CV phrasing",
-              "Long-term planning"
             ]}
             buttonText="Book Snapshot"
             variant="trial"
@@ -338,7 +404,9 @@ export default function Packages() {
   )
 }
 
-function PackageCard({ badge, title, price, priceNote, features, notIncluded, highlight, buttonText, variant = '', packageId, onPurchase, loading }) {
+function PackageCard({ badge, title, price, priceNote, features, notIncluded, highlight, sessionStructure, buttonText, variant = '', packageId, onPurchase, loading }) {
+  const [showStructure, setShowStructure] = useState(false)
+  
   const handleClick = (e) => {
     e.preventDefault()
     if (packageId && onPurchase) {
@@ -355,21 +423,48 @@ function PackageCard({ badge, title, price, priceNote, features, notIncluded, hi
         {priceNote && <span className="price-note">{priceNote}</span>}
       </div>
       <ul className="package-features">
-        {features.map((feature, index) => (
-          <li key={index}><span className="feature-check">✓</span> {feature}</li>
+        {features.map((feature) => (
+          <li key={feature}><span className="feature-check">✓</span> {feature}</li>
         ))}
       </ul>
       {notIncluded && notIncluded.length > 0 && (
         <ul className="package-not-included">
-          {notIncluded.map((item, index) => (
-            <li key={index}><span className="feature-x">✗</span> {item}</li>
+          {notIncluded.map((item) => (
+            <li key={item}><span className="feature-x">✗</span> {item}</li>
           ))}
         </ul>
       )}
       {highlight && (
         <p className="package-highlight">{highlight}</p>
       )}
+      {sessionStructure && (
+        <div className="session-structure-inline">
+          <button 
+            type="button"
+            className="structure-toggle"
+            onClick={() => setShowStructure(!showStructure)}
+            aria-expanded={showStructure}
+          >
+            {showStructure ? '▼' : '▶'} {sessionStructure.title}
+          </button>
+          {showStructure && (
+            <div className="structure-levels">
+              {sessionStructure.levels.map((level) => (
+                <div key={level.name} className="structure-level">
+                  <strong>{level.name}</strong>
+                  <ul>
+                    {level.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <button 
+        type="button"
         onClick={handleClick} 
         className={variant.includes('premium') ? 'package-btn-premium' : 'package-btn'}
         disabled={loading}

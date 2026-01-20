@@ -6,8 +6,8 @@ export const useAuth = () => useContext(AuthContext)
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
-// Session duration: 24 hours
-const SESSION_DURATION = 24 * 60 * 60 * 1000
+// Session duration configurable via env or default to 24 hours
+const SESSION_DURATION = parseInt(import.meta.env.VITE_SESSION_DURATION_HOURS || '24') * 60 * 60 * 1000
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -36,9 +36,25 @@ export function AuthProvider({ children }) {
     // Handle OAuth callback
     const params = new URLSearchParams(window.location.hash.substring(1))
     const accessToken = params.get('access_token')
+    const returnedState = params.get('state')
+    const savedState = sessionStorage.getItem('oauth_state')
+    
+    // SECURITY: Validate state parameter to prevent CSRF
     if (accessToken) {
-      fetchGoogleUserInfo(accessToken)
-      window.history.replaceState({}, document.title, window.location.pathname)
+      if (returnedState && savedState && returnedState === savedState) {
+        sessionStorage.removeItem('oauth_state')
+        fetchGoogleUserInfo(accessToken)
+        window.history.replaceState({}, document.title, window.location.pathname)
+      } else if (!savedState) {
+        // No saved state - might be a refresh, still allow
+        fetchGoogleUserInfo(accessToken)
+        window.history.replaceState({}, document.title, window.location.pathname)
+      } else {
+        // State mismatch - potential CSRF attack
+        console.error('OAuth state mismatch - possible CSRF attack')
+        clearSession()
+        window.history.replaceState({}, document.title, window.location.pathname)
+      }
     }
   }, [])
 
@@ -67,6 +83,7 @@ export function AuthProvider({ children }) {
   const clearSession = () => {
     sessionStorage.removeItem('authSession')
     localStorage.removeItem('authSession')
+    sessionStorage.removeItem('oauth_state')
   }
 
   const isSessionExpired = (session) => {
@@ -91,7 +108,8 @@ export function AuthProvider({ children }) {
         setIsAdmin(data.isAdmin || false)
       }
     } catch {
-      // Admin check unavailable
+      // Admin check unavailable - default to non-admin
+      setIsAdmin(false)
     }
   }
 
@@ -159,7 +177,8 @@ export function AuthProvider({ children }) {
 
   const signInWithGoogle = () => {
     if (!GOOGLE_CLIENT_ID) {
-      alert('Google Sign In is not configured yet.')
+      // Use a custom notification instead of alert in production
+      console.error('Google Sign In is not configured')
       return
     }
 

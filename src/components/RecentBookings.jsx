@@ -11,26 +11,31 @@ function readCache(key) {
     if (cached) {
       const { data, timestamp } = JSON.parse(cached)
       if (Date.now() - timestamp < CACHE_DURATION && data?.length > 0) {
-        return data
+        return { data, isStale: false }
+      }
+      // Return stale data with flag
+      if (data?.length > 0) {
+        return { data, isStale: true }
       }
     }
-  } catch {
-    // localStorage unavailable or corrupt - gracefully degrade
+  } catch (e) {
+    console.warn('Cache read error:', e.message)
   }
-  return []
+  return { data: [], isStale: true }
 }
 
 // Safely write to localStorage
 function writeCache(key, data) {
   try {
     localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }))
-  } catch {
-    // localStorage full or unavailable - gracefully degrade
+  } catch (e) {
+    console.warn('Cache write error:', e.message)
   }
 }
 
 export default function RecentBookings() {
-  const [purchases, setPurchases] = useState(() => readCache(CACHE_KEY))
+  const [purchases, setPurchases] = useState(() => readCache(CACHE_KEY).data)
+  const [isLoading, setIsLoading] = useState(() => readCache(CACHE_KEY).isStale)
 
   useEffect(() => {
     fetchRecentPurchases()
@@ -48,30 +53,44 @@ export default function RecentBookings() {
           writeCache(CACHE_KEY, data.purchases)
         }
       }
-      // Non-200 responses: keep showing cached data silently
-    } catch {
-      // Network error: keep showing cached data silently
+    } catch (e) {
+      console.warn('Failed to fetch recent purchases:', e.message)
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  if (purchases.length === 0) return null
+  if (purchases.length === 0 && !isLoading) return null
 
   return (
     <div className="recent-bookings">
       <h4>Recent Bookings</h4>
       <div className="recent-bookings-scroll">
-        {purchases.map((purchase) => (
-          <div className="recent-booking-card" key={purchase.id}>
-            <div className="recent-booking-avatar">
-              {purchase.first_name?.charAt(0) || 'U'}
+        {isLoading && purchases.length === 0 ? (
+          // Loading skeleton
+          Array.from({ length: 3 }).map((_, i) => (
+            <div className="recent-booking-card loading" key={`skeleton-${i}`}>
+              <div className="recent-booking-avatar skeleton" />
+              <div className="recent-booking-info">
+                <span className="recent-booking-name skeleton" />
+                <span className="recent-booking-package skeleton" />
+              </div>
             </div>
-            <div className="recent-booking-info">
-              <span className="recent-booking-name">{purchase.first_name}</span>
-              <span className="recent-booking-package">{purchase.package_name}</span>
-              <span className="recent-booking-time">{getTimeAgo(purchase.created_at)}</span>
+          ))
+        ) : (
+          purchases.map((purchase) => (
+            <div className="recent-booking-card" key={purchase.id}>
+              <div className="recent-booking-avatar">
+                {(purchase.first_name || 'U').charAt(0)}
+              </div>
+              <div className="recent-booking-info">
+                <span className="recent-booking-name">{purchase.first_name || 'User'}</span>
+                <span className="recent-booking-package">{purchase.package_name}</span>
+                <span className="recent-booking-time">{getTimeAgo(purchase.created_at)}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   )

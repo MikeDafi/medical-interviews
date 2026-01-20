@@ -58,8 +58,8 @@ export default async function handler(req, res) {
     // Index on updated_at for recent activity queries
     await sql`CREATE INDEX IF NOT EXISTS idx_users_updated_at ON users(updated_at DESC)`;
     
-    // GIN index on purchases JSONB for efficient JSON queries
-    await sql`CREATE INDEX IF NOT EXISTS idx_users_purchases ON users USING GIN(purchases)`;
+    // GIN index on purchases JSONB for efficient JSON queries (including subscription_id lookups)
+    await sql`CREATE INDEX IF NOT EXISTS idx_users_purchases ON users USING GIN(purchases jsonb_path_ops)`;
 
     // Create packages table
     await sql`
@@ -114,7 +114,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ 
       message: 'Database initialized successfully',
       tables: ['users', 'packages'],
-      indexes: ['idx_users_email', 'idx_users_google_id', 'idx_users_created_at', 'idx_users_updated_at', 'idx_users_purchases', 'idx_packages_active']
+      indexes: ['idx_users_email', 'idx_users_google_id', 'idx_users_created_at', 'idx_users_updated_at', 'idx_users_purchases (GIN jsonb_path_ops)', 'idx_packages_active']
     });
   } catch (error) {
     // Log error for debugging but don't expose details

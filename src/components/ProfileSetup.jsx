@@ -2,14 +2,17 @@ import { useState } from 'react'
 
 const MAX_CONCERNS_LENGTH = 500
 
+// Generate unique IDs for form items
+const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
 export default function ProfileSetup({ user, onComplete }) {
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
     phone: '',
     applicationStage: '',
-    targetSchools: [{ name: '', interviewType: 'MMI', interviewDate: '', priority: 1 }],
+    targetSchools: [{ id: generateId(), name: '', interviewType: 'MMI', interviewDate: '', priority: 1 }],
     currentConcerns: '',
-    resources: [{ title: '', url: '' }]
+    resources: [{ id: generateId(), title: '', url: '' }]
   })
   const [loading, setLoading] = useState(false)
   const [phoneError, setPhoneError] = useState('')
@@ -46,7 +49,7 @@ export default function ProfileSetup({ user, onComplete }) {
   const addSchool = () => {
     setFormData(prev => ({
       ...prev,
-      targetSchools: [...prev.targetSchools, { name: '', interviewType: 'MMI', interviewDate: '', priority: prev.targetSchools.length + 1 }]
+      targetSchools: [...prev.targetSchools, { id: generateId(), name: '', interviewType: 'MMI', interviewDate: '', priority: prev.targetSchools.length + 1 }]
     }))
   }
 
@@ -68,7 +71,7 @@ export default function ProfileSetup({ user, onComplete }) {
   const addResource = () => {
     setFormData(prev => ({
       ...prev,
-      resources: [...prev.resources, { title: '', url: '' }]
+      resources: [...prev.resources, { id: generateId(), title: '', url: '' }]
     }))
   }
 
@@ -182,7 +185,7 @@ export default function ProfileSetup({ user, onComplete }) {
 
               <div className="schools-form-list">
                 {formData.targetSchools.map((school, index) => (
-                  <div className="school-entry" key={index}>
+                  <div className="school-entry" key={school.id}>
                     <div className="school-row">
                       <input
                         type="text"
@@ -239,7 +242,7 @@ export default function ProfileSetup({ user, onComplete }) {
 
               <div className="resources-form-list">
                 {formData.resources.map((resource, index) => (
-                  <div className="resource-entry" key={index}>
+                  <div className="resource-entry" key={resource.id}>
                     <input
                       type="text"
                       placeholder="Resource name (e.g., UCLA interview tips)"

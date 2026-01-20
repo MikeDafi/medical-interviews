@@ -40,11 +40,13 @@ CREATE TABLE IF NOT EXISTS packages (
 --   {
 --     "id": "cs_xxx or manual_xxx",
 --     "package_id": "trial|single|package3|package5",
---     "type": "trial|regular",
+--     "duration_minutes": 30 or 60,
+--     "category": "interview|cv|advisory",
 --     "sessions_total": 1,
 --     "sessions_used": 0,
 --     "purchase_date": "2024-01-01T00:00:00Z",
---     "status": "active|cancelled"
+--     "status": "active|cancelled",
+--     "bookings": [{ "id", "date", "time", "duration", "status", "booked_at" }]
 --   }
 -- ]
 
