@@ -45,7 +45,7 @@ export default function RecentBookings() {
 
   const fetchRecentPurchases = async () => {
     try {
-      const response = await fetch('/api/purchases/recent')
+      const response = await fetch('/api/profile?action=recentPurchases')
       if (response.ok) {
         const data = await response.json()
         if (data.purchases?.length > 0) {

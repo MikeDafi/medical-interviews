@@ -61,7 +61,10 @@ export default function Admin() {
   }
 
   const handleAddResource = async (userId) => {
-    if (!newResource.title || !newResource.url) return
+    if (!newResource.title || !newResource.url) {
+      alert('Please enter both a title and URL')
+      return
+    }
 
     try {
       const response = await fetch(`/api/admin?action=resources&googleId=${user?.id || ''}`, {
@@ -81,9 +84,13 @@ export default function Admin() {
         setNewResource({ title: '', url: '', description: '', type: 'article' })
         setAddingResourceFor(null)
         fetchUsers()
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        alert(`Failed to add resource: ${errorData.error || response.statusText}`)
       }
     } catch (error) {
       console.error('Error adding resource:', error)
+      alert('Error adding resource: ' + error.message)
     }
   }
 

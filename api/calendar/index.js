@@ -294,6 +294,37 @@ export default async function handler(req, res) {
 
   const { action } = req.query;
 
+  // GET recent purchases (for social proof display)
+  if (req.method === 'GET' && action === 'recent') {
+    try {
+      // Get recent purchases from all users (last 10)
+      const result = await sql`
+        SELECT 
+          u.name as first_name,
+          p.value->>'package_id' as package_id,
+          p.value->>'type' as type,
+          p.value->>'purchase_date' as created_at
+        FROM users u,
+        LATERAL jsonb_array_elements(COALESCE(u.purchases, '[]'::jsonb)) AS p(value)
+        WHERE (p.value->>'purchase_date') IS NOT NULL
+        ORDER BY (p.value->>'purchase_date') DESC
+        LIMIT 10
+      `;
+
+      const purchases = result.rows.map(row => ({
+        id: row.created_at,
+        first_name: row.first_name?.split(' ')[0] || 'Student',
+        package_name: getPackageName(row.package_id, row.type),
+        created_at: row.created_at
+      }));
+
+      return res.status(200).json({ purchases });
+    } catch (error) {
+      console.error('Error fetching recent purchases:', error);
+      return res.status(200).json({ purchases: [] });
+    }
+  }
+
   // GET preload - batch load all 4 weeks and return ALL data (call on page load)
   if (req.method === 'GET' && action === 'preload') {
     try {
@@ -514,22 +545,23 @@ export default async function handler(req, res) {
       });
     }
 
-    // IMPORTANT: Check if cache is valid before allowing booking
+    // Refresh cache if expired, then verify slot availability
     if (!isCacheValid()) {
-      return res.status(409).json({ 
-        error: 'Availability data has expired. Please refresh and try again.',
-        code: 'CACHE_EXPIRED',
-        needsRefresh: true
-      });
+      console.log('Cache expired during booking, refreshing...');
+      try {
+        await batchPreloadAvailability();
+      } catch (refreshError) {
+        console.error('Failed to refresh availability:', refreshError);
+        // Continue anyway - we'll verify with Google Calendar during booking
+      }
     }
 
-    // Verify the selected time is still available in cache
+    // Verify the selected time is still available
     const cachedDay = getCachedAvailability(date);
     if (!cachedDay || !cachedDay.availableSlots?.includes(time)) {
       return res.status(409).json({
-        error: 'This time slot is no longer available. Please select another time.',
-        code: 'SLOT_UNAVAILABLE',
-        needsRefresh: true
+        error: 'Sorry, this time slot is no longer available. Please select another time.',
+        code: 'SLOT_UNAVAILABLE'
       });
     }
 
@@ -697,3 +729,4 @@ export default async function handler(req, res) {
 
   return res.status(405).json({ error: 'Method not allowed' });
 }
+

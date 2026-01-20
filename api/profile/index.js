@@ -1,12 +1,70 @@
 import { sql } from '@vercel/postgres';
 import { rateLimit } from '../lib/auth.js';
 
+// Map package IDs to friendly display names
+function getPackageName(packageId) {
+  const names = {
+    'trial': '30 Min Trial',
+    'single': '1 Hour Session',
+    'package3': 'Package of 3',
+    'package5': 'Package of 5',
+    'cv_trial': 'CV Strategy Snapshot',
+    'cv_single': 'CV Review Session',
+    'cv_package3': 'CV Strategy Package',
+    'cv_package5': 'CV Strategy Package',
+    'advisory_email': 'Email Advisory',
+    'advisory_checkin': 'Monthly Check-In',
+    'advisory_full': 'Full Advisory'
+  };
+  return names[packageId] || 'Session Package';
+}
+
 export default async function handler(req, res) {
   // SECURITY: Rate limiting
   const clientIP = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
   const { allowed } = rateLimit(clientIP, 60, 60000);
   if (!allowed) {
     return res.status(429).json({ error: 'Too many requests' });
+  }
+
+  const { action } = req.query;
+
+  // Public endpoint: Get recent purchases for social proof (no auth required)
+  if (action === 'recentPurchases' && req.method === 'GET') {
+    try {
+      const result = await sql`
+        SELECT name, purchases, created_at 
+        FROM users 
+        WHERE purchases IS NOT NULL AND purchases != '[]'::jsonb
+        ORDER BY updated_at DESC
+        LIMIT 20
+      `;
+
+      // Extract recent purchases with anonymized names
+      const recentPurchases = [];
+      
+      for (const user of result.rows) {
+        const purchases = user.purchases || [];
+        for (const purchase of purchases) {
+          if (purchase.purchase_date) {
+            recentPurchases.push({
+              id: purchase.id,
+              first_name: user.name ? user.name.split(' ')[0] : 'User',
+              package_name: getPackageName(purchase.package_id || purchase.type),
+              created_at: purchase.purchase_date
+            });
+          }
+        }
+      }
+
+      // Sort by date and limit to 5
+      recentPurchases.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      return res.status(200).json({ purchases: recentPurchases.slice(0, 5) });
+    } catch (error) {
+      console.error('Error fetching recent purchases:', error);
+      return res.status(500).json({ error: 'Failed to fetch recent purchases' });
+    }
   }
 
   if (req.method === 'GET') {

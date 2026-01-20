@@ -278,20 +278,20 @@ export default function Calendar() {
         setSelectedDuration(null)
         fetchAvailability(selectedDate)
       } else {
-        // Handle cache expired or slot unavailable - refresh just this date
-        if (data.needsRefresh || data.code === 'CACHE_EXPIRED' || data.code === 'SLOT_UNAVAILABLE') {
+        // Handle slot unavailable - refresh and let user pick another time
+        if (data.code === 'SLOT_UNAVAILABLE') {
           setBookingResult({
             success: false,
-            message: 'Availability changed. Refreshing...',
+            message: 'Updating available times...',
             refreshing: true
           })
-          // Refresh only this date (not entire cache)
-          await refreshDateAvailability(selectedDate)
+          // Refresh this date's availability
+          await fetchAvailability(selectedDate)
           setSelectedTime(null)
           setSelectedDuration(null)
           setBookingResult({
             success: false,
-            message: data.error || 'Please select a new time slot.'
+            message: data.error || 'Please select another available time.'
           })
         } else {
           setBookingResult({
@@ -410,7 +410,7 @@ export default function Calendar() {
         <h2>Book Your Session</h2>
         <p>Select a date and time that works for you</p>
         <p className="booking-notice">Same-day bookings not available • Book at least 1 day in advance (up to 4 weeks)</p>
-        <p className="timezone-note">Times shown in your timezone ({formatTimezone(userTimezone)}) • Sessions held in {formatTimezone(businessTimezone)}</p>
+        <p className="timezone-note">Times shown in your timezone ({formatTimezone(userTimezone)})</p>
       </div>
 
       {user && (
