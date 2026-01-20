@@ -66,57 +66,31 @@ export default function Calendar() {
     }
   }
 
-  // Default fallback slots for when API is unavailable (local dev)
-  const fallbackSlots = [
-    '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
-    '12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM', '2:00 PM', '2:30 PM',
-    '3:00 PM', '3:30 PM', '4:00 PM', '4:30 PM', '5:00 PM', '5:30 PM'
-  ]
-
   const fetchAvailability = async (date) => {
     setLoadingSlots(true)
     setAvailableSlots([])
     
     try {
       const dateStr = date.toISOString().split('T')[0]
-      const response = await fetch(`/api/calendar/availability?date=${dateStr}`)
+      const response = await fetch(`/api/calendar?action=availability&date=${dateStr}`)
       
       if (response.ok) {
         const data = await response.json()
         const slotsData = data.availableSlots || []
         
-        if (slotsData.length > 0) {
-          // Store slots with info about whether an hour session is possible
-          const slots = slotsData.map(time => {
-            const canBookHour = canBookHourSession(time, slotsData)
-            return { time, canBookHour }
-          })
-          setAvailableSlots(slots)
-        } else {
-          // API returned empty - use fallback for local dev
-          const slots = fallbackSlots.map(time => {
-            const canBookHour = canBookHourSession(time, fallbackSlots)
-            return { time, canBookHour }
-          })
-          setAvailableSlots(slots)
-        }
-      } else {
-        // API error - use fallback slots for local development
-        console.log('Calendar API not available, using fallback slots')
-        const slots = fallbackSlots.map(time => {
-          const canBookHour = canBookHourSession(time, fallbackSlots)
+        // Store slots with info about whether an hour session is possible
+        const slots = slotsData.map(time => {
+          const canBookHour = canBookHourSession(time, slotsData)
           return { time, canBookHour }
         })
         setAvailableSlots(slots)
+      } else {
+        // API error - no slots available
+        setAvailableSlots([])
       }
     } catch (error) {
-      console.log('Error fetching availability, using fallback:', error)
-      // Use fallback slots for local development
-      const slots = fallbackSlots.map(time => {
-        const canBookHour = canBookHourSession(time, fallbackSlots)
-        return { time, canBookHour }
-      })
-      setAvailableSlots(slots)
+      console.log('Error fetching availability:', error)
+      setAvailableSlots([])
     } finally {
       setLoadingSlots(false)
     }
@@ -158,7 +132,7 @@ export default function Calendar() {
       const dateStr = selectedDate.toISOString().split('T')[0]
       const duration = selectedSessionType === 'trial' ? 30 : 60
       
-      const response = await fetch('/api/calendar/book', {
+      const response = await fetch('/api/calendar?action=book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

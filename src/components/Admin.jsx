@@ -328,10 +328,10 @@ export default function Admin() {
                           <h4>User Details</h4>
                           <div className="admin-detail-list">
                             <div><strong>Phone:</strong> {u.phone || 'Not provided'}</div>
-                            <div><strong>Level:</strong> {u.current_level || 'Not set'}</div>
+                            <div><strong>Application Stage:</strong> {u.application_stage || 'Not set'}</div>
                             <div><strong>Profile Complete:</strong> {u.profile_complete ? 'Yes' : 'No'}</div>
-                            {u.concerns && (
-                              <div><strong>Concerns:</strong> {u.concerns}</div>
+                            {u.main_concerns && (
+                              <div><strong>Concerns:</strong> {u.main_concerns}</div>
                             )}
                           </div>
                         </div>
