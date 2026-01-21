@@ -3071,6 +3071,33 @@ img {
   box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
 }
 
+.book-session-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-family: var(--marketing-font);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.book-session-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(13, 148, 136, 0.35);
+}
+
+.book-session-btn:active {
+  transform: translateY(0);
+}
+
 .next-session .session-preview {
   display: flex;
   align-items: center;

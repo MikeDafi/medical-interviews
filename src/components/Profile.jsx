@@ -379,57 +379,6 @@ export default function Profile({ onClose }) {
         <div className="profile-content">
           {activeTab === 'overview' && (
             <div className="tab-overview">
-              {/* Purchased Packages */}
-              {purchasedPackages.length > 0 && (
-                <div className="overview-card">
-                  <h4>Your Packages</h4>
-                  <div className="packages-list">
-                    {purchasedPackages.map((pkg) => {
-                      const total = pkg.sessions_total || pkg.sessionsTotal || 1
-                      const used = pkg.sessions_used || pkg.sessionsUsed || 0
-                      const remaining = total - used
-                      const isSub = isSubscription(pkg)
-                      const category = getPackageCategory(pkg.package_id)
-                      
-                      return (
-                        <div className={`package-item ${category} ${isSub ? 'subscription' : ''}`} key={pkg.id}>
-                          <div className="package-info">
-                            <span className="package-name">{getPackageName(pkg)}</span>
-                            {isSub && pkg.subscription_status === 'active' && (
-                              <span className="subscription-badge">🔄 Monthly Subscription</span>
-                            )}
-                            {isSub && pkg.subscription_status === 'cancelled' && (
-                              <span className="subscription-badge cancelled">Cancelled</span>
-                            )}
-                            <span className="package-date">
-                              {isSub ? 'Started' : 'Purchased'} {new Date(pkg.purchase_date || pkg.purchaseDate).toLocaleDateString()}
-                            </span>
-                            {isSub && pkg.subscription_status === 'active' && pkg.current_period_start && (
-                              <span className="renewal-info">
-                                Renews {new Date(new Date(pkg.current_period_start).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}
-                              </span>
-                            )}
-                          </div>
-                          <div className="package-sessions">
-                            {isSub && pkg.sessions_total === 0 ? (
-                              <>
-                                <span className="sessions-remaining">∞</span>
-                                <span className="sessions-label">Email access</span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="sessions-remaining">{remaining}</span>
-                                <span className="sessions-label">{remaining === 1 ? 'session left' : 'sessions left'}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
               {/* Quick Stats */}
               <div className="overview-stats">
                 <div className="stat-card">

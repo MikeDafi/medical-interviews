@@ -4,7 +4,9 @@
   "framework": "vite",
   "rewrites": [
     { "source": "/api/auth/callback", "destination": "/api/auth?action=callback" },
-    { "source": "/api/auth/session", "destination": "/api/auth?action=session" }
+    { "source": "/api/auth/session", "destination": "/api/auth?action=session" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/profile", "destination": "/index.html" }
   ],
   "headers": [
     {
