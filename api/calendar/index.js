@@ -720,16 +720,20 @@ export default async function handler(req, res) {
           if (ampm === 'PM' && hours !== 12) hour24 += 12;
           if (ampm === 'AM' && hours === 12) hour24 = 0;
 
-          const startDateTime = new Date(`${date}T${hour24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`);
-          const endDateTime = new Date(startDateTime.getTime() + duration * 60 * 1000);
+          // Create datetime strings in local format (NOT UTC) - Google Calendar will handle timezone
+          const startTimeStr = `${date}T${hour24.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}:00`;
+          const endHour = hour24 + Math.floor(duration / 60);
+          const endMinutes = (minutes || 0) + (duration % 60);
+          const endTimeStr = `${date}T${(endHour + Math.floor(endMinutes / 60)).toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}:00`;
 
           console.log('Creating calendar event:', {
             calendarId: BOOKINGS_CALENDAR_ID,
             date,
             time,
             duration,
-            startISO: startDateTime.toISOString(),
-            endISO: endDateTime.toISOString()
+            startTimeStr,
+            endTimeStr,
+            timezone: BUSINESS_HOURS.timezone
           });
 
           const sessionLabel = duration === 30 ? '30-min Session' : '1-hour Session';
@@ -740,11 +744,11 @@ export default async function handler(req, res) {
               description: `PreMedical 1-on-1 Interview Coaching Session\n\nClient: ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes\n\n🎥 Google Meet: ${meetLink}`,
               location: meetLink,
               start: {
-                dateTime: startDateTime.toISOString(),
+                dateTime: startTimeStr,  // Pass local time, let Google handle timezone
                 timeZone: BUSINESS_HOURS.timezone
               },
               end: {
-                dateTime: endDateTime.toISOString(),
+                dateTime: endTimeStr,
                 timeZone: BUSINESS_HOURS.timezone
               },
               reminders: {
