@@ -392,6 +392,7 @@ export default async function handler(req, res) {
   }
 
   // GET preload - batch load all 4 weeks and return ALL data (call on page load)
+  // Add ?refresh=true to force cache invalidation
   if (req.method === 'GET' && action === 'preload') {
     try {
       // Check if Google Calendar is configured
@@ -402,6 +403,14 @@ export default async function handler(req, res) {
           configured: false,
           availability: {}
         });
+      }
+
+      // Force refresh if requested
+      const forceRefresh = req.query.refresh === 'true';
+      if (forceRefresh) {
+        console.log('Force refresh requested - clearing cache');
+        batchCache.data = null;
+        batchCache.timestamp = 0;
       }
 
       // If cache is valid, return cached data
@@ -778,6 +787,11 @@ export default async function handler(req, res) {
         meetLink,
         userProfile
       }).catch(err => console.error('Admin email error:', err));
+
+      // Invalidate cache so next user sees updated availability
+      console.log('Booking successful - invalidating availability cache');
+      batchCache.data = null;
+      batchCache.timestamp = 0;
 
       return res.status(200).json({ 
         success: true, 
