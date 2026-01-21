@@ -836,8 +836,10 @@ export default async function handler(req, res) {
   // ==================== CANCEL BOOKING ====================
   if (action === 'cancel' && req.method === 'POST') {
     // Require authentication
-    const sessionUser = await requireAuth(req, res);
-    if (!sessionUser) return; // requireAuth sends the 401 response
+    const { authenticated, user: sessionUser, error: authError } = await requireAuth(req);
+    if (!authenticated) {
+      return res.status(401).json({ error: authError || 'Authentication required' });
+    }
 
     const { bookingId, packageId, date } = req.body;
 
