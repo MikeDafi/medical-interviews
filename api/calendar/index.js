@@ -391,6 +391,16 @@ export default async function handler(req, res) {
     }
   }
 
+  // GET debug - show what calendars are being used
+  if (req.method === 'GET' && action === 'debug') {
+    return res.status(200).json({
+      bookingsCalendarId: BOOKINGS_CALENDAR_ID || 'NOT SET',
+      baseCalendarIds: BASE_CALENDAR_IDS,
+      allCalendarIds: CALENDAR_IDS,
+      hasServiceAccountKey: !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY
+    });
+  }
+
   // GET preload - batch load all 4 weeks and return ALL data (call on page load)
   // Add ?refresh=true to force cache invalidation
   if (req.method === 'GET' && action === 'preload') {
