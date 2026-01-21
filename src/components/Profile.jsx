@@ -139,6 +139,8 @@ export default function Profile({ onClose }) {
       if (response.ok) {
         // Refresh session data
         await fetchSessionData()
+        // Tell Calendar to refresh availability (slot is now available again)
+        window.dispatchEvent(new CustomEvent('bookingCancelled'))
         alert('Your session has been cancelled. Your session credit has been restored.')
       } else {
         const data = await response.json()

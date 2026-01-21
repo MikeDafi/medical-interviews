@@ -53,8 +53,19 @@ export default function Calendar() {
       if (user) setTimeout(fetchSessionCredits, 2000)
     }
     
+    // When a booking is cancelled, refresh availability (slot is now free)
+    const handleBookingCancelled = () => {
+      setPreloadedAvailability({}) // Clear local cache
+      preloadAvailability() // Fetch fresh data from server
+      fetchSessionCredits()
+    }
+    
     window.addEventListener('paymentCompleted', handlePaymentCompleted)
-    return () => window.removeEventListener('paymentCompleted', handlePaymentCompleted)
+    window.addEventListener('bookingCancelled', handleBookingCancelled)
+    return () => {
+      window.removeEventListener('paymentCompleted', handlePaymentCompleted)
+      window.removeEventListener('bookingCancelled', handleBookingCancelled)
+    }
   }, [user])
 
   // Preload 4 weeks of availability (only 4 API calls!)
