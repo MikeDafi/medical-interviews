@@ -86,12 +86,13 @@ export default function Calendar() {
     }
   }
 
-  // Fetch available slots when date is selected OR when preload completes
+  // Fetch available slots when date is selected AND preload has completed
   useEffect(() => {
-    if (selectedDate) {
+    // Only fetch after preload has completed (to avoid duplicate calls)
+    if (selectedDate && cacheStatus.loaded) {
       fetchAvailability(selectedDate)
     }
-  }, [selectedDate, cacheStatus.loaded]) // Re-run when preload completes!
+  }, [selectedDate, cacheStatus.loaded])
 
   const fetchSessionCredits = async () => {
     try {
@@ -147,8 +148,7 @@ export default function Calendar() {
     // Use local date format to avoid UTC timezone issues
     const dateStr = date.toLocaleDateString('en-CA') // YYYY-MM-DD in local timezone
     
-    // Check if we have preloaded data for this date (INSTANT - no API call!)
-    // Unless forceRefresh is true (after booking)
+    // Use preloaded data (INSTANT - no API call!) unless force refreshing after booking
     if (!forceRefresh && preloadedAvailability[dateStr]) {
       console.log(`✓ Using local cache for ${dateStr}`)
       const data = preloadedAvailability[dateStr]
@@ -158,42 +158,40 @@ export default function Calendar() {
       return
     }
     
-    // If preload is still loading, show loading state and wait for it
-    if (cacheStatus.loading) {
-      console.log(`⏳ Waiting for preload to complete for ${dateStr}`)
+    // Only make API call when force refreshing (after booking) to get fresh data
+    if (forceRefresh) {
+      console.log(`🔄 Force refreshing from API for ${dateStr}`)
       setLoadingSlots(true)
-      setAvailableSlots([])
-      return // useEffect will re-trigger when preloadedAvailability updates
-    }
-    
-    // Fallback: fetch from API and store locally
-    console.log(`⚠ Fetching from API for ${dateStr} (not in local cache)`)
-    setLoadingSlots(true)
-    setAvailableSlots([])
-    
-    try {
-      const response = await fetch(`/api/calendar?action=availability&date=${dateStr}`)
       
-      if (response.ok) {
-        const data = await response.json()
-        const slotsData = data.availableSlots || []
-        const tz = data.timezone || 'America/Chicago'
-        setBusinessTimezone(tz)
+      try {
+        const response = await fetch(`/api/calendar?action=availability&date=${dateStr}`)
         
-        // Store in local cache for instant access later
-        setPreloadedAvailability(prev => ({
-          ...prev,
-          [dateStr]: { availableSlots: slotsData, timezone: tz }
-        }))
-        
-        setAvailableSlots(processSlotsData(slotsData, dateStr, tz))
-      } else {
+        if (response.ok) {
+          const data = await response.json()
+          const slotsData = data.availableSlots || []
+          const tz = data.timezone || 'America/Chicago'
+          setBusinessTimezone(tz)
+          
+          // Update local cache with fresh data
+          setPreloadedAvailability(prev => ({
+            ...prev,
+            [dateStr]: { availableSlots: slotsData, timezone: tz }
+          }))
+          
+          setAvailableSlots(processSlotsData(slotsData, dateStr, tz))
+        } else {
+          setAvailableSlots([])
+        }
+      } catch (error) {
+        console.error('Error fetching availability:', error)
         setAvailableSlots([])
+      } finally {
+        setLoadingSlots(false)
       }
-    } catch (error) {
-      console.error('Error fetching availability:', error)
+    } else {
+      // Date not in preload cache and not force refresh - show empty (shouldn't happen normally)
+      console.log(`⚠ Date ${dateStr} not in preload cache`)
       setAvailableSlots([])
-    } finally {
       setLoadingSlots(false)
     }
   }
