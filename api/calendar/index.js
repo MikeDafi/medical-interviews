@@ -674,10 +674,12 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: `No ${duration}-minute sessions available. Please purchase a package.` });
       }
 
+      // Static Google Meet link for all sessions
+      const meetLink = process.env.GOOGLE_MEET_LINK || 'https://meet.google.com/yrr-qxiw-hjh';
+      
       // Create booking in Google Calendar if configured
       let eventLink = null;
       let calendarEventId = null;
-      let meetLink = null;
       if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY && BOOKINGS_CALENDAR_ID) {
         try {
           const calendar = getCalendarClient();
@@ -695,10 +697,10 @@ export default async function handler(req, res) {
           const sessionLabel = duration === 30 ? '30-min Session' : '1-hour Session';
           const event = await calendar.events.insert({
             calendarId: BOOKINGS_CALENDAR_ID,
-            conferenceDataVersion: 1, // Enable Google Meet creation
             requestBody: {
               summary: `${sessionLabel} - ${userName || userEmail}`,
-              description: `PreMedical 1-on-1 Interview Coaching Session\n\nClient: ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes\n\nJoin the video call using the Google Meet link below.`,
+              description: `PreMedical 1-on-1 Interview Coaching Session\n\nClient: ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes\n\n🎥 Google Meet: ${meetLink}`,
+              location: meetLink,
               start: {
                 dateTime: startDateTime.toISOString(),
                 timeZone: BUSINESS_HOURS.timezone
@@ -706,14 +708,6 @@ export default async function handler(req, res) {
               end: {
                 dateTime: endDateTime.toISOString(),
                 timeZone: BUSINESS_HOURS.timezone
-              },
-              attendees: [{ email: userEmail }],
-              // Automatically create Google Meet link
-              conferenceData: {
-                createRequest: {
-                  requestId: `premedical-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                  conferenceSolutionKey: { type: 'hangoutsMeet' }
-                }
               },
               reminders: {
                 useDefault: false,
@@ -727,11 +721,6 @@ export default async function handler(req, res) {
 
           eventLink = event.data.htmlLink;
           calendarEventId = event.data.id;
-          
-          // Get the Google Meet link if created
-          meetLink = event.data.conferenceData?.entryPoints?.find(
-            ep => ep.entryPointType === 'video'
-          )?.uri;
         } catch (calError) {
           console.error('Google Calendar event creation error:', calError.message);
           // Continue with booking even if calendar event fails
