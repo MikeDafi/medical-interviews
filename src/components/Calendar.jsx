@@ -6,7 +6,12 @@ import Login from './Login'
 
 export default function Calendar() {
   const { user } = useAuth()
-  const [selectedDate, setSelectedDate] = useState(null)
+  // Default to tomorrow
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    return tomorrow
+  })
   const [selectedTime, setSelectedTime] = useState(null)
   const [selectedDuration, setSelectedDuration] = useState(null) // 30 or 60 minutes
   const [currentMonth, setCurrentMonth] = useState(new Date())
