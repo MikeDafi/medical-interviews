@@ -8,12 +8,12 @@ import { requireAuth } from '../_lib/session.js';
 import { sendCustomerBookingEmail, sendAdminBookingEmail } from '../_lib/email.js';
 
 // Calendar where bookings are created
-const BOOKINGS_CALENDAR_ID = process.env.GOOGLE_BOOKINGS_CALENDAR_ID;
+const BOOKINGS_CALENDAR_ID = process.env.GOOGLE_BOOKINGS_CALENDAR_ID?.trim();
 
 // Calendar IDs to check for busy times (Ashley's calendars + bookings calendar)
 // Set these in environment variables, comma-separated
 const BASE_CALENDAR_IDS = process.env.GOOGLE_CALENDAR_IDS 
-  ? process.env.GOOGLE_CALENDAR_IDS.split(',').map(id => id.trim())
+  ? process.env.GOOGLE_CALENDAR_IDS.trim().split(',').map(id => id.trim())
   : [];
 
 // Always include the bookings calendar to block out already-booked times
