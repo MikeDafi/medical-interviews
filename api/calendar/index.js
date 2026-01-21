@@ -887,6 +887,11 @@ export default async function handler(req, res) {
         UPDATE users SET purchases = ${JSON.stringify(purchases)}::jsonb WHERE id = ${user.id}
       `;
 
+      // Invalidate cache so next user sees updated availability
+      console.log('Cancellation successful - invalidating availability cache');
+      batchCache.data = null;
+      batchCache.timestamp = 0;
+
       return res.status(200).json({
         success: true,
         message: 'Booking cancelled successfully. Your session credit has been restored.',
