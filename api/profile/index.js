@@ -13,6 +13,53 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Too many requests' });
   }
 
+  // ==================== RECENT PURCHASES (PUBLIC, NO AUTH REQUIRED) ====================
+  // Returns anonymized purchase data for social proof notifications
+  if (req.method === 'GET' && req.query.action === 'recentPurchases') {
+    try {
+      // Query only the minimal fields needed - extract from purchases JSONB
+      const result = await sql`
+        SELECT 
+          name,
+          purchases
+        FROM users 
+        WHERE purchases IS NOT NULL 
+          AND jsonb_array_length(purchases) > 0
+        ORDER BY updated_at DESC
+        LIMIT 10
+      `;
+
+      // Extract and anonymize recent purchases
+      const recentPurchases = [];
+      const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // Last 7 days
+
+      for (const user of result.rows) {
+        const purchases = user.purchases || [];
+        for (const purchase of purchases) {
+          const purchaseTime = new Date(purchase.purchased_at || purchase.created_at).getTime();
+          if (purchaseTime > cutoff && recentPurchases.length < 5) {
+            // Only return minimal anonymized data
+            const firstName = (user.name || 'Someone').split(' ')[0];
+            recentPurchases.push({
+              first_name: firstName.charAt(0).toUpperCase() + firstName.slice(1, 2) + '.',
+              package_name: purchase.package_name || 'Session',
+              purchased_at: purchase.purchased_at || purchase.created_at
+            });
+          }
+        }
+      }
+
+      // Sort by most recent first
+      recentPurchases.sort((a, b) => new Date(b.purchased_at) - new Date(a.purchased_at));
+
+      return res.status(200).json({ purchases: recentPurchases.slice(0, 5) });
+    } catch (error) {
+      console.error('Recent purchases error:', error);
+      return res.status(200).json({ purchases: [] }); // Fail silently for social proof
+    }
+  }
+
+  // ==================== PROFILE (AUTH REQUIRED) ====================
   if (req.method === 'GET') {
     // SECURITY: Require authenticated session
     const { authenticated, user: sessionUser, error } = await requireAuth(req);
