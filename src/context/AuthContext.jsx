@@ -48,9 +48,13 @@ export function AuthProvider({ children }) {
           setUser(data.user)
           setIsAdmin(data.user.isAdmin || false)
           
-          if (!data.user.profileComplete) {
-            setShowProfileSetup(true)
+          // Only show profile setup for NEW users (profile not complete)
+          // Once complete, never show again
+          if (data.user.profileComplete) {
+            setShowProfileSetup(false)
           }
+          // Note: We no longer auto-show for incomplete profiles on every page load
+          // It only shows on first sign-in (via URL param)
         } else {
           setUser(null)
           setIsAdmin(false)

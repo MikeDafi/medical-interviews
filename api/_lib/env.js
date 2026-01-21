@@ -11,7 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Load .env.local from project root
-config({ path: resolve(__dirname, '../../.env.local') });
+// Use override:true to ensure local values take precedence over Vercel cloud values
+config({ path: resolve(__dirname, '../../.env.local'), override: true });
 
 // Export for confirmation
 export const envLoaded = true;

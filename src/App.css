@@ -2912,6 +2912,54 @@ img {
   color: var(--light-text);
 }
 
+/* Package type styling */
+.package-item.subscription {
+  border-left: 3px solid #8b5cf6;
+}
+
+.package-item.cv {
+  border-left: 3px solid #f59e0b;
+}
+
+.package-item.advisory {
+  border-left: 3px solid #8b5cf6;
+}
+
+.subscription-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  color: #7c3aed;
+  background: #ede9fe;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+.subscription-badge.cancelled {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.renewal-info {
+  display: block;
+  font-size: 11px;
+  color: #7c3aed;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.subscription-tag {
+  display: block;
+  font-size: 11px;
+  color: #7c3aed;
+  font-weight: 500;
+}
+
+.subscription-tag.cancelled {
+  color: #dc2626;
+}
+
 .progress-track {
   margin-top: 8px;
 }
@@ -3093,27 +3141,40 @@ img {
   opacity: 0.7;
 }
 
-.booking-info {
-  display: flex;
-  gap: 16px;
-  align-items: center;
+.booking-card.cv {
+  border-left: 3px solid #f59e0b;
 }
 
-.booking-date {
+.booking-card.advisory {
+  border-left: 3px solid #8b5cf6;
+}
+
+.booking-card.interview {
+  border-left: 3px solid var(--primary-teal);
+}
+
+.booking-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+
+.booking-type {
   font-family: var(--marketing-font);
   font-size: 14px;
   font-weight: 600;
   color: var(--dark-text);
 }
 
-.booking-time {
-  font-size: 13px;
+.booking-date {
+  font-size: 12px;
   color: var(--light-text);
 }
 
-.booking-type {
-  font-size: 13px;
-  color: var(--primary-teal);
+.booking-time {
+  font-size: 12px;
+  color: var(--light-text);
 }
 
 .booking-status {

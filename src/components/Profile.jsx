@@ -5,6 +5,38 @@ import { calculateSessionCredits, formatDate } from '../utils'
 // Constants
 const DELETE_CONFIRMATION_TEXT = 'DELETE'
 
+// Package name mapping
+const PACKAGE_NAMES = {
+  // Interview packages
+  trial: '30 Min Trial Session',
+  single: '1 Hour Session',
+  package3: 'Package of 3 (Interview)',
+  package5: 'Package of 5 (Interview)',
+  // CV packages
+  cv_trial: '30 Min Strategy Snapshot',
+  cv_single: '1 Hour CV Review',
+  cv_package3: 'CV Package of 3',
+  cv_package5: 'CV Package of 5',
+  // Advisory subscriptions
+  advisory_email: 'Email-Only Advisory',
+  advisory_checkin: 'Monthly Check-In',
+  advisory_full: 'Email + Monthly Advisory'
+}
+
+function getPackageName(pkg) {
+  return PACKAGE_NAMES[pkg.package_id] || pkg.name || pkg.package_name || 'Session'
+}
+
+function getPackageCategory(packageId) {
+  if (packageId?.startsWith('cv_')) return 'cv'
+  if (packageId?.startsWith('advisory_')) return 'advisory'
+  return 'interview'
+}
+
+function isSubscription(pkg) {
+  return pkg.is_subscription || pkg.package_id?.startsWith('advisory_')
+}
+
 export default function Profile({ onClose }) {
   const { user, signOut } = useAuth()
   const [activeTab, setActiveTab] = useState('overview')
@@ -356,15 +388,40 @@ export default function Profile({ onClose }) {
                       const total = pkg.sessions_total || pkg.sessionsTotal || 1
                       const used = pkg.sessions_used || pkg.sessionsUsed || 0
                       const remaining = total - used
+                      const isSub = isSubscription(pkg)
+                      const category = getPackageCategory(pkg.package_id)
+                      
                       return (
-                        <div className="package-item" key={pkg.id}>
+                        <div className={`package-item ${category} ${isSub ? 'subscription' : ''}`} key={pkg.id}>
                           <div className="package-info">
-                            <span className="package-name">{pkg.name || pkg.package_name}</span>
-                            <span className="package-date">Purchased {new Date(pkg.purchase_date || pkg.purchaseDate).toLocaleDateString()}</span>
+                            <span className="package-name">{getPackageName(pkg)}</span>
+                            {isSub && pkg.subscription_status === 'active' && (
+                              <span className="subscription-badge">🔄 Monthly Subscription</span>
+                            )}
+                            {isSub && pkg.subscription_status === 'cancelled' && (
+                              <span className="subscription-badge cancelled">Cancelled</span>
+                            )}
+                            <span className="package-date">
+                              {isSub ? 'Started' : 'Purchased'} {new Date(pkg.purchase_date || pkg.purchaseDate).toLocaleDateString()}
+                            </span>
+                            {isSub && pkg.subscription_status === 'active' && pkg.current_period_start && (
+                              <span className="renewal-info">
+                                Renews {new Date(new Date(pkg.current_period_start).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+                              </span>
+                            )}
                           </div>
                           <div className="package-sessions">
-                            <span className="sessions-remaining">{remaining}</span>
-                            <span className="sessions-label">{remaining === 1 ? 'session left' : 'sessions left'}</span>
+                            {isSub && pkg.sessions_total === 0 ? (
+                              <>
+                                <span className="sessions-remaining">∞</span>
+                                <span className="sessions-label">Email access</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="sessions-remaining">{remaining}</span>
+                                <span className="sessions-label">{remaining === 1 ? 'session left' : 'sessions left'}</span>
+                              </>
+                            )}
                           </div>
                         </div>
                       )
@@ -464,18 +521,24 @@ export default function Profile({ onClose }) {
                     <div className="bookings-list">
                       {purchasedPackages.map(pkg => {
                         const remaining = (pkg.sessions_total || 1) - (pkg.sessions_used || 0)
-                        const packageName = pkg.package_id === 'trial' ? '30 Min Session' : 
-                                           pkg.package_id === 'single' ? '1 Hour Session' : 
-                                           pkg.package_id === 'package3' ? 'Package of 3' : 
-                                           pkg.package_id === 'package5' ? 'Package of 5' : 'Session'
+                        const isSub = isSubscription(pkg)
+                        const category = getPackageCategory(pkg.package_id)
+                        
                         return (
-                          <div className="booking-card" key={pkg.id}>
+                          <div className={`booking-card ${category}`} key={pkg.id}>
                             <div className="booking-info">
-                              <span className="booking-type">{packageName}</span>
-                              <span className="booking-date">Purchased {new Date(pkg.purchase_date).toLocaleDateString()}</span>
+                              <span className="booking-type">{getPackageName(pkg)}</span>
+                              {isSub && pkg.subscription_status === 'active' && (
+                                <span className="subscription-tag">Monthly • Renews {new Date(new Date(pkg.current_period_start || pkg.purchase_date).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</span>
+                              )}
+                              {isSub && pkg.subscription_status === 'cancelled' && (
+                                <span className="subscription-tag cancelled">Subscription Cancelled</span>
+                              )}
+                              <span className="booking-date">{isSub ? 'Started' : 'Purchased'} {new Date(pkg.purchase_date).toLocaleDateString()}</span>
                             </div>
-                            <span className={`booking-status ${remaining > 0 ? 'active' : 'used'}`}>
-                              {remaining > 0 ? `${remaining} remaining` : 'Used'}
+                            <span className={`booking-status ${remaining > 0 || (isSub && pkg.subscription_status === 'active') ? 'active' : 'used'}`}>
+                              {isSub && pkg.sessions_total === 0 ? 'Email Access' : 
+                               remaining > 0 ? `${remaining} remaining` : 'Used'}
                             </span>
                           </div>
                         )

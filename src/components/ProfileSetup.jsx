@@ -321,7 +321,27 @@ export default function ProfileSetup({ user, onComplete }) {
           )}
         </div>
 
-        <button type="button" className="skip-setup" onClick={onComplete}>
+        <button type="button" className="skip-setup" onClick={async () => {
+          // Save minimal profile to mark as complete so it doesn't keep showing
+          try {
+            await fetch('/api/profile/setup', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                name: user.name,
+                phone: '',
+                applicationStage: '',
+                targetSchools: [],
+                concerns: '',
+                resources: []
+              })
+            })
+          } catch (e) {
+            console.error('Skip save error:', e)
+          }
+          onComplete()
+        }}>
           Skip for now
         </button>
       </div>
