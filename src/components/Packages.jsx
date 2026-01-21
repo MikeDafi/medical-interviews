@@ -1,12 +1,18 @@
 import { useState, useEffect } from 'react'
-import { loadStripe } from '@stripe/stripe-js'
 import { useAuth } from '../context/AuthContext'
 import GoogleIcon from './icons/GoogleIcon'
 
-// Initialize Stripe with publishable key
-const stripePromise = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY 
-  ? loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY)
-  : null
+// Lazy-load Stripe only when needed (prevents analytics requests on page load)
+let stripePromise = null
+const getStripe = () => {
+  if (!stripePromise && import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
+    // Dynamically import and load Stripe only on first purchase attempt
+    stripePromise = import('@stripe/stripe-js').then(({ loadStripe }) => 
+      loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY)
+    )
+  }
+  return stripePromise
+}
 
 export default function Packages() {
   const [loading, setLoading] = useState(null)
@@ -48,7 +54,8 @@ export default function Packages() {
         window.location.href = data.url
         return
       } else if (response.ok && data.sessionId) {
-        const stripe = await stripePromise
+        // Lazy load Stripe only when we actually need it
+        const stripe = await getStripe()
         if (stripe) {
           await stripe.redirectToCheckout({ sessionId: data.sessionId })
           return
