@@ -3822,6 +3822,18 @@ img {
   gap: 12px;
 }
 
+.resources-list.compact {
+  gap: 8px;
+}
+
+.resources-list.compact .resource-card {
+  padding: 8px 12px;
+}
+
+.resources-list.compact .resource-title {
+  font-size: 13px;
+}
+
 .resource-card {
   display: flex;
   align-items: center;
