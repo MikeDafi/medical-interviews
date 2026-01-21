@@ -694,6 +694,11 @@ export default async function handler(req, res) {
       // Create booking in Google Calendar if configured
       let eventLink = null;
       let calendarEventId = null;
+      console.log('Calendar config check:', {
+        hasServiceAccountKey: !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY,
+        bookingsCalendarId: BOOKINGS_CALENDAR_ID || 'NOT SET'
+      });
+      
       if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY && BOOKINGS_CALENDAR_ID) {
         try {
           const calendar = getCalendarClient();
@@ -707,6 +712,15 @@ export default async function handler(req, res) {
 
           const startDateTime = new Date(`${date}T${hour24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`);
           const endDateTime = new Date(startDateTime.getTime() + duration * 60 * 1000);
+
+          console.log('Creating calendar event:', {
+            calendarId: BOOKINGS_CALENDAR_ID,
+            date,
+            time,
+            duration,
+            startISO: startDateTime.toISOString(),
+            endISO: endDateTime.toISOString()
+          });
 
           const sessionLabel = duration === 30 ? '30-min Session' : '1-hour Session';
           const event = await calendar.events.insert({
@@ -735,10 +749,14 @@ export default async function handler(req, res) {
 
           eventLink = event.data.htmlLink;
           calendarEventId = event.data.id;
+          console.log('Calendar event created successfully:', { eventId: calendarEventId, eventLink });
         } catch (calError) {
           console.error('Google Calendar event creation error:', calError.message);
+          console.error('Full calendar error:', calError.response?.data || calError.stack);
           // Continue with booking even if calendar event fails
         }
+      } else {
+        console.log('Skipping calendar event - missing config');
       }
 
       // Create booking record
