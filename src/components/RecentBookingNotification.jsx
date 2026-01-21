@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../context/AuthContext'
 import { getTimeAgo } from '../utils'
 
 const CACHE_KEY = 'recentPurchases'
@@ -28,10 +29,14 @@ function writeCache(key, data) {
 }
 
 export default function RecentBookingNotification() {
+  const { user } = useAuth()
   const [notification, setNotification] = useState(null)
   const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {
+    // Only fetch if user is logged in
+    if (!user) return
+
     const timer = setTimeout(() => {
       // Try cache first for instant display
       const cached = readCache(CACHE_KEY)
@@ -45,7 +50,7 @@ export default function RecentBookingNotification() {
     }, NOTIFICATION_DELAY)
     
     return () => clearTimeout(timer)
-  }, [])
+  }, [user])
 
   const fetchRecentPurchase = async () => {
     try {

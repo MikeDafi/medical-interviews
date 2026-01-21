@@ -8,28 +8,29 @@ export default function Experiences() {
       id: 'sarah-m',
       name: "Sarah M.",
       school: "Accepted to Northwestern",
-      image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=600&fit=crop&crop=face",
+      image: "/person-1.jpeg",
       review: "Ashley completely transformed my interview skills. After 3 sessions, I went from freezing up to confidently handling any question thrown at me."
     },
     {
       id: 'james-l',
       name: "James L.",
       school: "Accepted to UCLA",
-      image: "https://images.unsplash.com/photo-1552058544-f2b08422138a?w=400&h=600&fit=crop&crop=face",
+      image: "/person-3.jpeg",
+      imageStyle: { objectPosition: 'center 10%' },
       review: "The MMI practice was incredibly realistic. I felt like I had already done my interview by the time the real one came around."
     },
     {
       id: 'priya-k',
       name: "Priya K.",
       school: "Accepted to Duke",
-      image: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=400&h=600&fit=crop&crop=face",
+      image: "/person-2.png",
       review: "Honest feedback that actually helped. Ashley doesn't sugarcoat things, and that's exactly what I needed to improve."
     },
     {
       id: 'michael-t',
       name: "Michael T.",
       school: "Accepted to Emory",
-      image: "https://images.unsplash.com/photo-1463453091185-61582044d556?w=400&h=600&fit=crop&crop=face",
+      image: null,
       review: "Worth every penny. The take-home questions helped me practice on my own time and the recordings let me see exactly where I needed work."
     },
     {
@@ -66,16 +67,23 @@ export default function Experiences() {
         <div className="experiences-track">
           {testimonials.map((testimonial) => (
             <div className="experience-card" key={testimonial.id}>
-              <div className="experience-image">
-                <img 
-                  src={testimonial.image} 
-                  alt={testimonial.name}
-                  loading="lazy"
-                  onError={(e) => { 
-                    e.target.onerror = null
-                    e.target.src = getFallbackAvatar(testimonial.name) 
-                  }}
-                />
+              <div className={`experience-image ${!testimonial.image ? 'anonymous' : ''}`}>
+                {testimonial.image ? (
+                  <img 
+                    src={testimonial.image} 
+                    alt={testimonial.name}
+                    loading="lazy"
+                    style={testimonial.imageStyle || {}}
+                    onError={(e) => { 
+                      e.target.onerror = null
+                      e.target.src = getFallbackAvatar(testimonial.name) 
+                    }}
+                  />
+                ) : (
+                  <div className="anonymous-placeholder">
+                    <span>?</span>
+                  </div>
+                )}
               </div>
               <div className="experience-content">
                 <div className="experience-header">

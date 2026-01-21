@@ -1,8 +1,18 @@
+// Load .env.local for local development
+import '../_lib/env.js';
+
 import Stripe from 'stripe';
 import { rateLimit } from '../_lib/auth.js';
 import { requireAuth } from '../_lib/session.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+// Initialize Stripe lazily to ensure env vars are loaded
+let stripeInstance = null;
+function getStripe() {
+  if (!stripeInstance && process.env.STRIPE_SECRET_KEY) {
+    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+  }
+  return stripeInstance;
+}
 
 // Package definitions - organized by category
 // duration_minutes: 30 or 60 (used for booking validation)
@@ -127,6 +137,8 @@ const ALLOWED_ORIGINS = [
 ];
 
 export default async function handler(req, res) {
+  console.log('Stripe checkout request received');
+  
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -139,12 +151,15 @@ export default async function handler(req, res) {
   }
 
   // SECURITY: Require authenticated session for purchases
+  console.log('Checking auth...');
   const { authenticated, user: sessionUser, error: authError } = await requireAuth(req);
+  console.log('Auth result:', { authenticated, authError, hasUser: !!sessionUser });
   
   if (!authenticated) {
     return res.status(401).json({ error: authError || 'Please sign in to purchase' });
   }
 
+  console.log('STRIPE_SECRET_KEY exists:', !!process.env.STRIPE_SECRET_KEY);
   if (!process.env.STRIPE_SECRET_KEY) {
     return res.status(500).json({ error: 'Payment not configured' });
   }
@@ -223,7 +238,7 @@ export default async function handler(req, res) {
       ];
     }
 
-    const session = await stripe.checkout.sessions.create(sessionConfig);
+    const session = await getStripe().checkout.sessions.create(sessionConfig);
 
     res.status(200).json({ 
       sessionId: session.id,

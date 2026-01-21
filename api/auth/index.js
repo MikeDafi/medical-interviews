@@ -3,6 +3,9 @@
  * Handles: session check, logout, OAuth callback, and legacy google auth
  */
 
+// Load .env.local for local development
+import '../_lib/env.js';
+
 import { sql } from '@vercel/postgres';
 import { rateLimit } from '../_lib/auth.js';
 import { sanitizeString, sanitizeEmail, sanitizeUrl } from '../_lib/sanitize.js';
@@ -14,9 +17,6 @@ import {
   getTokenFromRequest, 
   clearSessionCookie 
 } from '../_lib/session.js';
-
-const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
 // Google-specific URL sanitizer
 const sanitizeGooglePictureUrl = (url) => {
@@ -119,6 +119,17 @@ export default async function handler(req, res) {
       if (!verifier) {
         return res.status(400).json({ error: 'Missing PKCE verifier' });
       }
+
+      // Read env vars at RUNTIME (not module load time)
+      const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_CLIENT_ID;
+      const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+      
+      // Debug: Check if credentials are loaded
+      console.log('Auth debug - Client ID exists:', !!GOOGLE_CLIENT_ID);
+      console.log('Auth debug - Client Secret exists:', !!GOOGLE_CLIENT_SECRET);
+      console.log('Auth debug - Client Secret value (first 10 chars):', GOOGLE_CLIENT_SECRET?.substring(0, 10));
+      console.log('Auth debug - All env keys:', Object.keys(process.env).filter(k => k.includes('GOOGLE') || k.includes('SECRET')));
+      console.log('Auth debug - Redirect URI:', getRedirectUri(req));
 
       // Exchange code for tokens
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {

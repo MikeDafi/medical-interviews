@@ -5,6 +5,9 @@
  * to authenticate requests. Tokens are httpOnly cookies.
  */
 
+// Load .env.local for local development
+import './env.js';
+
 import { sql } from '@vercel/postgres';
 import crypto from 'crypto';
 

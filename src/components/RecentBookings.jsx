@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../context/AuthContext'
 import { getTimeAgo } from '../utils'
 
 const CACHE_KEY = 'recentPurchases'
@@ -34,14 +35,21 @@ function writeCache(key, data) {
 }
 
 export default function RecentBookings() {
+  const { user } = useAuth()
   const [purchases, setPurchases] = useState(() => readCache(CACHE_KEY).data)
   const [isLoading, setIsLoading] = useState(() => readCache(CACHE_KEY).isStale)
 
   useEffect(() => {
+    // Only fetch if user is logged in
+    if (!user) {
+      setIsLoading(false)
+      return
+    }
+    
     fetchRecentPurchases()
     const interval = setInterval(fetchRecentPurchases, CACHE_DURATION)
     return () => clearInterval(interval)
-  }, [])
+  }, [user])
 
   const fetchRecentPurchases = async () => {
     try {

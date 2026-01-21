@@ -1,8 +1,21 @@
+// Load .env.local for local development
+import '../_lib/env.js';
+
 import Stripe from 'stripe';
 import { sql } from '@vercel/postgres';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+// Initialize Stripe lazily to ensure env vars are loaded
+let stripeInstance = null;
+function getStripe() {
+  if (!stripeInstance) {
+    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+  }
+  return stripeInstance;
+}
+
+function getWebhookSecret() {
+  return process.env.STRIPE_WEBHOOK_SECRET;
+}
 
 export const config = {
   api: { bodyParser: false }
@@ -54,7 +67,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  if (!webhookSecret) {
+  if (!getWebhookSecret()) {
     console.error('Webhook secret not configured');
     return res.status(500).json({ error: 'Webhook not configured' });
   }
@@ -69,7 +82,7 @@ export default async function handler(req, res) {
 
     let event;
     try {
-      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+      event = getStripe().webhooks.constructEvent(rawBody, sig, getWebhookSecret());
     } catch (err) {
       console.error('Webhook signature verification failed:', err.message);
       return res.status(401).json({ error: 'Invalid signature' });
@@ -170,7 +183,7 @@ export default async function handler(req, res) {
       let customerEmail = null;
       if (subscription.customer) {
         try {
-          const customer = await stripe.customers.retrieve(subscription.customer);
+          const customer = await getStripe().customers.retrieve(subscription.customer);
           customerEmail = customer.email;
         } catch {
           // Customer lookup failed, fall back to JSONB search
@@ -207,7 +220,7 @@ export default async function handler(req, res) {
       let customerEmail = null;
       if (subscription.customer) {
         try {
-          const customer = await stripe.customers.retrieve(subscription.customer);
+          const customer = await getStripe().customers.retrieve(subscription.customer);
           customerEmail = customer.email;
         } catch {
           // Customer lookup failed

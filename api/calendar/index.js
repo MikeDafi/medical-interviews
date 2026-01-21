@@ -1,3 +1,6 @@
+// Load .env.local for local development
+import '../_lib/env.js';
+
 import { sql } from '@vercel/postgres';
 import { google } from 'googleapis';
 import { rateLimit } from '../_lib/auth.js';

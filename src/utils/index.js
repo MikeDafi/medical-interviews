@@ -1,5 +1,6 @@
 // Shared utility functions
 
+
 /**
  * Format a date string to relative time (e.g., "2h ago", "1d ago")
  */
@@ -39,6 +40,7 @@ export function calculateSessionCredits(purchases = []) {
   
   purchases.forEach(p => {
     if (p.status !== 'active') return
+    
     const remaining = (p.sessions_total || 0) - (p.sessions_used || 0)
     if (remaining <= 0) return
     
