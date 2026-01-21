@@ -599,19 +599,20 @@ export default async function handler(req, res) {
     const userEmail = sessionUser.email;
     const userName = sessionUser.name;
 
-    // SECURITY: Reject same-day bookings
-    const bookingDate = new Date(date + 'T00:00:00');
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    // SECURITY: Reject same-day and past bookings
+    // Use business timezone for consistent date comparison
+    const businessTimezone = process.env.BUSINESS_TIMEZONE || 'America/Chicago';
+    const todayInBusiness = new Date().toLocaleDateString('en-CA', { timeZone: businessTimezone }); // YYYY-MM-DD format
+    const bookingDateStr = date; // Already in YYYY-MM-DD format
     
-    if (bookingDate.getTime() === todayStart.getTime()) {
+    if (bookingDateStr === todayInBusiness) {
       return res.status(400).json({ 
         error: 'Same-day bookings are not available. Please book at least 1 day in advance.',
         code: 'SAME_DAY_BOOKING'
       });
     }
 
-    if (bookingDate < todayStart) {
+    if (bookingDateStr < todayInBusiness) {
       return res.status(400).json({ 
         error: 'Cannot book sessions in the past.',
         code: 'PAST_DATE'

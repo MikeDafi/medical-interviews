@@ -144,7 +144,8 @@ export default function Calendar() {
   }
 
   const fetchAvailability = async (date) => {
-    const dateStr = date.toISOString().split('T')[0]
+    // Use local date format to avoid UTC timezone issues
+    const dateStr = date.toLocaleDateString('en-CA') // YYYY-MM-DD in local timezone
     
     // Check if we have preloaded data for this date (INSTANT - no API call!)
     if (preloadedAvailability[dateStr]) {
@@ -198,7 +199,8 @@ export default function Calendar() {
 
   // Force refresh a specific date (used after booking failure)
   const refreshDateAvailability = async (date) => {
-    const dateStr = date.toISOString().split('T')[0]
+    // Use local date format to avoid UTC timezone issues
+    const dateStr = date.toLocaleDateString('en-CA') // YYYY-MM-DD in local timezone
     console.log(`🔄 Force refreshing ${dateStr}`)
     
     try {
@@ -255,7 +257,8 @@ export default function Calendar() {
     setBookingResult(null)
     
     try {
-      const dateStr = selectedDate.toISOString().split('T')[0]
+      // Use local date format to avoid UTC timezone issues
+      const dateStr = selectedDate.toLocaleDateString('en-CA') // YYYY-MM-DD in local timezone
       
       // SECURITY: Session cookie authenticates user, no need to send userId/email
       const response = await fetch('/api/calendar?action=book', {
@@ -531,8 +534,8 @@ export default function Calendar() {
             <p className="select-date-prompt">Select a date to see available times</p>
           )}
 
-          {/* Session Duration Selection */}
-          {selectedTime && user && totalSessions > 0 && (
+          {/* Session Duration Selection - Show for logged in users */}
+          {selectedTime && user && (
             <div className="session-type-selection">
               <h4>Choose Session Duration</h4>
               <div className="session-type-options">
@@ -556,6 +559,14 @@ export default function Calendar() {
                   {selectedSlot?.canBookHour && sessionCredits.sixtyMin === 0 && <span className="type-note">None available</span>}
                 </button>
               </div>
+              {totalSessions === 0 && (
+                <div className="no-sessions-prompt">
+                  <p>You don't have any sessions yet.</p>
+                  <a href="#packages" className="purchase-sessions-link">
+                    Browse Prep Packages →
+                  </a>
+                </div>
+              )}
             </div>
           )}
 
@@ -591,14 +602,6 @@ export default function Calendar() {
 
           {selectedDate && selectedTime && !selectedDuration && user && totalSessions > 0 && (
             <p className="select-session-prompt">Select a session duration above to continue</p>
-          )}
-
-          {selectedDate && selectedTime && user && totalSessions === 0 && (
-            <div className="booking-summary">
-              <a href="#packages" className="confirm-booking-btn purchase-btn">
-                Purchase Sessions
-              </a>
-            </div>
           )}
 
           {selectedDate && selectedTime && !user && (

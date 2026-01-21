@@ -1,0 +1,14 @@
+#!/bin/sh
+
+echo "🧪 Running pre-commit tests..."
+
+# Run unit tests (fast, no server needed)
+npm run test:unit
+
+# Check if tests passed
+if [ $? -ne 0 ]; then
+  echo "❌ Unit tests failed. Commit aborted."
+  exit 1
+fi
+
+echo "✅ All tests passed!"
