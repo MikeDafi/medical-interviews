@@ -7,14 +7,19 @@ import { rateLimit } from '../_lib/auth.js';
 import { requireAuth } from '../_lib/session.js';
 import { sendCustomerBookingEmail, sendAdminBookingEmail } from '../_lib/email.js';
 
-// Calendar IDs to check for busy times (Ashley's calendars)
+// Calendar where bookings are created
+const BOOKINGS_CALENDAR_ID = process.env.GOOGLE_BOOKINGS_CALENDAR_ID;
+
+// Calendar IDs to check for busy times (Ashley's calendars + bookings calendar)
 // Set these in environment variables, comma-separated
-const CALENDAR_IDS = process.env.GOOGLE_CALENDAR_IDS 
+const BASE_CALENDAR_IDS = process.env.GOOGLE_CALENDAR_IDS 
   ? process.env.GOOGLE_CALENDAR_IDS.split(',').map(id => id.trim())
   : [];
 
-// Calendar where bookings are created
-const BOOKINGS_CALENDAR_ID = process.env.GOOGLE_BOOKINGS_CALENDAR_ID;
+// Always include the bookings calendar to block out already-booked times
+const CALENDAR_IDS = BOOKINGS_CALENDAR_ID 
+  ? [...new Set([...BASE_CALENDAR_IDS, BOOKINGS_CALENDAR_ID])] // dedupe in case it's already listed
+  : BASE_CALENDAR_IDS;
 
 // Business hours configuration (in CDT/Chicago time)
 // Weekdays: 10 AM - 7 PM CDT
