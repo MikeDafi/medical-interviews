@@ -143,12 +143,13 @@ export default function Calendar() {
     })
   }
 
-  const fetchAvailability = async (date) => {
+  const fetchAvailability = async (date, forceRefresh = false) => {
     // Use local date format to avoid UTC timezone issues
     const dateStr = date.toLocaleDateString('en-CA') // YYYY-MM-DD in local timezone
     
     // Check if we have preloaded data for this date (INSTANT - no API call!)
-    if (preloadedAvailability[dateStr]) {
+    // Unless forceRefresh is true (after booking)
+    if (!forceRefresh && preloadedAvailability[dateStr]) {
       console.log(`✓ Using local cache for ${dateStr}`)
       const data = preloadedAvailability[dateStr]
       const slotsData = data.availableSlots || []
@@ -277,13 +278,14 @@ export default function Calendar() {
       if (response.ok) {
         setBookingResult({
           success: true,
-          message: data.message || 'Booking confirmed!',
+          message: '✅ Booking confirmed! Check your email for the Google Meet link.',
           eventLink: data.eventLink
         })
         fetchSessionCredits()
         setSelectedTime(null)
         setSelectedDuration(null)
-        fetchAvailability(selectedDate)
+        // Force refresh from API to update available slots (bypass cache)
+        fetchAvailability(selectedDate, true)
       } else {
         // Handle slot unavailable - refresh and let user pick another time
         if (data.code === 'SLOT_UNAVAILABLE') {
@@ -418,6 +420,11 @@ export default function Calendar() {
         <p>Select a date and time that works for you</p>
         <p className="booking-notice">Same-day bookings not available • Book at least 1 day in advance (up to 4 weeks)</p>
         <p className="timezone-note">Times shown in your timezone ({formatTimezone(userTimezone)})</p>
+      </div>
+
+      <div className="booking-info-box">
+        <p>📧 <strong>You'll receive a confirmation email</strong> with your Google Meet link after booking</p>
+        <p>🎥 <strong>All sessions are via Google Meet</strong> - join from any device</p>
       </div>
 
       {user && (

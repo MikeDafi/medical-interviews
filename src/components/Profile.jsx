@@ -70,7 +70,19 @@ export default function Profile({ onClose }) {
       if (pkg.bookings && Array.isArray(pkg.bookings)) {
         pkg.bookings.forEach(booking => {
           // Only include future bookings that aren't cancelled
-          const bookingDate = new Date(booking.date + 'T' + booking.time?.split(' ')[0] + ':00')
+          // Parse time like "2:00 PM" to 24-hour format
+          let bookingDate
+          try {
+            const [timePart, ampm] = (booking.time || '12:00 PM').split(' ')
+            const [hours, minutes] = timePart.split(':').map(Number)
+            let hour24 = hours
+            if (ampm === 'PM' && hours !== 12) hour24 += 12
+            if (ampm === 'AM' && hours === 12) hour24 = 0
+            bookingDate = new Date(`${booking.date}T${hour24.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}:00`)
+          } catch {
+            bookingDate = new Date(booking.date + 'T12:00:00')
+          }
+          
           if (bookingDate > now && booking.status !== 'cancelled') {
             bookings.push({
               ...booking,
