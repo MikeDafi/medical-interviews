@@ -484,50 +484,15 @@ export default function Profile({ onClose }) {
                   Book Your Session →
                 </button>
               )}
-
-              {/* Main Concerns */}
-              <div className="overview-card concerns-card">
-                <div className="concerns-header">
-                  <h4>Main Concerns</h4>
-                  <button 
-                    type="button"
-                    className="edit-concerns-btn"
-                    onClick={() => setEditingConcerns(!editingConcerns)}
-                  >
-                    {editingConcerns ? 'Cancel' : 'Edit'}
-                  </button>
-                </div>
-                {editingConcerns ? (
-                  <div className="concerns-edit">
-                    <textarea
-                      value={concerns}
-                      onChange={(e) => setConcerns(e.target.value.slice(0, 500))}
-                      placeholder="What are your main concerns about interviews? e.g., I freeze up when I don't know the answer..."
-                      rows={4}
-                      maxLength={500}
-                    />
-                    <div className="concerns-footer">
-                      <span className="char-count">{concerns.length}/500</span>
-                      <button type="button" className="save-concerns-btn" onClick={handleSaveConcerns}>
-                        Save
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="concerns-text">
-                    {profileData?.current_concerns || concerns || 'No concerns added yet. Click Edit to add your interview concerns.'}
-                  </p>
-                )}
-              </div>
             </div>
           )}
 
           {activeTab === 'bookings' && (
             <div className="tab-bookings">
-              {/* Upcoming Sessions */}
-              <div className="overview-card upcoming-sessions-card">
-                <h4>📅 Upcoming Sessions</h4>
-                {upcomingBookings.length > 0 ? (
+              {/* Upcoming Sessions - only show if there are bookings */}
+              {upcomingBookings.length > 0 && (
+                <div className="overview-card upcoming-sessions-card compact">
+                  <h4>📅 Upcoming</h4>
                   <div className="upcoming-bookings-list">
                     {upcomingBookings.map(booking => {
                       const bookingDate = new Date(booking.date + 'T12:00:00')
@@ -535,7 +500,7 @@ export default function Profile({ onClose }) {
                       const isCancelling = cancellingBooking === booking.id
                       
                       return (
-                        <div key={booking.id} className="upcoming-booking-item">
+                        <div key={booking.id} className="upcoming-booking-item compact">
                           <div className="upcoming-booking-info">
                             <div className="upcoming-booking-date">
                               <span className="booking-day">{bookingDate.toLocaleDateString('en-US', { weekday: 'short' })}</span>
@@ -543,10 +508,10 @@ export default function Profile({ onClose }) {
                             </div>
                             <div className="upcoming-booking-details">
                               <span className="booking-time-display">{booking.time}</span>
-                              <span className="booking-duration-display">{booking.duration} minutes</span>
+                              <span className="booking-duration-display">{booking.duration} min</span>
                               {booking.meet_link && (
                                 <a href={booking.meet_link} target="_blank" rel="noopener noreferrer" className="booking-meet-link">
-                                  🎥 Join Google Meet
+                                  🎥 Join Meet
                                 </a>
                               )}
                             </div>
@@ -558,11 +523,11 @@ export default function Profile({ onClose }) {
                                 onClick={() => handleCancelBooking(booking)}
                                 disabled={isCancelling}
                               >
-                                {isCancelling ? 'Cancelling...' : 'Cancel'}
+                                {isCancelling ? '...' : 'Cancel'}
                               </button>
                             ) : (
                               <span className="cannot-cancel-notice" title="Cancellations must be made at least 1 day before">
-                                Cannot cancel
+                                ✗
                               </span>
                             )}
                           </div>
@@ -570,11 +535,8 @@ export default function Profile({ onClose }) {
                       )
                     })}
                   </div>
-                ) : (
-                  <p className="no-upcoming-sessions">No upcoming sessions. {(sessionCredits.total || 0) > 0 && <button className="link-btn" onClick={handleBookNow}>Book one now!</button>}</p>
-                )}
-                <p className="cancel-policy-note">💡 Cancellations must be made at least 1 day before your appointment. Your session credit will be restored.</p>
-              </div>
+                </div>
+              )}
 
               {/* Session Credits */}
               <div className="overview-card session-credits-card">
@@ -823,7 +785,7 @@ export default function Profile({ onClose }) {
           {activeTab === 'settings' && (
             <div className="tab-settings">
               <div className="settings-section">
-                <h4>Account Settings</h4>
+                <h4>About Me</h4>
                 <div className="settings-item">
                   <div className="settings-info">
                     <span className="settings-label">Display Name</span>
@@ -878,6 +840,37 @@ export default function Profile({ onClose }) {
                       <div className="name-display">
                         <span className="settings-value">{profileData?.phone || 'Not set'}</span>
                         <button className="edit-name-btn" onClick={() => { setEditingPhone(true); setNewPhone(profileData?.phone || '') }}>Edit</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Main Concerns */}
+                <div className="settings-item concerns-setting">
+                  <div className="settings-info">
+                    <span className="settings-label">Main Concerns</span>
+                    {editingConcerns ? (
+                      <div className="concerns-edit-inline">
+                        <textarea
+                          value={concerns}
+                          onChange={(e) => setConcerns(e.target.value.slice(0, 500))}
+                          placeholder="What are your main concerns about interviews? e.g., I freeze up when I don't know the answer..."
+                          rows={3}
+                          maxLength={500}
+                          className="concerns-textarea"
+                        />
+                        <div className="concerns-edit-actions">
+                          <span className="char-count">{concerns.length}/500</span>
+                          <button className="save-name-btn" onClick={handleSaveConcerns}>Save</button>
+                          <button className="cancel-name-btn" onClick={() => setEditingConcerns(false)}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="name-display">
+                        <span className="settings-value concerns-value">
+                          {profileData?.current_concerns || concerns || 'Not set'}
+                        </span>
+                        <button className="edit-name-btn" onClick={() => setEditingConcerns(true)}>Edit</button>
                       </div>
                     )}
                   </div>
