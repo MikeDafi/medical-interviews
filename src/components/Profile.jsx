@@ -60,6 +60,7 @@ export default function Profile({ onClose }) {
   const [phoneError, setPhoneError] = useState('')
   const [cancellingBooking, setCancellingBooking] = useState(null)
   const [upcomingBookings, setUpcomingBookings] = useState([])
+  const [expandedSections, setExpandedSections] = useState({ concerns: false, schools: false, resources: false })
 
   // Extract upcoming bookings from purchases
   const extractUpcomingBookings = (purchases) => {
@@ -621,6 +622,8 @@ export default function Profile({ onClose }) {
             <div className="tab-settings">
               <div className="settings-section">
                 <h4>About Me</h4>
+                
+                {/* Display Name */}
                 <div className="settings-item">
                   <div className="settings-info">
                     <span className="settings-label">Display Name</span>
@@ -647,7 +650,7 @@ export default function Profile({ onClose }) {
                   </div>
                 </div>
 
-                {/* Phone Number Setting */}
+                {/* Phone Number */}
                 <div className="settings-item">
                   <div className="settings-info">
                     <span className="settings-label">Phone Number</span>
@@ -680,39 +683,205 @@ export default function Profile({ onClose }) {
                   </div>
                 </div>
 
-                {/* Main Concerns */}
-                <div className="settings-item concerns-setting">
-                  <div className="settings-info">
-                    <span className="settings-label">Main Concerns</span>
-                    {editingConcerns ? (
-                      <div className="concerns-edit-inline">
-                        <textarea
-                          value={concerns}
-                          onChange={(e) => setConcerns(e.target.value.slice(0, 500))}
-                          placeholder="What are your main concerns about interviews? e.g., I freeze up when I don't know the answer..."
-                          rows={3}
-                          maxLength={500}
-                          className="concerns-textarea"
-                        />
-                        <div className="concerns-edit-actions">
-                          <span className="char-count">{concerns.length}/500</span>
-                          <button className="save-name-btn" onClick={handleSaveConcerns}>Save</button>
-                          <button className="cancel-name-btn" onClick={() => setEditingConcerns(false)}>Cancel</button>
+                {/* Main Concerns - Collapsible */}
+                <div className="collapsible-section">
+                  <button 
+                    className="collapsible-header"
+                    onClick={() => setExpandedSections(prev => ({ ...prev, concerns: !prev.concerns }))}
+                  >
+                    <span>Main Concerns</span>
+                    <span className={`collapsible-arrow ${expandedSections.concerns ? 'expanded' : ''}`}>▸</span>
+                  </button>
+                  {expandedSections.concerns && (
+                    <div className="collapsible-content">
+                      {editingConcerns ? (
+                        <div className="concerns-edit-inline">
+                          <textarea
+                            value={concerns}
+                            onChange={(e) => setConcerns(e.target.value.slice(0, 500))}
+                            placeholder="What are your main concerns about interviews? e.g., I freeze up when I don't know the answer..."
+                            rows={3}
+                            maxLength={500}
+                            className="concerns-textarea"
+                          />
+                          <div className="concerns-edit-actions">
+                            <span className="char-count">{concerns.length}/500</span>
+                            <button className="save-name-btn" onClick={handleSaveConcerns}>Save</button>
+                            <button className="cancel-name-btn" onClick={() => setEditingConcerns(false)}>Cancel</button>
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="name-display">
-                        <span className="settings-value concerns-value">
-                          {profileData?.current_concerns || concerns || 'Not set'}
-                        </span>
-                        <button className="edit-name-btn" onClick={() => setEditingConcerns(true)}>Edit</button>
-                      </div>
-                    )}
-                  </div>
+                      ) : (
+                        <div className="collapsible-value">
+                          <span>{profileData?.current_concerns || concerns || 'Not set'}</span>
+                          <button className="edit-name-btn" onClick={() => setEditingConcerns(true)}>Edit</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
+                {/* Target Schools - Collapsible */}
+                <div className="collapsible-section">
+                  <button 
+                    className="collapsible-header"
+                    onClick={() => setExpandedSections(prev => ({ ...prev, schools: !prev.schools }))}
+                  >
+                    <span>Target Schools ({profileData?.target_schools?.length || 0})</span>
+                    <span className={`collapsible-arrow ${expandedSections.schools ? 'expanded' : ''}`}>▸</span>
+                  </button>
+                  {expandedSections.schools && (
+                    <div className="collapsible-content">
+                      <div className="collapsible-actions">
+                        <button 
+                          type="button"
+                          className="add-inline-btn"
+                          onClick={() => setShowAddSchool(!showAddSchool)}
+                        >
+                          {showAddSchool ? 'Cancel' : '+ Add School'}
+                        </button>
+                      </div>
+
+                      {showAddSchool && (
+                        <div className="add-school-form compact">
+                          <input
+                            type="text"
+                            placeholder="School name (e.g., UCLA)"
+                            value={newSchool.name}
+                            onChange={(e) => setNewSchool(prev => ({ ...prev, name: e.target.value }))}
+                          />
+                          <div className="add-school-row">
+                            <select
+                              value={newSchool.interviewType}
+                              onChange={(e) => setNewSchool(prev => ({ ...prev, interviewType: e.target.value }))}
+                            >
+                              <option value="MMI">MMI</option>
+                              <option value="Traditional">Traditional</option>
+                              <option value="Both">Both</option>
+                              <option value="Unknown">Not sure</option>
+                            </select>
+                            <input
+                              type="date"
+                              value={newSchool.interviewDate}
+                              onChange={(e) => setNewSchool(prev => ({ ...prev, interviewDate: e.target.value }))}
+                            />
+                          </div>
+                          <button type="button" className="save-school-btn" onClick={handleAddSchool}>Add</button>
+                        </div>
+                      )}
+
+                      {profileData?.target_schools?.length > 0 ? (
+                        <div className="schools-list compact">
+                          {profileData.target_schools.map((school, index) => (
+                            <div className="school-card compact" key={school.school_name || `school-${index}`}>
+                              <div className="school-info">
+                                <span className="school-name">{school.school_name}</span>
+                                <span className="school-type">{school.interview_type}</span>
+                              </div>
+                              <button 
+                                type="button"
+                                className="remove-school-profile-btn"
+                                onClick={() => handleRemoveSchool(index)}
+                              >×</button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="no-items">No schools added yet.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Resources - Collapsible */}
+                <div className="collapsible-section">
+                  <button 
+                    className="collapsible-header"
+                    onClick={() => setExpandedSections(prev => ({ ...prev, resources: !prev.resources }))}
+                  >
+                    <span>Resources ({(resources.filter(r => !r.added_by_admin).length || 0) + (coachResources.length || 0)})</span>
+                    <span className={`collapsible-arrow ${expandedSections.resources ? 'expanded' : ''}`}>▸</span>
+                  </button>
+                  {expandedSections.resources && (
+                    <div className="collapsible-content">
+                      {/* Coach Resources */}
+                      {coachResources.length > 0 && (
+                        <>
+                          <p className="resource-category">📚 From Ashley</p>
+                          <div className="resources-list compact">
+                            {coachResources.map((resource) => (
+                              <a 
+                                href={resource.url} 
+                                className="resource-card coach" 
+                                key={resource.id}
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                              >
+                                <span className="resource-title">{resource.title}</span>
+                                <span className="resource-link-icon">↗</span>
+                              </a>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      {/* User Resources */}
+                      <div className="resource-category-header">
+                        <p className="resource-category">📁 Your Resources</p>
+                        <button className="add-inline-btn" onClick={() => setShowAddResource(!showAddResource)}>
+                          {showAddResource ? 'Cancel' : '+ Add'}
+                        </button>
+                      </div>
+
+                      {showAddResource && (
+                        <div className="add-resource-form compact">
+                          <input
+                            type="text"
+                            placeholder="Resource name"
+                            value={newResource.title}
+                            onChange={(e) => setNewResource(prev => ({ ...prev, title: e.target.value }))}
+                          />
+                          <input
+                            type="url"
+                            placeholder="https://..."
+                            value={newResource.url}
+                            onChange={(e) => setNewResource(prev => ({ ...prev, url: e.target.value }))}
+                          />
+                          <button className="save-resource-btn" onClick={handleAddResource}>Add</button>
+                        </div>
+                      )}
+
+                      {resources.filter(r => !r.added_by_admin).length > 0 ? (
+                        <div className="resources-list compact">
+                          {resources.filter(r => !r.added_by_admin).map((resource, index) => (
+                            <div className="resource-card-wrapper" key={resource.id || index}>
+                              <a 
+                                href={resource.url} 
+                                className="resource-card user" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                              >
+                                <span className="resource-title">{resource.title}</span>
+                                <span className="resource-link-icon">↗</span>
+                              </a>
+                              <button 
+                                className="delete-resource-btn-small"
+                                onClick={() => handleDeleteResource(resource.id)}
+                              >×</button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="no-items">No resources added yet.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Sign Out & Danger Zone */}
+              <div className="settings-footer">
                 <button 
-                  className="sign-out-btn"
+                  className="sign-out-link"
                   onClick={() => {
                     signOut()
                     onClose()
@@ -720,218 +889,32 @@ export default function Profile({ onClose }) {
                 >
                   Sign Out
                 </button>
-              </div>
-
-              {/* Target Schools Section */}
-              <div className="settings-section">
-                <div className="schools-header">
-                  <h4>Target Schools</h4>
-                  <button 
-                    type="button"
-                    className="add-school-profile-btn"
-                    onClick={() => setShowAddSchool(!showAddSchool)}
-                  >
-                    {showAddSchool ? 'Cancel' : '+ Add'}
-                  </button>
-                </div>
-
-                {showAddSchool && (
-                  <div className="add-school-form">
-                    <input
-                      type="text"
-                      placeholder="School name (e.g., UCLA)"
-                      value={newSchool.name}
-                      onChange={(e) => setNewSchool(prev => ({ ...prev, name: e.target.value }))}
-                    />
-                    <div className="add-school-row">
-                      <select
-                        value={newSchool.interviewType}
-                        onChange={(e) => setNewSchool(prev => ({ ...prev, interviewType: e.target.value }))}
-                      >
-                        <option value="MMI">MMI</option>
-                        <option value="Traditional">Traditional</option>
-                        <option value="Both">Both</option>
-                        <option value="Unknown">Not sure</option>
-                      </select>
-                      <input
-                        type="date"
-                        value={newSchool.interviewDate}
-                        onChange={(e) => setNewSchool(prev => ({ ...prev, interviewDate: e.target.value }))}
-                        placeholder="Interview date (optional)"
-                      />
-                    </div>
-                    <button type="button" className="save-school-btn" onClick={handleAddSchool}>
-                      Add School
-                    </button>
-                  </div>
-                )}
-
-                {profileData?.target_schools?.length > 0 ? (
-                  <div className="schools-list">
-                    {profileData.target_schools.map((school, index) => (
-                      <div className="school-card" key={school.school_name || `school-${index}`}>
-                        <div className="school-info">
-                          <span className="school-name">{school.school_name}</span>
-                          <span className="school-type">{school.interview_type} Interview</span>
-                        </div>
-                        <div className="school-actions">
-                          {school.interview_date && (
-                            <span className="school-date">{formatDate(school.interview_date)}</span>
-                          )}
-                          <button 
-                            type="button"
-                            className="remove-school-profile-btn"
-                            onClick={() => handleRemoveSchool(index)}
-                            title="Remove school"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="no-schools">No target schools added yet.</p>
-                )}
-              </div>
-
-              {/* Resources Section */}
-              <div className="settings-section">
-                {/* Coach Resources */}
-                <div className="resources-section-header">
-                  <h4>📚 From Your Coach</h4>
-                  {coachResources.length > 0 && (
-                    <span className="resources-badge coach">Ashley's Picks</span>
-                  )}
-                </div>
-                {coachResources.length > 0 ? (
-                  <div className="resources-list compact">
-                    {coachResources.map((resource) => (
-                      <a 
-                        href={resource.url} 
-                        className="resource-card coach" 
-                        key={resource.id}
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                      >
-                        <div className="resource-icon coach">📖</div>
-                        <div className="resource-info">
-                          <span className="resource-title">{resource.title}</span>
-                        </div>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
-                        </svg>
-                      </a>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="no-resources coach-empty">No resources from Ashley yet.</p>
-                )}
-
-                {/* User Resources */}
-                <div className="resources-section-header" style={{ marginTop: '16px' }}>
-                  <h4>📁 Your Resources</h4>
-                  <button className="add-resource-btn" onClick={() => setShowAddResource(!showAddResource)}>
-                    {showAddResource ? 'Cancel' : '+ Add'}
-                  </button>
-                </div>
-
-                {showAddResource && (
-                  <div className="add-resource-form">
-                    <input
-                      type="text"
-                      placeholder="Resource name"
-                      value={newResource.title}
-                      onChange={(e) => setNewResource(prev => ({ ...prev, title: e.target.value }))}
-                    />
-                    <input
-                      type="url"
-                      placeholder="https://..."
-                      value={newResource.url}
-                      onChange={(e) => setNewResource(prev => ({ ...prev, url: e.target.value }))}
-                    />
-                    <button className="save-resource-btn" onClick={handleAddResource}>
-                      Save
-                    </button>
-                  </div>
-                )}
-
-                {resources.filter(r => !r.added_by_admin).length > 0 ? (
-                  <div className="resources-list compact">
-                    {resources.filter(r => !r.added_by_admin).map((resource, index) => (
-                      <div className="resource-card-wrapper" key={resource.id || index}>
-                        <a 
-                          href={resource.url} 
-                          className="resource-card user" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                        >
-                          <div className="resource-icon user">🔗</div>
-                          <div className="resource-info">
-                            <span className="resource-title">{resource.title}</span>
-                          </div>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
-                          </svg>
-                        </a>
-                        <button 
-                          className="delete-resource-btn"
-                          onClick={() => handleDeleteResource(resource.id)}
-                          title="Delete resource"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="no-resources">No resources added yet.</p>
-                )}
-              </div>
-
-              <div className="settings-section danger-zone">
-                <h4>Danger Zone</h4>
-                <p className="danger-warning">Once you delete your account, there is no going back. All your data, bookings, and resources will be permanently removed.</p>
-                
+                <span className="footer-divider">•</span>
                 {!showDeleteConfirm ? (
                   <button 
-                    className="delete-account-btn"
+                    className="delete-link"
                     onClick={() => setShowDeleteConfirm(true)}
                   >
-                    Delete My Account
+                    Delete Account
                   </button>
                 ) : (
-                  <div className="delete-confirm-box">
-                    <p>Type <strong>{DELETE_CONFIRMATION_TEXT}</strong> to confirm:</p>
+                  <div className="delete-confirm-inline">
                     <input
                       type="text"
                       value={deleteConfirmText}
                       onChange={(e) => setDeleteConfirmText(e.target.value)}
                       placeholder={`Type ${DELETE_CONFIRMATION_TEXT}`}
-                      className="delete-confirm-input"
+                      className="delete-confirm-input-small"
                     />
-                    <div className="delete-confirm-actions">
-                      <button 
-                        type="button"
-                        className="cancel-delete-btn"
-                        onClick={() => {
-                          setShowDeleteConfirm(false)
-                          setDeleteConfirmText('')
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button 
-                        type="button"
-                        className="confirm-delete-btn"
-                        onClick={handleDeleteAccount}
-                        disabled={deleteConfirmText !== DELETE_CONFIRMATION_TEXT}
-                      >
-                        Permanently Delete
-                      </button>
-                    </div>
+                    <button 
+                      className="confirm-delete-small"
+                      onClick={handleDeleteAccount}
+                      disabled={deleteConfirmText !== DELETE_CONFIRMATION_TEXT}
+                    >Delete</button>
+                    <button 
+                      className="cancel-delete-small"
+                      onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText('') }}
+                    >Cancel</button>
                   </div>
                 )}
               </div>

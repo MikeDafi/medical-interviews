@@ -4112,6 +4112,258 @@ img {
   gap: 12px;
 }
 
+/* Collapsible Sections */
+.collapsible-section {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 12px;
+  margin-top: 4px;
+}
+
+.collapsible-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 8px 0;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--dark-text);
+  font-family: var(--marketing-font);
+}
+
+.collapsible-header:hover {
+  color: var(--primary-teal);
+}
+
+.collapsible-arrow {
+  font-size: 12px;
+  color: #9ca3af;
+  transition: transform 0.2s ease;
+}
+
+.collapsible-arrow.expanded {
+  transform: rotate(90deg);
+}
+
+.collapsible-content {
+  padding: 8px 0 4px;
+}
+
+.collapsible-value {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.collapsible-actions {
+  margin-bottom: 8px;
+}
+
+.add-inline-btn {
+  background: none;
+  border: none;
+  color: var(--primary-teal);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+}
+
+.add-inline-btn:hover {
+  text-decoration: underline;
+}
+
+/* Compact forms */
+.add-school-form.compact,
+.add-resource-form.compact {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.add-school-form.compact input,
+.add-school-form.compact select,
+.add-resource-form.compact input {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.add-school-form.compact .save-school-btn,
+.add-resource-form.compact .save-resource-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* Compact lists */
+.schools-list.compact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.school-card.compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.school-card.compact .school-name {
+  font-size: 13px;
+}
+
+.school-card.compact .school-type {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.no-items {
+  font-size: 12px;
+  color: #9ca3af;
+  padding: 4px 0;
+}
+
+/* Resource category */
+.resource-category {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  margin: 8px 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.resource-category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.resource-card.coach,
+.resource-card.user {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--dark-text);
+  font-size: 13px;
+}
+
+.resource-card.coach:hover,
+.resource-card.user:hover {
+  border-color: var(--primary-teal);
+}
+
+.resource-link-icon {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.delete-resource-btn-small {
+  background: none;
+  border: none;
+  color: #dc2626;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: 4px;
+}
+
+/* Settings Footer */
+.settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 8px;
+}
+
+.sign-out-link {
+  background: none;
+  border: none;
+  color: var(--primary-teal);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.sign-out-link:hover {
+  text-decoration: underline;
+}
+
+.footer-divider {
+  color: #d1d5db;
+}
+
+.delete-link {
+  background: none;
+  border: none;
+  color: #dc2626;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.delete-link:hover {
+  text-decoration: underline;
+}
+
+.delete-confirm-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.delete-confirm-input-small {
+  padding: 4px 8px;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  font-size: 12px;
+  width: 80px;
+}
+
+.confirm-delete-small {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.confirm-delete-small:disabled {
+  background: #e5e7eb;
+  color: #9ca3af;
+}
+
+.cancel-delete-small {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 .settings-section {
   background: #f9fafb;
   border-radius: 12px;
