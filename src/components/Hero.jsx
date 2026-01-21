@@ -101,8 +101,7 @@ export default function Hero() {
                   <div className="logo-item" key={`row1-${logo.id}-${index}`}>
                     <img 
                       src={logo.url} 
-                      alt={logo.name} 
-                      loading="lazy"
+                      alt={`${logo.name} Medical School`}
                       onError={(e) => { e.target.style.display = 'none' }}
                     />
                   </div>
@@ -115,8 +114,7 @@ export default function Hero() {
                   <div className="logo-item" key={`row2-${logo.id}-${index}`}>
                     <img 
                       src={logo.url} 
-                      alt={logo.name} 
-                      loading="lazy"
+                      alt={`${logo.name} Medical School`}
                       onError={(e) => { e.target.style.display = 'none' }}
                     />
                   </div>

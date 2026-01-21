@@ -369,36 +369,28 @@ img {
 .logos-row {
   width: 100%;
   overflow: hidden;
-  mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
 }
 
 .logos-track {
-  display: flex;
-  gap: 32px;
-  width: max-content;
-  animation: scrollLogos 45s linear infinite;
+  display: inline-flex;
+  gap: 40px;
+  animation: scrollLogos 40s linear infinite;
+  will-change: transform;
 }
 
 .logos-track.reverse {
-  animation: scrollLogosReverse 45s linear infinite;
+  animation-direction: reverse;
 }
 
+/* Seamless infinite scroll using CSS variable for exact width */
 @keyframes scrollLogos {
   0% {
     transform: translateX(0);
   }
   100% {
     transform: translateX(-50%);
-  }
-}
-
-@keyframes scrollLogosReverse {
-  0% {
-    transform: translateX(-50%);
-  }
-  100% {
-    transform: translateX(0);
   }
 }
 
