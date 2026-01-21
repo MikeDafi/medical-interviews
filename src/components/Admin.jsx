@@ -325,8 +325,8 @@ export default function Admin() {
               filteredUsers.map(u => (
                 <div key={u.id} className={`admin-user-card ${expandedUser === u.id ? 'expanded' : ''}`}>
                   {/* User Row - Always Visible */}
-                  <div className="admin-user-row" onClick={() => toggleUserExpand(u.id)}>
-                    <div className="admin-user-info">
+                  <div className="admin-user-row">
+                    <div className="admin-user-info" onClick={() => toggleUserExpand(u.id)}>
                       <img 
                         src={u.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'User')}&background=2da7a7&color=fff`} 
                         alt={u.name}
@@ -340,6 +340,13 @@ export default function Admin() {
                         <span className="admin-user-email">{u.email}</span>
                       </div>
                     </div>
+                    <Link 
+                      to={`/admin/user/${u.id}`} 
+                      className="admin-view-profile-btn"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      View Profile →
+                    </Link>
                     <div className="admin-user-metrics">
                       <div className="admin-metric">
                         <span className="metric-value">{u.sessions_remaining || 0}</span>

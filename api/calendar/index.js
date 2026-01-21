@@ -676,6 +676,8 @@ export default async function handler(req, res) {
 
       // Create booking in Google Calendar if configured
       let eventLink = null;
+      let calendarEventId = null;
+      let meetLink = null;
       if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY && BOOKINGS_CALENDAR_ID) {
         try {
           const calendar = getCalendarClient();
@@ -693,9 +695,10 @@ export default async function handler(req, res) {
           const sessionLabel = duration === 30 ? '30-min Session' : '1-hour Session';
           const event = await calendar.events.insert({
             calendarId: BOOKINGS_CALENDAR_ID,
+            conferenceDataVersion: 1, // Enable Google Meet creation
             requestBody: {
               summary: `${sessionLabel} - ${userName || userEmail}`,
-              description: `Session with ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes`,
+              description: `PreMedical 1-on-1 Interview Coaching Session\n\nClient: ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes\n\nJoin the video call using the Google Meet link below.`,
               start: {
                 dateTime: startDateTime.toISOString(),
                 timeZone: BUSINESS_HOURS.timezone
@@ -705,6 +708,13 @@ export default async function handler(req, res) {
                 timeZone: BUSINESS_HOURS.timezone
               },
               attendees: [{ email: userEmail }],
+              // Automatically create Google Meet link
+              conferenceData: {
+                createRequest: {
+                  requestId: `premedical-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  conferenceSolutionKey: { type: 'hangoutsMeet' }
+                }
+              },
               reminders: {
                 useDefault: false,
                 overrides: [
@@ -716,6 +726,12 @@ export default async function handler(req, res) {
           });
 
           eventLink = event.data.htmlLink;
+          calendarEventId = event.data.id;
+          
+          // Get the Google Meet link if created
+          meetLink = event.data.conferenceData?.entryPoints?.find(
+            ep => ep.entryPointType === 'video'
+          )?.uri;
         } catch (calError) {
           console.error('Google Calendar event creation error:', calError.message);
           // Continue with booking even if calendar event fails
@@ -730,7 +746,9 @@ export default async function handler(req, res) {
         duration,
         status: 'confirmed',
         booked_at: new Date().toISOString(),
-        calendar_event_link: eventLink
+        calendar_event_link: eventLink,
+        calendar_event_id: calendarEventId,
+        meet_link: meetLink
       };
 
       // Update the package
@@ -751,6 +769,7 @@ export default async function handler(req, res) {
         time,
         duration,
         eventLink,
+        meetLink,
         timezone: 'Central Time'
       }).catch(err => console.error('Customer email error:', err));
       
@@ -762,6 +781,7 @@ export default async function handler(req, res) {
         time,
         duration,
         eventLink,
+        meetLink,
         userProfile
       }).catch(err => console.error('Admin email error:', err));
 
@@ -773,6 +793,100 @@ export default async function handler(req, res) {
       });
     } catch (error) {
       console.error('Booking error:', error);
+      return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    }
+  }
+
+  // ==================== CANCEL BOOKING ====================
+  if (action === 'cancel' && req.method === 'POST') {
+    // Require authentication
+    const sessionUser = await requireAuth(req, res);
+    if (!sessionUser) return; // requireAuth sends the 401 response
+
+    const { bookingId, packageId, date } = req.body;
+
+    if (!bookingId || !packageId) {
+      return res.status(400).json({ error: 'Missing booking or package information' });
+    }
+
+    // Validate cancellation is at least 1 day before
+    const businessTimezone = process.env.BUSINESS_TIMEZONE || 'America/Chicago';
+    const todayInBusiness = new Date().toLocaleDateString('en-CA', { timeZone: businessTimezone });
+    const bookingDateStr = date;
+
+    const bookingDate = new Date(bookingDateStr + 'T00:00:00');
+    const today = new Date(todayInBusiness + 'T00:00:00');
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (bookingDate < tomorrow) {
+      return res.status(400).json({ 
+        error: 'Cancellations must be made at least 1 day before your appointment.',
+        code: 'TOO_LATE_TO_CANCEL'
+      });
+    }
+
+    try {
+      // Get user and their purchases
+      const userId = sessionUser.googleId;
+      const userResult = await sql`SELECT id, purchases FROM users WHERE google_id = ${userId}`;
+      
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const user = userResult.rows[0];
+      const purchases = user.purchases || [];
+
+      // Find the package and booking
+      const packageIndex = purchases.findIndex(p => p.id === packageId);
+      if (packageIndex === -1) {
+        return res.status(404).json({ error: 'Package not found' });
+      }
+
+      const pkg = purchases[packageIndex];
+      const bookingIndex = pkg.bookings?.findIndex(b => b.id === bookingId);
+      
+      if (bookingIndex === -1 || bookingIndex === undefined) {
+        return res.status(404).json({ error: 'Booking not found' });
+      }
+
+      const booking = pkg.bookings[bookingIndex];
+
+      // Mark booking as cancelled and restore session credit
+      pkg.bookings[bookingIndex].status = 'cancelled';
+      pkg.bookings[bookingIndex].cancelled_at = new Date().toISOString();
+      pkg.sessions_used = Math.max(0, (pkg.sessions_used || 0) - 1);
+
+      // Try to delete the Google Calendar event if we have the ID
+      if (booking.calendar_event_id && BOOKINGS_CALENDAR_ID) {
+        try {
+          const auth = await getGoogleAuth();
+          const calendar = google.calendar({ version: 'v3', auth });
+          await calendar.events.delete({
+            calendarId: BOOKINGS_CALENDAR_ID,
+            eventId: booking.calendar_event_id,
+            sendUpdates: 'all' // Notify attendees
+          });
+        } catch (calError) {
+          console.error('Failed to delete calendar event:', calError.message);
+          // Continue even if calendar deletion fails
+        }
+      }
+
+      // Save updated purchases
+      await sql`
+        UPDATE users SET purchases = ${JSON.stringify(purchases)}::jsonb WHERE id = ${user.id}
+      `;
+
+      return res.status(200).json({
+        success: true,
+        message: 'Booking cancelled successfully. Your session credit has been restored.',
+        sessionRestored: true
+      });
+
+    } catch (error) {
+      console.error('Cancel booking error:', error);
       return res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
   }

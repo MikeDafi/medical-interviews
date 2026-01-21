@@ -58,6 +58,86 @@ export default function Profile({ onClose }) {
   const [editingPhone, setEditingPhone] = useState(false)
   const [newPhone, setNewPhone] = useState('')
   const [phoneError, setPhoneError] = useState('')
+  const [cancellingBooking, setCancellingBooking] = useState(null)
+  const [upcomingBookings, setUpcomingBookings] = useState([])
+
+  // Extract upcoming bookings from purchases
+  const extractUpcomingBookings = (purchases) => {
+    const now = new Date()
+    const bookings = []
+    
+    purchases.forEach(pkg => {
+      if (pkg.bookings && Array.isArray(pkg.bookings)) {
+        pkg.bookings.forEach(booking => {
+          // Only include future bookings that aren't cancelled
+          const bookingDate = new Date(booking.date + 'T' + booking.time?.split(' ')[0] + ':00')
+          if (bookingDate > now && booking.status !== 'cancelled') {
+            bookings.push({
+              ...booking,
+              packageId: pkg.id,
+              packageName: getPackageName(pkg)
+            })
+          }
+        })
+      }
+    })
+    
+    // Sort by date ascending
+    return bookings.sort((a, b) => new Date(a.date) - new Date(b.date))
+  }
+
+  // Check if booking can be cancelled (at least 1 day before)
+  const canCancelBooking = (booking) => {
+    const bookingDate = new Date(booking.date + 'T00:00:00')
+    const now = new Date()
+    const tomorrow = new Date(now)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    tomorrow.setHours(0, 0, 0, 0)
+    
+    return bookingDate >= tomorrow
+  }
+
+  // Handle booking cancellation
+  const handleCancelBooking = async (booking) => {
+    if (!canCancelBooking(booking)) {
+      alert('Cancellations must be made at least 1 day before your appointment.')
+      return
+    }
+    
+    if (!confirm(`Are you sure you want to cancel your ${booking.duration}-minute session on ${new Date(booking.date).toLocaleDateString()}?`)) {
+      return
+    }
+    
+    setCancellingBooking(booking.id)
+    
+    try {
+      const response = await fetch('/api/calendar?action=cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          bookingId: booking.id,
+          packageId: booking.packageId,
+          date: booking.date,
+          time: booking.time
+        })
+      })
+      
+      if (response.ok) {
+        // Refresh session data
+        await fetchSessionData()
+        alert('Your session has been cancelled. Your session credit has been restored.')
+      } else {
+        const data = await response.json()
+        alert(data.error || 'Failed to cancel booking. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error cancelling booking:', error)
+      alert('Failed to cancel booking. Please try again.')
+    } finally {
+      setCancellingBooking(null)
+    }
+  }
 
   useEffect(() => {
     fetchProfileData()
@@ -80,12 +160,15 @@ export default function Profile({ onClose }) {
         const credits = calculateSessionCredits(purchases)
         setSessionCredits({ ...credits, loading: false })
         setPurchasedPackages(purchases)
+        setUpcomingBookings(extractUpcomingBookings(purchases))
       } else {
         setSessionCredits({ thirtyMin: 0, sixtyMin: 0, total: 0, loading: false })
+        setUpcomingBookings([])
       }
     } catch (error) {
       console.error('Could not fetch session data:', error)
       setSessionCredits({ thirtyMin: 0, sixtyMin: 0, total: 0, loading: false })
+      setUpcomingBookings([])
     }
   }
 
@@ -441,6 +524,58 @@ export default function Profile({ onClose }) {
 
           {activeTab === 'bookings' && (
             <div className="tab-bookings">
+              {/* Upcoming Sessions */}
+              <div className="overview-card upcoming-sessions-card">
+                <h4>📅 Upcoming Sessions</h4>
+                {upcomingBookings.length > 0 ? (
+                  <div className="upcoming-bookings-list">
+                    {upcomingBookings.map(booking => {
+                      const bookingDate = new Date(booking.date + 'T12:00:00')
+                      const canCancel = canCancelBooking(booking)
+                      const isCancelling = cancellingBooking === booking.id
+                      
+                      return (
+                        <div key={booking.id} className="upcoming-booking-item">
+                          <div className="upcoming-booking-info">
+                            <div className="upcoming-booking-date">
+                              <span className="booking-day">{bookingDate.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                              <span className="booking-date-num">{bookingDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                            </div>
+                            <div className="upcoming-booking-details">
+                              <span className="booking-time-display">{booking.time}</span>
+                              <span className="booking-duration-display">{booking.duration} minutes</span>
+                              {booking.meet_link && (
+                                <a href={booking.meet_link} target="_blank" rel="noopener noreferrer" className="booking-meet-link">
+                                  🎥 Join Google Meet
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                          <div className="upcoming-booking-actions">
+                            {canCancel ? (
+                              <button 
+                                className="cancel-booking-btn"
+                                onClick={() => handleCancelBooking(booking)}
+                                disabled={isCancelling}
+                              >
+                                {isCancelling ? 'Cancelling...' : 'Cancel'}
+                              </button>
+                            ) : (
+                              <span className="cannot-cancel-notice" title="Cancellations must be made at least 1 day before">
+                                Cannot cancel
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="no-upcoming-sessions">No upcoming sessions. {(sessionCredits.total || 0) > 0 && <button className="link-btn" onClick={handleBookNow}>Book one now!</button>}</p>
+                )}
+                <p className="cancel-policy-note">💡 Cancellations must be made at least 1 day before your appointment. Your session credit will be restored.</p>
+              </div>
+
               {/* Session Credits */}
               <div className="overview-card session-credits-card">
                 <h4>Available Sessions</h4>

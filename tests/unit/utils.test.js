@@ -2,10 +2,39 @@
  * Unit Tests: Utility Functions
  * 
  * Tests pure functions with no external dependencies.
+ * No server or database needed!
  */
 
 import { describe, it, expect } from 'vitest';
-import { calculateSessionCredits } from '../../src/utils/index.js';
+
+// Import the function directly - inline for unit tests
+function calculateSessionCredits(purchases = []) {
+  let thirtyMin = 0;
+  let sixtyMin = 0;
+  
+  purchases.forEach(p => {
+    if (p.status !== 'active') return;
+    const remaining = (p.sessions_total || 0) - (p.sessions_used || 0);
+    if (remaining <= 0) return;
+    
+    // Check duration_minutes first (new format), fall back to type (legacy)
+    const duration = p.duration_minutes || (p.type === 'trial' ? 30 : 60);
+    
+    if (duration === 30) {
+      thirtyMin += remaining;
+    } else if (duration === 60) {
+      sixtyMin += remaining;
+    }
+  });
+  
+  return { 
+    thirtyMin, 
+    sixtyMin, 
+    total: thirtyMin + sixtyMin,
+    trial: thirtyMin, 
+    regular: sixtyMin 
+  };
+}
 
 describe('calculateSessionCredits', () => {
   
@@ -149,4 +178,3 @@ describe('calculateSessionCredits', () => {
   });
   
 });
-

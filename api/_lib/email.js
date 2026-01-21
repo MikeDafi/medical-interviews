@@ -70,6 +70,7 @@ export async function sendCustomerBookingEmail({
   time, 
   duration, 
   eventLink,
+  meetLink,
   timezone = 'Central Time'
 }) {
   const sessionType = duration === 30 ? 'Trial Session (30 minutes)' : 'Regular Session (1 hour)';
@@ -155,7 +156,7 @@ export async function sendCustomerBookingEmail({
                             📍 Location
                           </p>
                           <p style="color: #134e4a; font-size: 16px; font-weight: 500; margin: 0;">
-                            Video Call (link will be in calendar invite)
+                            ${meetLink ? 'Google Meet Video Call' : 'Video Call (link will be in calendar invite)'}
                           </p>
                         </td>
                       </tr>
@@ -164,13 +165,33 @@ export async function sendCustomerBookingEmail({
                 </tr>
               </table>
               
-              ${eventLink ? `
-              <!-- Calendar Button -->
+              ${meetLink ? `
+              <!-- Google Meet Button -->
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 32px;">
                 <tr>
                   <td align="center">
-                    <a href="${eventLink}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600;">
-                      View in Google Calendar →
+                    <a href="${meetLink}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-size: 18px; font-weight: 600; box-shadow: 0 4px 12px rgba(26,115,232,0.3);">
+                      🎥 Join Google Meet
+                    </a>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding-top: 12px;">
+                    <p style="color: #6b7280; font-size: 13px; margin: 0;">
+                      Or copy this link: <a href="${meetLink}" style="color: #1a73e8;">${meetLink}</a>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              ` : ''}
+              
+              ${eventLink ? `
+              <!-- Calendar Button -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: ${meetLink ? '16px' : '32px'};">
+                <tr>
+                  <td align="center">
+                    <a href="${eventLink}" target="_blank" style="display: inline-block; background: ${meetLink ? '#f3f4f6' : 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)'}; color: ${meetLink ? '#374151' : '#ffffff'}; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600;">
+                      ${meetLink ? '📅 View in Calendar' : 'View in Google Calendar →'}
                     </a>
                   </td>
                 </tr>
@@ -193,9 +214,34 @@ export async function sendCustomerBookingEmail({
                 </tr>
               </table>
               
-              <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 32px 0 0;">
-                If you need to reschedule or have any questions, please reply to this email or contact us at ${ADMIN_EMAIL}.
-              </p>
+              <!-- Cancel/Reschedule Section -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 24px; background-color: #f8f4f0; border-radius: 12px; border: 1px solid #e7e5e4;">
+                <tr>
+                  <td style="padding: 20px 24px;">
+                    <p style="color: #78716c; font-size: 14px; font-weight: 600; margin: 0 0 8px;">
+                      Need to Cancel?
+                    </p>
+                    <p style="color: #78716c; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
+                      We understand plans change! Cancellations are free if made at least 1 day before your appointment. Your session credit will be restored automatically.
+                    </p>
+                    <p style="color: #78716c; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
+                      <strong>To cancel:</strong>
+                    </p>
+                    <ol style="color: #78716c; font-size: 14px; line-height: 1.8; margin: 0 0 16px; padding-left: 20px;">
+                      <li>Go to <a href="${SITE_URL}" style="color: #0d9488; font-weight: 600;">premedical1on1.com</a></li>
+                      <li>Sign in and click your profile icon</li>
+                      <li>Go to <strong>"My Sessions"</strong> tab</li>
+                      <li>Find your upcoming session and click <strong>"Cancel"</strong></li>
+                    </ol>
+                    <a href="${SITE_URL}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%); color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600;">
+                      Go to My Sessions →
+                    </a>
+                    <p style="color: #a1a1aa; font-size: 12px; margin: 16px 0 0;">
+                      Questions? Contact us at ${ADMIN_EMAIL}
+                    </p>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
           
@@ -226,19 +272,32 @@ SESSION DETAILS:
 - Type: ${sessionType}
 - Date: ${formattedDate}
 - Time: ${time} ${timezone}
-- Location: Video Call (link will be in calendar invite)
+- Location: ${meetLink ? 'Google Meet Video Call' : 'Video Call'}
 
-${eventLink ? `View in Google Calendar: ${eventLink}` : ''}
+${meetLink ? `🎥 JOIN GOOGLE MEET: ${meetLink}` : ''}
+${eventLink ? `📅 View in Google Calendar: ${eventLink}` : ''}
 
 BEFORE YOUR SESSION:
 - Update your profile with your main concerns and target schools
 - Have a quiet, well-lit space ready for the video call
 - Prepare any specific questions you'd like to discuss
 
-If you need to reschedule or have any questions, please contact us at ${ADMIN_EMAIL}.
+NEED TO CANCEL?
+We understand plans change! Cancellations are free if made at least 1 day before your appointment.
+
+To cancel:
+1. Go to ${SITE_URL}
+2. Sign in and click your profile icon
+3. Go to "My Sessions" tab
+4. Find your upcoming session and click "Cancel"
+
+Your session credit will be restored automatically.
+
+Questions? Contact us at ${ADMIN_EMAIL}
 
 ---
 PreMedical 1-on-1 • Expert Interview Coaching
+${SITE_URL}
 `;
 
   return sendEmail({
@@ -260,6 +319,7 @@ export async function sendAdminBookingEmail({
   time,
   duration,
   eventLink,
+  meetLink,
   userProfile = {}
 }) {
   const sessionType = duration === 30 ? 'Trial (30 min)' : 'Regular (1 hour)';
@@ -368,6 +428,11 @@ export async function sendAdminBookingEmail({
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td>
+                    ${meetLink ? `
+                    <a href="${meetLink}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%); color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-size: 14px; font-weight: 600; margin-right: 12px;">
+                      🎥 Join Meet
+                    </a>
+                    ` : ''}
                     <a href="${adminUserLink}" target="_blank" style="display: inline-block; background-color: #0d9488; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-size: 14px; font-weight: 600; margin-right: 12px;">
                       View Client Profile →
                     </a>
@@ -413,6 +478,7 @@ CLIENT INFORMATION:
 
 ${main_concerns ? `MAIN CONCERNS:\n${main_concerns}\n` : ''}
 
+${meetLink ? `JOIN GOOGLE MEET: ${meetLink}` : ''}
 View Client Profile: ${adminUserLink}
 ${eventLink ? `Calendar Event: ${eventLink}` : ''}
 

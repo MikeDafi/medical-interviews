@@ -2,12 +2,17 @@
 
 echo "🧪 Running pre-commit tests..."
 
-# Run unit tests (fast, no server needed)
+# Run unit tests
 npm run test:unit
-
-# Check if tests passed
 if [ $? -ne 0 ]; then
   echo "❌ Unit tests failed. Commit aborted."
+  exit 1
+fi
+
+# Run component tests
+npm run test:components
+if [ $? -ne 0 ]; then
+  echo "❌ Component tests failed. Commit aborted."
   exit 1
 fi
 
