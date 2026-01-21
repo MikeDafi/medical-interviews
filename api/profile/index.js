@@ -28,16 +28,25 @@ export default async function handler(req, res) {
 
       for (const row of result.rows) {
         for (const p of (row.purchases || [])) {
-          const ts = p.purchased_at || p.created_at;
-          if (new Date(ts).getTime() > cutoff && purchases.length < 5) {
+          // Check all possible timestamp field names
+          const ts = p.purchase_date || p.purchased_at || p.created_at;
+          if (ts && new Date(ts).getTime() > cutoff && purchases.length < 5) {
             const name = (row.name || 'S').split(' ')[0];
             purchases.push({
               first_name: name[0] + '.',  // Just initial: "S."
-              package_name: p.package_name || 'Session',
+              package_name: p.package_name || getPackageLabel(p),
               created_at: ts
             });
           }
         }
+      }
+      
+      // Helper to generate package label from data
+      function getPackageLabel(p) {
+        if (p.duration_minutes === 30) return 'Trial Session';
+        if (p.sessions_total === 3) return 'Package of 3';
+        if (p.sessions_total === 5) return 'Package of 5';
+        return '1-Hour Session';
       }
 
       purchases.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
