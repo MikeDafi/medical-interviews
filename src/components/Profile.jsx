@@ -39,7 +39,7 @@ function isSubscription(pkg) {
 
 export default function Profile({ onClose }) {
   const { user, signOut } = useAuth()
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState('upcoming')
   const [profileData, setProfileData] = useState(null)
   const [resources, setResources] = useState([])
   const [loading, setLoading] = useState(true)
@@ -427,28 +427,16 @@ export default function Profile({ onClose }) {
         {/* Tab Navigation */}
         <div className="profile-tabs">
           <button 
-            className={`profile-tab ${activeTab === 'overview' ? 'active' : ''}`}
-            onClick={() => setActiveTab('overview')}
+            className={`profile-tab ${activeTab === 'upcoming' ? 'active' : ''}`}
+            onClick={() => setActiveTab('upcoming')}
           >
-            Overview
+            Upcoming
           </button>
           <button 
-            className={`profile-tab ${activeTab === 'bookings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('bookings')}
+            className={`profile-tab ${activeTab === 'past' ? 'active' : ''}`}
+            onClick={() => setActiveTab('past')}
           >
-            My Sessions
-          </button>
-          <button 
-            className={`profile-tab ${activeTab === 'schools' ? 'active' : ''}`}
-            onClick={() => setActiveTab('schools')}
-          >
-            Target Schools
-          </button>
-          <button 
-            className={`profile-tab ${activeTab === 'resources' ? 'active' : ''}`}
-            onClick={() => setActiveTab('resources')}
-          >
-            Resources
+            Past
           </button>
           <button 
             className={`profile-tab ${activeTab === 'settings' ? 'active' : ''}`}
@@ -460,39 +448,31 @@ export default function Profile({ onClose }) {
 
         {/* Tab Content */}
         <div className="profile-content">
-          {activeTab === 'overview' && (
-            <div className="tab-overview">
-              {/* Quick Stats */}
-              <div className="overview-stats">
-                <div className="stat-card">
-                  <span className="stat-number">{purchasedPackages.reduce((acc, p) => acc + (p.sessions_used || 0), 0)}</span>
-                  <span className="stat-label">Sessions Completed</span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-number">{sessionCredits.total || 0}</span>
-                  <span className="stat-label">{(sessionCredits.total || 0) === 1 ? 'Session Available' : 'Sessions Available'}</span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-number">{profileData?.target_schools?.length || 0}</span>
-                  <span className="stat-label">Target Schools</span>
+          {activeTab === 'upcoming' && (
+            <div className="tab-upcoming">
+              {/* Available Sessions */}
+              <div className="overview-card session-credits-card">
+                <h4>Available Sessions</h4>
+                <div className="session-credits-display">
+                  <div className="credit-box">
+                    <span className="credit-number">{sessionCredits.thirtyMin || 0}</span>
+                    <span className="credit-type">30-min</span>
+                  </div>
+                  <div className="credit-box">
+                    <span className="credit-number">{sessionCredits.sixtyMin || 0}</span>
+                    <span className="credit-type">60-min</span>
+                  </div>
+                  <div className="credit-box total">
+                    <span className="credit-number">{sessionCredits.total || 0}</span>
+                    <span className="credit-type">Total</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Small Book Button below stats */}
-              {(sessionCredits.total || 0) > 0 && (
-                <button className="book-session-btn-small" onClick={handleBookNow}>
-                  Book Your Session →
-                </button>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'bookings' && (
-            <div className="tab-bookings">
-              {/* Upcoming Sessions - only show if there are bookings */}
-              {upcomingBookings.length > 0 && (
+              {/* Upcoming Sessions */}
+              {upcomingBookings.length > 0 ? (
                 <div className="overview-card upcoming-sessions-card compact">
-                  <h4>📅 Upcoming</h4>
+                  <h4>📅 Scheduled Sessions</h4>
                   <div className="upcoming-bookings-list">
                     {upcomingBookings.map(booking => {
                       const bookingDate = new Date(booking.date + 'T12:00:00')
@@ -536,247 +516,90 @@ export default function Profile({ onClose }) {
                     })}
                   </div>
                 </div>
+              ) : (
+                <p className="no-upcoming-simple">No sessions scheduled yet.</p>
               )}
 
-              {/* Session Credits */}
-              <div className="overview-card session-credits-card">
-                <h4>Available Sessions</h4>
-                <div className="session-credits-display">
-                  <div className="credit-box">
-                    <span className="credit-number">{sessionCredits.thirtyMin || 0}</span>
-                    <span className="credit-type">30-min Sessions</span>
-                  </div>
-                  <div className="credit-box">
-                    <span className="credit-number">{sessionCredits.sixtyMin || 0}</span>
-                    <span className="credit-type">60-min Sessions</span>
-                  </div>
-                  <div className="credit-box total">
-                    <span className="credit-number">{sessionCredits.total || 0}</span>
-                    <span className="credit-type">Total</span>
-                  </div>
-                </div>
-                {(sessionCredits.total || 0) === 0 && (
-                  <p className="no-sessions-msg">No sessions available. <a href="#packages" onClick={onClose}>Purchase a package</a></p>
-                )}
+              {/* Book Button */}
+              {(sessionCredits.total || 0) > 0 ? (
+                <button className="book-session-btn" onClick={handleBookNow}>Book a Session</button>
+              ) : (
+                <p className="no-sessions-msg">
+                  <a href="#packages" onClick={onClose}>Purchase a package</a> to book sessions
+                </p>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'past' && (
+            <div className="tab-past">
+              {/* Past Sessions */}
+              <div className="past-section">
+                <h4>Completed Sessions</h4>
+                {(() => {
+                  const pastSessions = []
+                  purchasedPackages.forEach(pkg => {
+                    if (pkg.bookings && Array.isArray(pkg.bookings)) {
+                      pkg.bookings.forEach(booking => {
+                        const bookingDate = new Date(booking.date + 'T' + (booking.time?.split(' ')[0] || '00:00') + ':00')
+                        if (bookingDate < new Date() || booking.status === 'completed') {
+                          pastSessions.push({ ...booking, packageName: getPackageName(pkg) })
+                        }
+                      })
+                    }
+                  })
+                  pastSessions.sort((a, b) => new Date(b.date) - new Date(a.date))
+                  
+                  if (pastSessions.length === 0) {
+                    return <p className="no-past">No completed sessions yet.</p>
+                  }
+                  
+                  return (
+                    <div className="past-sessions-list">
+                      {pastSessions.map((session, idx) => (
+                        <div key={session.id || idx} className="past-session-item">
+                          <div className="past-session-date">
+                            {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </div>
+                          <div className="past-session-info">
+                            <span className="past-session-time">{session.time}</span>
+                            <span className="past-session-duration">{session.duration} min</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
 
-              <div className="bookings-section">
-                <h4>Purchased Packages</h4>
+              {/* Past Packages (used up) */}
+              <div className="past-section">
+                <h4>Package History</h4>
                 {purchasedPackages.length > 0 ? (
-                  <>
-                    <div className="bookings-list">
-                      {purchasedPackages.map(pkg => {
-                        const remaining = (pkg.sessions_total || 1) - (pkg.sessions_used || 0)
-                        const isSub = isSubscription(pkg)
-                        const category = getPackageCategory(pkg.package_id)
-                        
-                        return (
-                          <div className={`booking-card ${category}`} key={pkg.id}>
-                            <div className="booking-info">
-                              <span className="booking-type">{getPackageName(pkg)}</span>
-                              {isSub && pkg.subscription_status === 'active' && (
-                                <span className="subscription-tag">Monthly • Renews {new Date(new Date(pkg.current_period_start || pkg.purchase_date).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</span>
-                              )}
-                              {isSub && pkg.subscription_status === 'cancelled' && (
-                                <span className="subscription-tag cancelled">Subscription Cancelled</span>
-                              )}
-                              <span className="booking-date">{isSub ? 'Started' : 'Purchased'} {new Date(pkg.purchase_date).toLocaleDateString()}</span>
-                            </div>
-                            <span className={`booking-status ${remaining > 0 || (isSub && pkg.subscription_status === 'active') ? 'active' : 'used'}`}>
-                              {isSub && pkg.sessions_total === 0 ? 'Email Access' : 
-                               remaining > 0 ? `${remaining} remaining` : 'Used'}
+                  <div className="past-packages-list">
+                    {purchasedPackages.map(pkg => {
+                      const remaining = (pkg.sessions_total || 1) - (pkg.sessions_used || 0)
+                      const isSub = isSubscription(pkg)
+                      const category = getPackageCategory(pkg.package_id)
+                      
+                      return (
+                        <div className={`past-package-item ${category}`} key={pkg.id}>
+                          <div className="past-package-info">
+                            <span className="past-package-name">{getPackageName(pkg)}</span>
+                            <span className="past-package-date">
+                              {new Date(pkg.purchase_date).toLocaleDateString()}
                             </span>
                           </div>
-                        )
-                      })}
-                    </div>
-                    {(sessionCredits.total || 0) > 0 && (
-                      <button className="book-session-btn" onClick={handleBookNow}>Book a Session</button>
-                    )}
-                  </>
-                ) : (
-                  <p className="no-bookings">No sessions yet. <button className="link-btn" onClick={handleBookNow}>Purchase a package!</button></p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'schools' && (
-            <div className="tab-schools">
-              <div className="schools-header">
-                <h4>Your Target Schools</h4>
-                <button 
-                  type="button"
-                  className="add-school-profile-btn"
-                  onClick={() => setShowAddSchool(!showAddSchool)}
-                >
-                  {showAddSchool ? 'Cancel' : '+ Add School'}
-                </button>
-              </div>
-
-              {showAddSchool && (
-                <div className="add-school-form">
-                  <input
-                    type="text"
-                    placeholder="School name (e.g., UCLA)"
-                    value={newSchool.name}
-                    onChange={(e) => setNewSchool(prev => ({ ...prev, name: e.target.value }))}
-                  />
-                  <div className="add-school-row">
-                    <select
-                      value={newSchool.interviewType}
-                      onChange={(e) => setNewSchool(prev => ({ ...prev, interviewType: e.target.value }))}
-                    >
-                      <option value="MMI">MMI</option>
-                      <option value="Traditional">Traditional</option>
-                      <option value="Both">Both</option>
-                      <option value="Unknown">Not sure</option>
-                    </select>
-                    <input
-                      type="date"
-                      value={newSchool.interviewDate}
-                      onChange={(e) => setNewSchool(prev => ({ ...prev, interviewDate: e.target.value }))}
-                      placeholder="Interview date (optional)"
-                    />
-                  </div>
-                  <button type="button" className="save-school-btn" onClick={handleAddSchool}>
-                    Add School
-                  </button>
-                </div>
-              )}
-
-              {profileData?.target_schools?.length > 0 ? (
-                <div className="schools-list">
-                  {profileData.target_schools.map((school, index) => (
-                    <div className="school-card" key={school.school_name || `school-${index}`}>
-                      <div className="school-info">
-                        <span className="school-name">{school.school_name}</span>
-                        <span className="school-type">{school.interview_type} Interview</span>
-                      </div>
-                      <div className="school-actions">
-                        {school.interview_date && (
-                          <span className="school-date">{formatDate(school.interview_date)}</span>
-                        )}
-                        <button 
-                          type="button"
-                          className="remove-school-profile-btn"
-                          onClick={() => handleRemoveSchool(index)}
-                          title="Remove school"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="no-schools">No target schools added yet. Click "+ Add School" to get started.</p>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'resources' && (
-            <div className="tab-resources">
-              {/* Coach Resources Section */}
-              <div className="resources-section coach-resources">
-                <div className="resources-section-header">
-                  <h4>📚 From Your Coach</h4>
-                  {coachResources.length > 0 && (
-                    <span className="resources-badge coach">Ashley's Picks</span>
-                  )}
-                </div>
-                {coachResources.length > 0 ? (
-                  <div className="resources-list">
-                    {coachResources.map((resource) => (
-                      <a 
-                        href={resource.url} 
-                        className="resource-card coach" 
-                        key={resource.id}
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                      >
-                        <div className="resource-icon coach">📖</div>
-                        <div className="resource-info">
-                          <span className="resource-title">{resource.title}</span>
-                          {resource.description && (
-                            <span className="resource-desc">{resource.description}</span>
-                          )}
+                          <span className={`past-package-status ${remaining > 0 ? 'active' : 'used'}`}>
+                            {isSub && pkg.sessions_total === 0 ? 'Email Access' : 
+                             `${pkg.sessions_used || 0}/${pkg.sessions_total || 1} used`}
+                          </span>
                         </div>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
-                        </svg>
-                      </a>
-                    ))}
+                      )
+                    })}
                   </div>
                 ) : (
-                  <p className="no-resources coach-empty">No resources from Ashley yet. Check back after your first session!</p>
-                )}
-              </div>
-
-              {/* User Resources Section */}
-              <div className="resources-section user-resources">
-                <div className="resources-section-header">
-                  <h4>📁 Your Resources</h4>
-                  <button className="add-resource-btn" onClick={() => setShowAddResource(!showAddResource)}>
-                    {showAddResource ? 'Cancel' : '+ Add'}
-                  </button>
-                </div>
-
-                {showAddResource && (
-                  <div className="add-resource-form">
-                    <input
-                      type="text"
-                      placeholder="Resource name"
-                      value={newResource.title}
-                      onChange={(e) => setNewResource(prev => ({ ...prev, title: e.target.value }))}
-                    />
-                    <input
-                      type="url"
-                      placeholder="https://..."
-                      value={newResource.url}
-                      onChange={(e) => setNewResource(prev => ({ ...prev, url: e.target.value }))}
-                    />
-                    <button className="save-resource-btn" onClick={handleAddResource}>
-                      Save Resource
-                    </button>
-                  </div>
-                )}
-
-                {resources.filter(r => !r.added_by_admin).length > 0 ? (
-                  <div className="resources-list">
-                    {resources.filter(r => !r.added_by_admin).map((resource, index) => (
-                      <div className="resource-card-wrapper" key={resource.id || index}>
-                        <a 
-                          href={resource.url} 
-                          className="resource-card user" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                        >
-                          <div className="resource-icon user">🔗</div>
-                          <div className="resource-info">
-                            <span className="resource-title">{resource.title}</span>
-                            {resource.description && (
-                              <span className="resource-desc">{resource.description}</span>
-                            )}
-                          </div>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
-                          </svg>
-                        </a>
-                        <button 
-                          className="delete-resource-btn"
-                          onClick={() => handleDeleteResource(resource.id)}
-                          title="Delete resource"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="no-resources">No resources added yet. Add links to articles, videos, or school pages you're using for prep.</p>
+                  <p className="no-past">No packages purchased yet.</p>
                 )}
               </div>
             </div>
