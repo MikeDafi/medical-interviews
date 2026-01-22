@@ -3,7 +3,8 @@
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const ADMIN_EMAIL = 'premedical1on1@gmail.com';
-const FROM_EMAIL = process.env.FROM_EMAIL || 'PreMedical 1-on-1 <notifications@premedical1on1.com>';
+// On Resend free tier, must use onboarding@resend.dev or a verified domain
+const FROM_EMAIL = process.env.FROM_EMAIL || 'PreMedical 1-on-1 <onboarding@resend.dev>';
 const SITE_URL = process.env.VERCEL_URL 
   ? `https://${process.env.VERCEL_URL}` 
   : process.env.SITE_URL || 'http://localhost:5173';
