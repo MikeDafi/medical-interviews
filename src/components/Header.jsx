@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import Login from './Login'
-import Profile from './Profile'
 import GoogleIcon from './icons/GoogleIcon'
+
+// Lazy-load modals — only fetched when user clicks Sign In / Profile
+const Login = lazy(() => import('./Login'))
+const Profile = lazy(() => import('./Profile'))
 
 const scrollToSection = (e, sectionId, callback) => {
   e.preventDefault()
@@ -96,8 +98,16 @@ export default function Header() {
         </div>
       </header>
       
-      {showLogin && <Login onClose={() => setShowLogin(false)} />}
-      {showProfile && <Profile onClose={() => setShowProfile(false)} />}
+      {showLogin && (
+        <Suspense fallback={null}>
+          <Login onClose={() => setShowLogin(false)} />
+        </Suspense>
+      )}
+      {showProfile && (
+        <Suspense fallback={null}>
+          <Profile onClose={() => setShowProfile(false)} />
+        </Suspense>
+      )}
     </>
   )
 }
