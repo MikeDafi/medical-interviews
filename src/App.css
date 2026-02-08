@@ -31,6 +31,11 @@ h1, h2, h3, h4 {
   font-weight: 600;
 }
 
+/* Prevent Chrome H1UserAgentFontSizeInSection deprecation warning */
+section h1 {
+  font-size: 2em;
+}
+
 a {
   text-decoration: none;
   color: inherit;
@@ -3230,14 +3235,6 @@ img {
   background: #fee2e2;
 }
 
-.renewal-info {
-  display: block;
-  font-size: 11px;
-  color: #7c3aed;
-  font-weight: 500;
-  margin-top: 2px;
-}
-
 .subscription-tag {
   display: block;
   font-size: 11px;
@@ -3842,43 +3839,6 @@ img {
 .delete-resource-btn:hover {
   background: #fee2e2;
   color: #b91c1c;
-}
-
-.no-resources {
-  font-size: 14px;
-  color: var(--light-text);
-  padding: 24px;
-  text-align: center;
-  background: #f9fafb;
-  border-radius: 12px;
-}
-
-.no-resources.coach-empty {
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  color: #3b82f6;
-  border: 1px solid #bfdbfe;
-}
-
-.link-btn {
-  background: none;
-  border: none;
-  color: var(--primary-teal);
-  font-weight: 600;
-  cursor: pointer;
-  font-size: inherit;
-  padding: 0;
-}
-
-.link-btn:hover {
-  text-decoration: underline;
-}
-
-.progress-stage {
-  font-size: 14px;
-  color: var(--primary-teal);
-  font-weight: 500;
-  margin-top: 8px;
-  font-family: var(--marketing-font);
 }
 
 .resources-header {

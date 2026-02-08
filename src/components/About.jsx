@@ -45,7 +45,7 @@ export default function About() {
         <div className="about-right">
           <div className="about-image-container">
             <img 
-              src="/ashley-kumar.png" 
+              src="/ashley-kumar.webp" 
               alt="Ashley Kumar - Interview Coach"
               className="about-image"
             />

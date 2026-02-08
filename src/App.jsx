@@ -28,7 +28,7 @@ function HomePage() {
         {/* Background Image with Blur */}
         <div className="background-layer">
           <img 
-            src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1920&q=80" 
+            src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1920&q=75&fm=webp" 
             alt="" 
             className="bg-image"
           />
