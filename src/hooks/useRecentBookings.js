@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useSyncExternalStore, useCallback } from 'react'
 import { getFallbackBookings } from '../components/RecentBookingNotification'
 
 const CACHE_KEY = 'recentPurchasesShared'
@@ -13,40 +13,59 @@ function sortByRecent(data) {
   })
 }
 
-// In-memory cache for consistency across components in the same session
-let memoryCache = null
-let memoryCacheTimestamp = 0
+// ============================================
+// GLOBAL STORE - Single source of truth
+// ============================================
+let globalBookings = []
+let globalLoading = true
+let globalFetched = false
+let listeners = new Set()
 
-// Safely read from localStorage
-function readCache() {
-  // Check memory cache first (same session consistency)
-  if (memoryCache && Date.now() - memoryCacheTimestamp < CACHE_DURATION) {
-    return { data: memoryCache, isStale: false }
-  }
-  
+function notifyListeners() {
+  listeners.forEach(listener => listener())
+}
+
+function subscribe(listener) {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+function getSnapshot() {
+  return globalBookings
+}
+
+function getLoadingSnapshot() {
+  return globalLoading
+}
+
+// Initialize from cache on module load
+function initFromCache() {
   try {
     const cached = localStorage.getItem(CACHE_KEY)
     if (cached) {
       const { data, timestamp } = JSON.parse(cached)
       if (Date.now() - timestamp < CACHE_DURATION && data?.length > 0) {
-        memoryCache = data
-        memoryCacheTimestamp = timestamp
-        return { data, isStale: false }
+        globalBookings = sortByRecent(data)
+        globalLoading = false
+        return
       }
       if (data?.length > 0) {
-        return { data, isStale: true }
+        // Stale but use as initial value
+        globalBookings = sortByRecent(data)
       }
     }
   } catch (e) {
     console.warn('Cache read error:', e.message)
   }
-  return { data: [], isStale: true }
+  
+  // No valid cache - use fallbacks
+  if (globalBookings.length === 0) {
+    globalBookings = sortByRecent(getFallbackBookings(5))
+  }
 }
 
-// Safely write to localStorage and memory
+// Write to localStorage
 function writeCache(data) {
-  memoryCache = data
-  memoryCacheTimestamp = Date.now()
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }))
   } catch (e) {
@@ -54,87 +73,65 @@ function writeCache(data) {
   }
 }
 
-// Generate and cache fallbacks so they're consistent
-function getOrCreateFallbacks(count) {
-  const fallbackKey = `fallbackBookings_${count}`
-  
-  // Check if we already have fallbacks in memory for this session
-  if (memoryCache && memoryCache.length > 0 && memoryCache[0]?.id?.startsWith?.('fallback')) {
-    return memoryCache.slice(0, count)
-  }
+// Fetch from API (called once globally)
+async function fetchGlobalBookings() {
+  if (globalFetched) return // Already fetching or fetched
+  globalFetched = true
   
   try {
-    const cached = sessionStorage.getItem(fallbackKey)
-    if (cached) {
-      const fallbacks = JSON.parse(cached)
-      if (fallbacks?.length >= count) {
-        return fallbacks.slice(0, count)
+    const response = await fetch('/api/profile?action=recentPurchases')
+    if (response.ok) {
+      const data = await response.json()
+      if (data.purchases?.length > 0) {
+        const sorted = sortByRecent(data.purchases)
+        globalBookings = sorted
+        writeCache(sorted)
+        globalLoading = false
+        notifyListeners()
+        return
       }
     }
   } catch (e) {
-    // Ignore
+    console.warn('Failed to fetch recent purchases:', e.message)
   }
   
-  // Generate new fallbacks and store them for session consistency
-  const fallbacks = getFallbackBookings(Math.max(count, 5))
-  try {
-    sessionStorage.setItem(fallbackKey, JSON.stringify(fallbacks))
-  } catch (e) {
-    // Ignore
-  }
-  
-  return fallbacks.slice(0, count)
+  // No real data - keep fallbacks
+  globalLoading = false
+  notifyListeners()
 }
 
-export function useRecentBookings(count = 5) {
-  const [bookings, setBookings] = useState(() => {
-    const cached = readCache()
-    if (cached.data.length > 0) {
-      return sortByRecent(cached.data).slice(0, count)
-    }
-    return sortByRecent(getOrCreateFallbacks(count))
-  })
-  const [isLoading, setIsLoading] = useState(() => readCache().isStale)
+// Initialize on module load
+initFromCache()
 
+// ============================================
+// HOOK - Returns slice of global store
+// ============================================
+export function useRecentBookings(count = 5) {
+  // Subscribe to global store changes
+  const allBookings = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  const isLoading = useSyncExternalStore(
+    subscribe, 
+    getLoadingSnapshot, 
+    getLoadingSnapshot
+  )
+  
+  // Trigger fetch on first mount (deferred)
   useEffect(() => {
-    // Defer API call to not compete with initial page render (improves LCP)
-    // Use requestIdleCallback if available, otherwise setTimeout
-    const deferFetch = window.requestIdleCallback || ((cb) => setTimeout(cb, 100))
+    if (globalFetched) return
     
+    const deferFetch = window.requestIdleCallback || ((cb) => setTimeout(cb, 100))
     const handle = deferFetch(() => {
-      fetchRecentPurchases()
+      fetchGlobalBookings()
     })
     
     return () => {
-      if (window.cancelIdleCallback) {
-        window.cancelIdleCallback(handle)
-      } else {
-        clearTimeout(handle)
-      }
+      if (window.cancelIdleCallback) window.cancelIdleCallback(handle)
+      else clearTimeout(handle)
     }
-  }, [count])
-
-  const fetchRecentPurchases = async () => {
-    try {
-      const response = await fetch('/api/profile?action=recentPurchases')
-      if (response.ok) {
-        const data = await response.json()
-        if (data.purchases?.length > 0) {
-          const sorted = sortByRecent(data.purchases)
-          writeCache(sorted)
-          setBookings(sorted.slice(0, count))
-          return
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to fetch recent purchases:', e.message)
-    }
-    // No real data - use consistent fallbacks
-    const fallbacks = sortByRecent(getOrCreateFallbacks(count))
-    setBookings(fallbacks)
-    setIsLoading(false)
-  }
-
+  }, [])
+  
+  // Return sliced data - all components see same underlying data
+  const bookings = allBookings.slice(0, count)
+  
   return { bookings, isLoading }
 }
-
