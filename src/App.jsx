@@ -25,15 +25,8 @@ function HomePage() {
   return (
     <>
       <div className="app">
-        {/* Background Image with Blur */}
-        <div className="background-layer">
-          <img 
-            src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1920&q=75&fm=webp" 
-            alt="" 
-            className="bg-image"
-          />
-          <div className="bg-overlay"></div>
-        </div>
+        {/* Background Layer */}
+        <div className="background-layer"></div>
 
         {/* Main Container with Border */}
         <div className="main-container">

@@ -66,28 +66,12 @@ img {
   width: 100%;
   height: 100%;
   z-index: -2;
-}
-
-.bg-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: blur(25px);
-  transform: scale(1.1);
-}
-
-.bg-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
   background: linear-gradient(
     135deg,
-    rgba(254, 243, 235, 0.88) 0%,
-    rgba(255, 228, 210, 0.85) 30%,
-    rgba(255, 210, 190, 0.82) 60%,
-    rgba(255, 195, 175, 0.85) 100%
+    #fef3eb 0%,
+    #ffe4d2 30%,
+    #ffd2be 60%,
+    #ffc3af 100%
   );
 }
 

@@ -1,7 +1,9 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 
 export default function FAQ() {
   const scrollRef = useRef(null)
+  const rafRef = useRef(null)
+  const dimensionsRef = useRef({ scrollWidth: 0, clientWidth: 0 })
   const [scrollProgress, setScrollProgress] = useState(0)
   const [thumbWidth, setThumbWidth] = useState(30)
 
@@ -53,27 +55,51 @@ export default function FAQ() {
     }
   ]
 
+  // Cache dimensions on resize (expensive layout reads)
+  const updateDimensions = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    dimensionsRef.current = {
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth
+    }
+    const maxScroll = dimensionsRef.current.scrollWidth - dimensionsRef.current.clientWidth
+    if (maxScroll > 0) {
+      setThumbWidth((dimensionsRef.current.clientWidth / dimensionsRef.current.scrollWidth) * 100)
+    }
+  }, [])
+
+  // Update scroll progress using cached dimensions (cheap)
+  const updateScrollProgress = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    
+    // Cancel any pending RAF
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    
+    rafRef.current = requestAnimationFrame(() => {
+      const { scrollWidth, clientWidth } = dimensionsRef.current
+      const maxScroll = scrollWidth - clientWidth
+      if (maxScroll > 0) {
+        setScrollProgress((el.scrollLeft / maxScroll) * 100)
+      }
+    })
+  }, [])
+
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
 
-    const updateScroll = () => {
-      const maxScroll = el.scrollWidth - el.clientWidth
-      if (maxScroll > 0) {
-        setScrollProgress((el.scrollLeft / maxScroll) * 100)
-        setThumbWidth((el.clientWidth / el.scrollWidth) * 100)
-      }
-    }
-
-    updateScroll()
-    el.addEventListener('scroll', updateScroll)
-    window.addEventListener('resize', updateScroll)
+    updateDimensions()
+    el.addEventListener('scroll', updateScrollProgress, { passive: true })
+    window.addEventListener('resize', updateDimensions)
     
     return () => {
-      el.removeEventListener('scroll', updateScroll)
-      window.removeEventListener('resize', updateScroll)
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      el.removeEventListener('scroll', updateScrollProgress)
+      window.removeEventListener('resize', updateDimensions)
     }
-  }, [])
+  }, [updateDimensions, updateScrollProgress])
 
   const handleTrackClick = (e) => {
     const el = scrollRef.current
