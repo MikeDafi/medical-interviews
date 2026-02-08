@@ -1,72 +1,8 @@
-import { useState, useEffect } from 'react'
-import { useAuth } from '../context/AuthContext'
 import { getTimeAgo } from '../utils'
-
-const CACHE_KEY = 'recentPurchases'
-const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
-
-// Safely read from localStorage (handles SSR, private browsing, quota errors)
-function readCache(key) {
-  try {
-    const cached = localStorage.getItem(key)
-    if (cached) {
-      const { data, timestamp } = JSON.parse(cached)
-      if (Date.now() - timestamp < CACHE_DURATION && data?.length > 0) {
-        return { data, isStale: false }
-      }
-      // Return stale data with flag
-      if (data?.length > 0) {
-        return { data, isStale: true }
-      }
-    }
-  } catch (e) {
-    console.warn('Cache read error:', e.message)
-  }
-  return { data: [], isStale: true }
-}
-
-// Safely write to localStorage
-function writeCache(key, data) {
-  try {
-    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }))
-  } catch (e) {
-    console.warn('Cache write error:', e.message)
-  }
-}
+import { useRecentBookings } from '../hooks/useRecentBookings'
 
 export default function RecentBookings() {
-  const { user } = useAuth()
-  const [purchases, setPurchases] = useState(() => readCache(CACHE_KEY).data)
-  const [isLoading, setIsLoading] = useState(() => readCache(CACHE_KEY).isStale)
-
-  useEffect(() => {
-    // Only fetch if user is logged in
-    if (!user) {
-      setIsLoading(false)
-      return
-    }
-    
-    fetchRecentPurchases()
-    const interval = setInterval(fetchRecentPurchases, CACHE_DURATION)
-    return () => clearInterval(interval)
-  }, [user])
-
-  const fetchRecentPurchases = async () => {
-    try {
-      const response = await fetch('/api/profile?action=recentPurchases')
-      if (response.ok) {
-        const data = await response.json()
-        if (data.purchases?.length > 0) {
-          setPurchases(data.purchases)
-          writeCache(CACHE_KEY, data.purchases)
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to fetch recent purchases:', e.message)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const { bookings: purchases, isLoading } = useRecentBookings(5)
 
   if (purchases.length === 0 && !isLoading) return null
 

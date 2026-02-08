@@ -481,16 +481,16 @@ export default function Calendar() {
       <div className="calendar-container">
         <div className="calendar-card">
           <div className="calendar-header">
-            <button className="calendar-nav-btn" onClick={prevMonth}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <button className="calendar-nav-btn" onClick={prevMonth} aria-label="Previous month">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <path d="M15 18l-6-6 6-6"/>
               </svg>
             </button>
             <span className="calendar-month">
               {months[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </span>
-            <button className="calendar-nav-btn" onClick={nextMonth}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <button className="calendar-nav-btn" onClick={nextMonth} aria-label="Next month">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <path d="M9 18l6-6-6-6"/>
               </svg>
             </button>

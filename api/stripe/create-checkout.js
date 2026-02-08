@@ -47,7 +47,7 @@ const PACKAGES = {
   },
   package5: {
     name: 'Interview Package (5 Sessions)',
-    price: 45000, // $450
+    price: 40000, // $400
     description: '5 one-hour sessions, take-home questions, priority scheduling',
     sessions: 5,
     duration_minutes: 60,
@@ -85,7 +85,7 @@ const PACKAGES = {
   },
   cv_package5: {
     name: 'CV Strategy Package (5 Sessions)',
-    price: 45000, // $450
+    price: 40000, // $400
     description: 'Mentorship-style advising across months or years',
     sessions: 5,
     duration_minutes: 60,

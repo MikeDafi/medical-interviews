@@ -215,8 +215,8 @@ export default function Packages() {
           <PackageCard
             badge="Premium"
             title="Package of 5"
-            price="$450"
-            priceNote="Save $50"
+            price="$400"
+            priceNote="Save $100"
             features={[
               "5 one-hour sessions",
               "Full interview mastery program",
@@ -308,8 +308,8 @@ export default function Packages() {
           <PackageCard
             badge="Long-Term"
             title="5 Session Package"
-            price="$450"
-            priceNote="Save $50"
+            price="$400"
+            priceNote="Save $100"
             features={[
               "Five 1-hour sessions",
               "Use across months or years",

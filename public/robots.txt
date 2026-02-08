@@ -1,0 +1,11 @@
+# Robots.txt for PreMedical 1-on-1
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://www.premedical1on1.biz/sitemap.xml
+
+# Disallow admin and API routes
+Disallow: /admin
+Disallow: /api/
+

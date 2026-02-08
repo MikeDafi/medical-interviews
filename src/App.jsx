@@ -9,7 +9,6 @@ import SampleQuestion from './components/SampleQuestion'
 import Packages from './components/Packages'
 import About from './components/About'
 import Features from './components/Features'
-import Experiences from './components/Experiences'
 import FAQ from './components/FAQ'
 import Calendar from './components/Calendar'
 import Footer from './components/Footer'
@@ -43,10 +42,9 @@ function HomePage() {
             
             <div className="content-area">
               <Hero />
-              <SampleQuestion />
-              <Experiences />
-              <Packages />
               <About />
+              <SampleQuestion />
+              <Packages />
               <Features />
               <FAQ />
               <Calendar />

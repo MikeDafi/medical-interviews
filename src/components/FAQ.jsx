@@ -1,4 +1,10 @@
+import { useRef, useState, useEffect } from 'react'
+
 export default function FAQ() {
+  const scrollRef = useRef(null)
+  const [scrollProgress, setScrollProgress] = useState(0)
+  const [thumbWidth, setThumbWidth] = useState(30)
+
   const faqs = [
     {
       id: 'school-targeting',
@@ -29,21 +35,80 @@ export default function FAQ() {
       id: 'mmi-vs-traditional',
       question: "What's the difference between MMI and traditional interviews?",
       answer: "MMI (Multiple Mini Interviews) are timed stations with different scenarios. Traditional interviews are longer, conversational discussions. Most schools now use MMI but include 1-2 traditional questions. I'll help you prep for what your target schools use."
+    },
+    {
+      id: 'session-recording',
+      question: "Can I get a recording of my mock interview?",
+      answer: "Yes! All sessions can be recorded so you can review your performance later. Watching yourself answer questions is one of the best ways to identify areas for improvement - body language, filler words, pacing. I'll share the recording within 24 hours after our session."
+    },
+    {
+      id: 'when-to-start',
+      question: "How far in advance should I start preparing?",
+      answer: "Ideally, start 4-6 weeks before your first interview. This gives you enough time to build skills gradually without cramming. If your interview is sooner, we can do intensive prep - just be upfront about your timeline so we can prioritize what matters most."
+    },
+    {
+      id: 'reapplicant',
+      question: "I'm a reapplicant. Can you help me improve?",
+      answer: "Absolutely. Reapplicants often know exactly where they struggled before. We'll do a deep dive into what went wrong, whether it was storytelling, handling tough questions, or projecting confidence. Many of my most successful students have been reapplicants who just needed targeted feedback."
     }
   ]
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    const updateScroll = () => {
+      const maxScroll = el.scrollWidth - el.clientWidth
+      if (maxScroll > 0) {
+        setScrollProgress((el.scrollLeft / maxScroll) * 100)
+        setThumbWidth((el.clientWidth / el.scrollWidth) * 100)
+      }
+    }
+
+    updateScroll()
+    el.addEventListener('scroll', updateScroll)
+    window.addEventListener('resize', updateScroll)
+    
+    return () => {
+      el.removeEventListener('scroll', updateScroll)
+      window.removeEventListener('resize', updateScroll)
+    }
+  }, [])
+
+  const handleTrackClick = (e) => {
+    const el = scrollRef.current
+    if (!el) return
+    
+    const rect = e.currentTarget.getBoundingClientRect()
+    const clickX = e.clientX - rect.left
+    const trackWidth = rect.width
+    const scrollRatio = clickX / trackWidth
+    const maxScroll = el.scrollWidth - el.clientWidth
+    
+    el.scrollTo({ left: scrollRatio * maxScroll, behavior: 'smooth' })
+  }
 
   return (
     <section className="faq-section" id="faq">
       <div className="section-header">
         <h2>Frequently Asked Questions</h2>
       </div>
-      <div className="faq-grid">
+      <div className="faq-grid" ref={scrollRef}>
         {faqs.map((faq) => (
           <div className="faq-item" key={faq.id}>
             <h4>{faq.question}</h4>
             <p>{faq.answer}</p>
           </div>
         ))}
+      </div>
+      <div className="faq-scroll-track" onClick={handleTrackClick}>
+        <div 
+          className="faq-scroll-thumb" 
+          style={{ 
+            width: `${Math.max(thumbWidth, 15)}%`,
+            left: `${scrollProgress * (100 - Math.max(thumbWidth, 15)) / 100}%`
+          }}
+        />
       </div>
     </section>
   )

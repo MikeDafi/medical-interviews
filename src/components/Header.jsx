@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Login from './Login'
 import Profile from './Profile'
+import GoogleIcon from './icons/GoogleIcon'
 
 const scrollToSection = (e, sectionId, callback) => {
   e.preventDefault()
@@ -51,6 +52,7 @@ export default function Header() {
               </button>
             ) : (
               <button type="button" onClick={() => setShowLogin(true)} className="nav-btn">
+                <GoogleIcon size={18} />
                 Sign In
               </button>
             )}
@@ -84,7 +86,8 @@ export default function Header() {
                   My Profile
                 </button>
               ) : (
-                <button type="button" onClick={() => { setShowLogin(true); setMobileMenuOpen(false); }} className="nav-btn-mobile">
+                <button type="button" onClick={() => { setShowLogin(true); setMobileMenuOpen(false); }} className="nav-btn-mobile nav-btn-signin">
+                  <GoogleIcon size={18} />
                   Sign In
                 </button>
               )}
