@@ -2,8 +2,12 @@
 import '../_lib/env.js';
 
 import Stripe from 'stripe';
+import { sql } from '@vercel/postgres';
 import { rateLimit } from '../_lib/auth.js';
 import { requireAuth } from '../_lib/session.js';
+
+// Trial package IDs that are restricted to first-time users
+const TRIAL_PACKAGES = ['trial', 'cv_trial'];
 
 // Initialize Stripe lazily to ensure env vars are loaded
 let stripeInstance = null;
@@ -171,6 +175,38 @@ export default async function handler(req, res) {
 
     if (!packageId || !PACKAGES[packageId]) {
       return res.status(400).json({ error: 'Invalid package' });
+    }
+
+    // SECURITY: Block trial packages for users who have already had any session
+    if (TRIAL_PACKAGES.includes(packageId)) {
+      const userResult = await sql`
+        SELECT purchases FROM users 
+        WHERE google_id = ${userId} OR email = ${userEmail}
+      `;
+      
+      if (userResult.rows.length > 0) {
+        const purchases = userResult.rows[0].purchases || [];
+        
+        // Check if user has ever had a session (used any sessions or has any completed bookings)
+        const hasHadSession = purchases.some(p => {
+          // Check if any sessions have been used
+          if ((p.sessions_used || 0) > 0) return true;
+          
+          // Check if there are any confirmed/completed bookings
+          const bookings = p.bookings || [];
+          return bookings.some(b => 
+            b.status === 'confirmed' || 
+            b.status === 'completed' ||
+            new Date(b.date_time) < new Date() // Past bookings
+          );
+        });
+        
+        if (hasHadSession) {
+          return res.status(400).json({ 
+            error: 'Trial sessions are only available for first-time users. Please choose a full session package.' 
+          });
+        }
+      }
     }
 
     const origin = req.headers.origin;

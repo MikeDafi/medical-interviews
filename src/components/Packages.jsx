@@ -67,7 +67,7 @@ export default function Packages() {
       
     } catch (err) {
       console.error('Payment error:', err)
-      setError('Unable to process payment. Please try again.')
+      setError(err.message || 'Unable to process payment. Please try again.')
     }
     
     setLoading(null)
