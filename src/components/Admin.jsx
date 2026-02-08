@@ -67,6 +67,14 @@ export default function Admin() {
       return
     }
 
+    // Limit to 10 admin-added resources per user
+    const targetUser = users.find(u => u.id === userId)
+    const adminResources = (targetUser?.resources || []).filter(r => r.added_by_admin === true)
+    if (adminResources.length >= 10) {
+      alert('Maximum of 10 admin-added resources per user')
+      return
+    }
+
     try {
       const response = await fetch(`/api/admin?action=resources&googleId=${user?.id || ''}`, {
         method: 'POST',

@@ -48,6 +48,10 @@ export default function ProfileSetup({ user, onComplete }) {
   }
 
   const addSchool = () => {
+    if (formData.targetSchools.length >= 10) {
+      alert('Maximum of 10 target schools allowed')
+      return
+    }
     setFormData(prev => ({
       ...prev,
       targetSchools: [...prev.targetSchools, { id: generateId(), name: '', interviewType: 'MMI', interviewDate: '', priority: prev.targetSchools.length + 1 }]
@@ -70,6 +74,10 @@ export default function ProfileSetup({ user, onComplete }) {
   }
 
   const addResource = () => {
+    if (formData.resources.length >= 10) {
+      alert('Maximum of 10 resources allowed')
+      return
+    }
     setFormData(prev => ({
       ...prev,
       resources: [...prev.resources, { id: generateId(), title: '', url: '' }]

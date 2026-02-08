@@ -213,6 +213,8 @@ export default function Profile({ onClose }) {
         setProfileData(data.profile)
         // Resources are now JSON on user object
         setResources(data.profile?.resources || [])
+        // Set concerns from server data
+        setConcerns(data.profile?.main_concerns || '')
       }
     } catch (error) {
       console.error('Error fetching profile data:', error)
@@ -231,6 +233,13 @@ export default function Profile({ onClose }) {
 
   const handleAddResource = async () => {
     if (!newResource.title || !newResource.url) return
+    
+    // Limit to 10 resources (user-added only)
+    const userResources = resources.filter(r => r.added_by_admin !== true)
+    if (userResources.length >= 10) {
+      alert('Maximum of 10 resources allowed')
+      return
+    }
     
     const newRes = { ...newResource, id: Date.now(), type: 'user' }
     const updatedResources = [...resources, newRes]
@@ -324,13 +333,20 @@ export default function Profile({ onClose }) {
   const handleAddSchool = async () => {
     if (!newSchool.name) return
     
+    const currentSchools = profileData?.target_schools || []
+    
+    // Limit to 10 target schools
+    if (currentSchools.length >= 10) {
+      alert('Maximum of 10 target schools allowed')
+      return
+    }
+    
     const school = {
       name: newSchool.name,
       interviewType: newSchool.interviewType,
       interviewDate: newSchool.interviewDate
     }
     
-    const currentSchools = profileData?.target_schools || []
     const updatedSchools = [...currentSchools, school]
     
     // Optimistically update UI

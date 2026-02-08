@@ -54,6 +54,13 @@ export default function AdminUser() {
   const handleAddResource = async () => {
     if (!newResource.title || !newResource.url) return
 
+    // Limit to 10 admin-added resources per user
+    const adminResources = (userData?.resources || []).filter(r => r.added_by_admin === true)
+    if (adminResources.length >= 10) {
+      alert('Maximum of 10 admin-added resources per user')
+      return
+    }
+
     try {
       const response = await fetch(`/api/admin?action=resources&googleId=${user?.id || ''}`, {
         method: 'POST',
