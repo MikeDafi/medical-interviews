@@ -489,12 +489,22 @@ img {
   flex-shrink: 0;
 }
 
-.recent-bookings-inline h4 {
+.recent-bookings-inline-title {
   font-family: var(--marketing-font);
   font-size: 16px;
   font-weight: 600;
   color: var(--dark-text);
   margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recent-bookings-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--primary-teal);
+  flex-shrink: 0;
 }
 
 .bookings-list {
@@ -1025,31 +1035,6 @@ img {
   opacity: 0.7;
   cursor: not-allowed;
   transform: none;
-}
-
-/* Stripe Test Notice */
-.stripe-test-notice {
-  margin-top: 32px;
-  padding: 16px 24px;
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border: 1px solid #f59e0b;
-  border-radius: 12px;
-  text-align: center;
-}
-
-.stripe-test-notice p {
-  margin: 0;
-  font-size: 14px;
-  color: #92400e;
-}
-
-.stripe-test-notice code {
-  background: white;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 13px;
-  color: #1f2937;
 }
 
 /* Payment Status Toast */
@@ -1858,13 +1843,6 @@ img {
   font-style: italic;
 }
 
-.credit-note {
-  display: block;
-  font-size: 10px;
-  color: #dc2626;
-  margin-top: 2px;
-}
-
 .calendar-day.beyond-limit {
   color: #d1d5db;
 }
@@ -2353,13 +2331,6 @@ img {
   margin-top: 24px;
 }
 
-/* User Menu */
-.user-menu {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
 .user-avatar {
   width: 40px;
   height: 40px;
@@ -2367,17 +2338,6 @@ img {
   object-fit: cover;
   border: 2px solid var(--primary-teal);
   background: #e5e7eb;
-}
-
-.logout-btn {
-  background: transparent;
-  color: var(--dark-text);
-  border: 1px solid var(--dark-text);
-}
-
-.logout-btn:hover {
-  background: var(--dark-text);
-  color: white;
 }
 
 /* Profile Setup Modal */
@@ -3485,20 +3445,6 @@ img {
   font-weight: 500;
 }
 
-.no-bookings {
-  font-size: 14px;
-  color: var(--light-text);
-  padding: 24px;
-  text-align: center;
-  background: #f9fafb;
-  border-radius: 12px;
-}
-
-.no-bookings a {
-  color: var(--primary-teal);
-  font-weight: 500;
-}
-
 /* Schools Tab */
 .schools-header {
   display: flex;
@@ -3714,16 +3660,6 @@ img {
 .school-date {
   font-size: 13px;
   color: var(--light-text);
-}
-
-.no-schools {
-  font-size: 14px;
-  color: var(--light-text);
-  padding: 24px;
-  text-align: center;
-  background: #f9fafb;
-  border-radius: 12px;
-  margin-bottom: 16px;
 }
 
 /* Resources Tab */
