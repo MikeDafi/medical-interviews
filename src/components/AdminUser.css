@@ -237,6 +237,9 @@
   border-radius: 8px;
   border-left: 3px solid #0d9488;
   margin: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
 }
 
 .schools-list {

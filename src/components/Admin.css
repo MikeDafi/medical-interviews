@@ -372,6 +372,12 @@
   gap: 8px;
 }
 
+.admin-detail-list > div {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}
+
 .admin-detail-list strong {
   color: #1f2937;
 }
