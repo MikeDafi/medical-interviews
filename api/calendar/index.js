@@ -432,6 +432,9 @@ export default async function handler(req, res) {
           availability[key] = value;
         });
         
+        // Edge cache for 5 min, stale-while-revalidate for 1 hour
+        res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=3600');
+        
         return res.status(200).json({
           success: true,
           cached: true,
@@ -452,6 +455,9 @@ export default async function handler(req, res) {
       batchCache.data.forEach((value, key) => {
         availability[key] = value;
       });
+
+      // Edge cache for 5 min, stale-while-revalidate for 1 hour
+      res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=3600');
 
       return res.status(200).json({
         success: true,

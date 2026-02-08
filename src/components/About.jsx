@@ -48,6 +48,7 @@ export default function About() {
               src="/ashley-kumar.webp" 
               alt="Ashley Kumar - Interview Coach"
               className="about-image"
+              fetchpriority="high"
             />
           </div>
         </div>

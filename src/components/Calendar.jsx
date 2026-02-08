@@ -37,9 +37,17 @@ export default function Calendar() {
   const fourWeeksFromNow = new Date(today)
   fourWeeksFromNow.setDate(today.getDate() + 28)
 
-  // Preload all availability on component mount
+  // Preload all availability on component mount (deferred to not block LCP)
   useEffect(() => {
-    preloadAvailability()
+    // Defer preload to after initial paint
+    const deferPreload = window.requestIdleCallback || ((cb) => setTimeout(cb, 150))
+    const handle = deferPreload(() => {
+      preloadAvailability()
+    })
+    return () => {
+      if (window.cancelIdleCallback) window.cancelIdleCallback(handle)
+      else clearTimeout(handle)
+    }
   }, [])
 
   useEffect(() => {

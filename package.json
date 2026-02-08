@@ -17,6 +17,9 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@fontsource/cormorant-garamond": "^5.2.11",
+    "@fontsource/dm-sans": "^5.2.8",
+    "@fontsource/plus-jakarta-sans": "^5.2.8",
     "@stripe/stripe-js": "^8.6.1",
     "@vercel/analytics": "^1.6.1",
     "@vercel/postgres": "^0.10.0",

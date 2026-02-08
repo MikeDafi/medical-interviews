@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useRecentBookings } from '../hooks/useRecentBookings'
 import { getTimeAgo } from '../utils'
 
-const CACHE_KEY = 'recentPurchases'
 const NOTIFICATION_DELAY = 3000 // 3 seconds after page load
 
 // 100 common first names for fallback social proof
@@ -72,75 +72,26 @@ export function getFallbackBookings(count = 3) {
   return Array.from({ length: count }, (_, i) => getFallbackBooking(i))
 }
 
-// Safely read from localStorage
-function readCache(key) {
-  try {
-    const cached = localStorage.getItem(key)
-    if (cached) {
-      const { data } = JSON.parse(cached)
-      if (data?.length > 0) return data
-    }
-  } catch (e) {
-    console.warn('Cache read error:', e.message)
-  }
-  return null
-}
-
-// Safely write to localStorage
-function writeCache(key, data) {
-  try {
-    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }))
-  } catch (e) {
-    console.warn('Cache write error:', e.message)
-  }
-}
-
 export default function RecentBookingNotification() {
   const { user } = useAuth()
-  const [notification, setNotification] = useState(null)
+  // Use shared hook - NO duplicate API call!
+  const { bookings } = useRecentBookings(1)
   const [isVisible, setIsVisible] = useState(false)
+  const [hasShown, setHasShown] = useState(false)
 
+  // Show notification after delay (only once per session)
   useEffect(() => {
-    // Only fetch if user is logged in
-    if (!user) return
-
+    if (hasShown || !bookings.length) return
+    
     const timer = setTimeout(() => {
-      // Try cache first for instant display
-      const cached = readCache(CACHE_KEY)
-      if (cached) {
-        setNotification(cached[0])
-        setIsVisible(true)
-        return
-      }
-      // Fall back to API
-      fetchRecentPurchase()
+      setIsVisible(true)
+      setHasShown(true)
     }, NOTIFICATION_DELAY)
     
     return () => clearTimeout(timer)
-  }, [user])
+  }, [bookings, hasShown])
 
-  const fetchRecentPurchase = async () => {
-    try {
-      const response = await fetch('/api/profile?action=recentPurchases')
-      if (response.ok) {
-        const data = await response.json()
-        if (data.purchases?.length > 0) {
-          setNotification(data.purchases[0])
-          setIsVisible(true)
-          writeCache(CACHE_KEY, data.purchases)
-          return
-        }
-      }
-      // No real data: show fallback booking
-      setNotification(getFallbackBooking())
-      setIsVisible(true)
-    } catch (e) {
-      console.warn('Failed to fetch recent purchase:', e.message)
-      // On error, still show fallback
-      setNotification(getFallbackBooking())
-      setIsVisible(true)
-    }
-  }
+  const notification = bookings[0]
 
   const handleClick = () => {
     setIsVisible(false)

@@ -65,17 +65,15 @@ function LoadingScreen() {
 function AppContent() {
   const { user, loading, showProfileSetup, completeProfileSetup } = useAuth()
 
-  // Show loading screen while auth is initializing
-  if (loading) {
-    return <LoadingScreen />
-  }
+  // Don't block page render on auth - let LCP (Hero) render immediately
+  // Auth-dependent UI (Header user menu) shows its own loading state
 
   return (
     <>
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/admin/user/:userId" element={<AdminUser />} />
+        <Route path="/admin" element={loading ? <LoadingScreen /> : <Admin />} />
+        <Route path="/admin/user/:userId" element={loading ? <LoadingScreen /> : <AdminUser />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="*" element={<NotFound />} />

@@ -97,7 +97,21 @@ export function useRecentBookings(count = 5) {
   const [isLoading, setIsLoading] = useState(() => readCache().isStale)
 
   useEffect(() => {
-    fetchRecentPurchases()
+    // Defer API call to not compete with initial page render (improves LCP)
+    // Use requestIdleCallback if available, otherwise setTimeout
+    const deferFetch = window.requestIdleCallback || ((cb) => setTimeout(cb, 100))
+    
+    const handle = deferFetch(() => {
+      fetchRecentPurchases()
+    })
+    
+    return () => {
+      if (window.cancelIdleCallback) {
+        window.cancelIdleCallback(handle)
+      } else {
+        clearTimeout(handle)
+      }
+    }
   }, [count])
 
   const fetchRecentPurchases = async () => {
