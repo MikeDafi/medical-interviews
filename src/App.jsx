@@ -1,25 +1,30 @@
 import './App.css'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import ErrorBoundary from './components/ErrorBoundary'
+
+// Critical path components - loaded immediately for LCP
 import Header from './components/Header'
 import Hero from './components/Hero'
-import SampleQuestion from './components/SampleQuestion'
-import Packages from './components/Packages'
-import About from './components/About'
-import Features from './components/Features'
-import FAQ from './components/FAQ'
-import Calendar from './components/Calendar'
 import Footer from './components/Footer'
-import RecentBookingNotification from './components/RecentBookingNotification'
-import ProfileSetup from './components/ProfileSetup'
-import PaymentStatus from './components/PaymentStatus'
-import Admin from './components/Admin'
-import AdminUser from './components/AdminUser'
-import Terms from './components/pages/Terms'
-import Privacy from './components/pages/Privacy'
-import NotFound from './components/pages/NotFound'
+
+// Lazy-loaded components - loaded when needed
+const SampleQuestion = lazy(() => import('./components/SampleQuestion'))
+const Packages = lazy(() => import('./components/Packages'))
+const About = lazy(() => import('./components/About'))
+const Features = lazy(() => import('./components/Features'))
+const FAQ = lazy(() => import('./components/FAQ'))
+const Calendar = lazy(() => import('./components/Calendar'))
+const RecentBookingNotification = lazy(() => import('./components/RecentBookingNotification'))
+const ProfileSetup = lazy(() => import('./components/ProfileSetup'))
+const PaymentStatus = lazy(() => import('./components/PaymentStatus'))
+const Admin = lazy(() => import('./components/Admin'))
+const AdminUser = lazy(() => import('./components/AdminUser'))
+const Terms = lazy(() => import('./components/pages/Terms'))
+const Privacy = lazy(() => import('./components/pages/Privacy'))
+const NotFound = lazy(() => import('./components/pages/NotFound'))
 
 function HomePage() {
   return (
@@ -34,21 +39,29 @@ function HomePage() {
             <Header />
             
             <div className="content-area">
+              {/* Critical LCP content - loads immediately */}
               <Hero />
-              <About />
-              <SampleQuestion />
-              <Packages />
-              <Features />
-              <FAQ />
-              <Calendar />
+              
+              {/* Below-the-fold content - lazy loaded */}
+              <Suspense fallback={null}>
+                <About />
+                <SampleQuestion />
+                <Packages />
+                <Features />
+                <FAQ />
+                <Calendar />
+              </Suspense>
+              
               <Footer />
             </div>
           </div>
         </div>
       </div>
 
-      <PaymentStatus />
-      <RecentBookingNotification />
+      <Suspense fallback={null}>
+        <PaymentStatus />
+        <RecentBookingNotification />
+      </Suspense>
     </>
   )
 }
@@ -70,19 +83,23 @@ function AppContent() {
 
   return (
     <>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/admin" element={loading ? <LoadingScreen /> : <Admin />} />
-        <Route path="/admin/user/:userId" element={loading ? <LoadingScreen /> : <AdminUser />} />
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <Suspense fallback={<LoadingScreen />}>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/admin" element={loading ? <LoadingScreen /> : <Admin />} />
+          <Route path="/admin/user/:userId" element={loading ? <LoadingScreen /> : <AdminUser />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
       
       <Analytics />
       
       {user && showProfileSetup && (
-        <ProfileSetup user={user} onComplete={completeProfileSetup} />
+        <Suspense fallback={null}>
+          <ProfileSetup user={user} onComplete={completeProfileSetup} />
+        </Suspense>
       )}
     </>
   )

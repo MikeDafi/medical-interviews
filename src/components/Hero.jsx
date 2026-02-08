@@ -101,6 +101,8 @@ export default function Hero() {
                     <img 
                       src={logo.url} 
                       alt={`${logo.name} Medical School`}
+                      width={256}
+                      height={256}
                       onError={(e) => { e.target.style.display = 'none' }}
                     />
                   </div>
@@ -114,6 +116,8 @@ export default function Hero() {
                     <img 
                       src={logo.url} 
                       alt={`${logo.name} Medical School`}
+                      width={256}
+                      height={256}
                       onError={(e) => { e.target.style.display = 'none' }}
                     />
                   </div>
