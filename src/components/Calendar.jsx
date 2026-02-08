@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { calculateSessionCredits } from '../utils'
 import RecentBookings from './RecentBookings'
@@ -20,6 +20,11 @@ export default function Calendar() {
   const [businessTimezone, setBusinessTimezone] = useState('America/Chicago')
   const [cacheStatus, setCacheStatus] = useState({ loaded: false, loading: false, expiresIn: 0 })
   const [preloadedAvailability, setPreloadedAvailability] = useState({}) // All 28 days cached locally
+  
+  // Hover-triggered preload refs
+  const sectionRef = useRef(null)
+  const hoverTimerRef = useRef(null)
+  const hasPreloadedOnHover = useRef(false)
   
   // Get user's timezone
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -47,6 +52,37 @@ export default function Calendar() {
     return () => {
       if (window.cancelIdleCallback) window.cancelIdleCallback(handle)
       else clearTimeout(handle)
+    }
+  }, [])
+
+  // Hover-triggered preload: if user hovers over booking section for 3+ seconds, ensure data is loaded
+  const handleMouseEnter = useCallback(() => {
+    // Clear any existing timer
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+    
+    // Set timer for 3 seconds
+    hoverTimerRef.current = setTimeout(() => {
+      // If not already loaded and not currently loading, trigger preload
+      if (!cacheStatus.loaded && !cacheStatus.loading && !hasPreloadedOnHover.current) {
+        hasPreloadedOnHover.current = true
+        console.log('⏳ Hover triggered preload after 3s')
+        preloadAvailability()
+      }
+    }, 3000)
+  }, [cacheStatus.loaded, cacheStatus.loading])
+
+  const handleMouseLeave = useCallback(() => {
+    // Clear timer when mouse leaves
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current)
+      hoverTimerRef.current = null
+    }
+  }, [])
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
     }
   }, [])
 
@@ -431,7 +467,13 @@ export default function Calendar() {
   }
 
   return (
-    <section className="calendar-section" id="book">
+    <section 
+      className="calendar-section" 
+      id="book"
+      ref={sectionRef}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <div className="section-header">
         <h2>Book Your Session</h2>
         <p>Select a date and time that works for you</p>

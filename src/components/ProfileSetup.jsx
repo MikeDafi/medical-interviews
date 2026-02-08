@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import './ProfileSetup.css'
 
 const MAX_CONCERNS_LENGTH = 500
 

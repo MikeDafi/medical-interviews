@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { calculateSessionCredits, formatDate } from '../utils'
+import './Profile.css'
 
 // Constants
 const DELETE_CONFIRMATION_TEXT = 'DELETE'
