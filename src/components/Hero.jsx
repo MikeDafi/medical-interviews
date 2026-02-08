@@ -103,6 +103,8 @@ export default function Hero() {
                       alt={`${logo.name} Medical School`}
                       width={256}
                       height={256}
+                      loading="lazy"
+                      decoding="async"
                       onError={(e) => { e.target.style.display = 'none' }}
                     />
                   </div>
@@ -118,6 +120,8 @@ export default function Hero() {
                       alt={`${logo.name} Medical School`}
                       width={256}
                       height={256}
+                      loading="lazy"
+                      decoding="async"
                       onError={(e) => { e.target.style.display = 'none' }}
                     />
                   </div>

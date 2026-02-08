@@ -18,14 +18,12 @@
         { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
         { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
       ]
-    }
-  ],
-  "redirects": [
+    },
     {
-      "source": "/:path*",
-      "has": [{ "type": "header", "key": "x-forwarded-proto", "value": "http" }],
-      "destination": "https://premedical1on1.vercel.app/:path*",
-      "permanent": true
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
     }
   ]
 }

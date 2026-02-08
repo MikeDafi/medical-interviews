@@ -1297,6 +1297,13 @@
   line-height: 1.5;
 }
 
+.collapsible-value > span:first-child {
+  flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
 .collapsible-actions {
   margin-bottom: 8px;
 }

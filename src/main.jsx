@@ -2,10 +2,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 // Self-hosted fonts (eliminates Google Fonts network chain)
-import '@fontsource/cormorant-garamond/400.css'
-import '@fontsource/cormorant-garamond/500.css'
-import '@fontsource/cormorant-garamond/600.css'
-import '@fontsource/cormorant-garamond/700.css'
+// Only import weights actually used in CSS to minimize font downloads
+import '@fontsource/cormorant-garamond/600.css'  // headings only use 600
 import '@fontsource/dm-sans/400.css'
 import '@fontsource/dm-sans/500.css'
 import '@fontsource/dm-sans/600.css'

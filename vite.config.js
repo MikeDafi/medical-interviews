@@ -7,14 +7,33 @@ export default defineConfig({
   build: {
     // Enable CSS code splitting
     cssCodeSplit: true,
+    // Minify CSS
+    cssMinify: true,
+    // Tree-shake target
+    target: 'es2020',
     // Optimize chunks
     rollupOptions: {
       output: {
-        // Split vendor chunks for better caching
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
+        // Split chunks for better caching and reduced unused JS
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            return 'vendor'
+          }
+          // Split admin pages into separate chunk (only loaded when visiting /admin)
+          if (id.includes('/components/Admin')) {
+            return 'admin'
+          }
+          // Split legal pages (only loaded when visiting /terms or /privacy)
+          if (id.includes('/pages/')) {
+            return 'pages'
+          }
         }
       }
+    },
+    // Use esbuild for fast minification with dead code elimination
+    minify: 'esbuild',
+    esbuild: {
+      drop: ['console', 'debugger']
     }
   }
 })

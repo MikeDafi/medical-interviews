@@ -2585,36 +2585,135 @@ img {
   /* Recent bookings responsive */
   .recent-bookings-scroll {
     justify-content: flex-start;
-    padding: 8px 16px;
+  padding: 8px 16px;
     margin: 0 -16px;
     width: calc(100% + 32px);
   }
   
   .recent-booking-card {
     padding: 8px 12px;
-    gap: 8px;
-  }
-  
+  gap: 8px;
+}
+
   .recent-booking-avatar {
     width: 32px;
     height: 32px;
     min-width: 32px;
-    font-size: 13px;
+  font-size: 13px;
   }
   
   .recent-booking-name {
-    font-size: 12px;
-  }
-  
+  font-size: 12px;
+}
+
   .recent-booking-package,
   .recent-booking-time {
-    font-size: 10px;
+  font-size: 10px;
   }
 }
 
 @media (max-width: 480px) {
   .footer-links {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ===== Mobile Performance Optimizations ===== */
+/* backdrop-filter: blur() is extremely expensive on mobile GPUs.
+   Replace with solid backgrounds to dramatically improve FPS and reduce jank. */
+@media (max-width: 1024px) {
+  .inner-border {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.6);
+  }
+
+  .header-bar {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.85);
+  }
+
+  .sample-card,
+  .recent-bookings-inline,
+  .feature-card,
+  .faq-item {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .package-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.95);
+  }
+
+  .calendar-card,
+  .time-slots-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.95);
+  }
+
+  .booking-notification {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  background: rgba(255, 255, 255, 0.95);
+  }
+
+  /* Reduce box-shadow complexity on mobile */
+  .logo-item {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    transition: none;
+  }
+
+  .logo-item:hover {
+    transform: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Remove hover animations on touch devices */
+  .package-card:hover,
+  .feature-card:hover,
+  .faq-item:hover {
+    transform: none;
+  }
+
+  /* Slow animation on mobile to reduce CPU usage */
+  .logos-track {
+    animation-duration: 90s;
+  }
+}
+
+/* content-visibility: auto for below-fold sections.
+   The browser skips layout/paint for offscreen content until scrolled near. */
+.about-section,
+.sample-section,
+.features-section,
+.faq-section,
+.calendar-section,
+.footer {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
+}
+
+/* Respect user preference to reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  .logos-track {
+    animation: none;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
