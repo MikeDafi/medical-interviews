@@ -519,7 +519,7 @@ export default function Calendar() {
         </div>
 
         <div className="time-slots-card">
-          <h4>Available Times</h4>
+          <h3>Available Times</h3>
           {selectedDate ? (
             <>
               <p className="selected-date">{formatSelectedDate()}</p>
@@ -553,7 +553,7 @@ export default function Calendar() {
           {/* Session Duration Selection - Show for logged in users */}
           {selectedTime && user && (
             <div className="session-type-selection">
-              <h4>Choose Session Duration</h4>
+              <h3>Choose Session Duration</h3>
               <div className="session-type-options">
                 <button
                   className={`session-type-btn thirty-min ${selectedDuration === 30 ? 'selected' : ''} ${!canSelect30Min ? 'disabled' : ''}`}

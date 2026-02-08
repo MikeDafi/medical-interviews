@@ -96,7 +96,7 @@ export default function FAQ() {
       <div className="faq-grid" ref={scrollRef}>
         {faqs.map((faq) => (
           <div className="faq-item" key={faq.id}>
-            <h4>{faq.question}</h4>
+            <h3>{faq.question}</h3>
             <p>{faq.answer}</p>
           </div>
         ))}

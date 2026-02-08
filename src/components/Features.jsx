@@ -81,7 +81,7 @@ export default function Features() {
       <div className="features-grid" ref={scrollRef}>
         {features.map((feature) => (
           <div className="feature-card" key={feature.id}>
-            <h4>{feature.title}</h4>
+            <h3>{feature.title}</h3>
             <p>{feature.description}</p>
           </div>
         ))}

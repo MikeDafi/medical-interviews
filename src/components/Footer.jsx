@@ -18,7 +18,7 @@ export default function Footer() {
         
         <div className="footer-links">
           <div className="footer-column">
-            <h4>Services</h4>
+            <h3>Services</h3>
             <ul>
               <li><a href="#packages" onClick={(e) => scrollToSection(e, 'packages')}>Mock Interviews</a></li>
               <li><a href="#packages" onClick={(e) => scrollToSection(e, 'packages')}>MMI Prep</a></li>
@@ -28,7 +28,7 @@ export default function Footer() {
           </div>
           
           <div className="footer-column">
-            <h4>Quick Links</h4>
+            <h3>Quick Links</h3>
             <ul>
               <li><a href="#about" onClick={(e) => scrollToSection(e, 'about')}>About</a></li>
               <li><a href="#faq" onClick={(e) => scrollToSection(e, 'faq')}>FAQ</a></li>
@@ -37,7 +37,7 @@ export default function Footer() {
           </div>
           
           <div className="footer-column">
-            <h4>Contact</h4>
+            <h3>Contact</h3>
             <ul>
               <li><a href="mailto:premedical1on1@gmail.com" rel="noopener">premedical1on1@gmail.com</a></li>
               <li>Response within 24 hours</li>
@@ -45,7 +45,7 @@ export default function Footer() {
           </div>
 
           <div className="footer-column">
-            <h4>Legal</h4>
+            <h3>Legal</h3>
             <ul>
               <li><Link to="/terms">Terms of Service</Link></li>
               <li><Link to="/privacy">Privacy Policy</Link></li>
