@@ -3289,41 +3289,6 @@ img {
   color: #dc2626;
 }
 
-.progress-track {
-  margin-top: 8px;
-}
-
-.progress-labels {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.progress-labels span {
-  font-size: 12px;
-  color: var(--light-text);
-  font-family: var(--marketing-font);
-}
-
-.progress-labels span.active {
-  color: var(--primary-teal);
-  font-weight: 600;
-}
-
-.progress-bar {
-  height: 8px;
-  background: #e5e7eb;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--primary-teal), #0f766e);
-  border-radius: 4px;
-  transition: width 0.3s ease;
-}
-
 .package-status {
   display: flex;
   justify-content: space-between;
@@ -3335,29 +3300,6 @@ img {
   font-size: 16px;
   font-weight: 600;
   color: var(--dark-text);
-}
-
-.sessions-remaining {
-  text-align: right;
-}
-
-.sessions-count {
-  display: block;
-  font-family: var(--marketing-font);
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--primary-teal);
-}
-
-.sessions-label {
-  font-size: 12px;
-  color: var(--light-text);
-}
-
-.overview-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
 }
 
 .stat-card {
@@ -3378,26 +3320,6 @@ img {
 .stat-label {
   font-size: 12px;
   color: var(--light-text);
-}
-
-.book-session-btn-small {
-  display: block;
-  width: 100%;
-  margin-top: 12px;
-  padding: 10px 16px;
-  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.book-session-btn-small:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
 }
 
 .book-session-btn {
@@ -4461,31 +4383,6 @@ img {
   background: #f3f4f6;
 }
 
-.danger-zone {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  padding: 12px 16px;
-  margin-top: 24px;
-}
-
-.danger-zone h4 {
-  color: #dc2626;
-  font-size: 13px;
-  margin-bottom: 8px;
-}
-
-.danger-warning {
-  font-size: 11px;
-  color: #991b1b;
-  margin-bottom: 10px;
-  line-height: 1.4;
-}
-
-/* Concerns in Settings */
-.concerns-setting {
-  margin-top: 8px;
-}
-
 .concerns-edit-inline {
   width: 100%;
 }
@@ -4517,50 +4414,6 @@ img {
   font-size: 11px;
   color: #9ca3af;
   margin-right: auto;
-}
-
-.concerns-value {
-  max-width: 200px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sign-out-btn {
-  background: var(--primary-teal);
-  color: white;
-  border: none;
-  padding: 14px 24px;
-  border-radius: 10px;
-  font-size: 15px;
-  font-weight: 600;
-  font-family: var(--marketing-font);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  margin-top: 16px;
-  width: 100%;
-}
-
-.sign-out-btn:hover {
-  background: #239696;
-  transform: translateY(-1px);
-}
-
-.delete-account-btn {
-  background: #dc2626;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  font-family: var(--marketing-font);
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.delete-account-btn:hover {
-  background: #b91c1c;
 }
 
 /* Login Prompt Modal */

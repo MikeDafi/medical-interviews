@@ -5,7 +5,11 @@ export default defineConfig({
   plugins: [react()],
   test: {
     globals: true,
-    environment: 'jsdom',
+    // Use node environment by default, jsdom only for component tests
+    environment: 'node',
+    environmentMatchGlobs: [
+      ['**/tests/components/**', 'jsdom'],
+    ],
     setupFiles: ['./tests/component-setup.js'],
     testTimeout: 30000,
     hookTimeout: 30000,

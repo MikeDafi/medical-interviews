@@ -2,24 +2,28 @@
  * Component Test Setup
  * 
  * Configures React Testing Library and provides mocks for browser APIs
+ * Only applies browser mocks in jsdom environment
  */
 
 import '@testing-library/jest-dom';
 
-// Mock window.matchMedia (used by some components)
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: (query) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: () => {},
-    removeListener: () => {},
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    dispatchEvent: () => {},
-  }),
-});
+// Only set up browser mocks when window is available (jsdom environment)
+if (typeof window !== 'undefined') {
+  // Mock window.matchMedia (used by some components)
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => {},
+    }),
+  });
+}
 
 // Mock IntersectionObserver (used for lazy loading)
 global.IntersectionObserver = class IntersectionObserver {
