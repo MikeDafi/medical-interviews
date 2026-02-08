@@ -124,12 +124,7 @@ export default async function handler(req, res) {
       const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_CLIENT_ID;
       const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
       
-      // Debug: Check if credentials are loaded
-      console.log('Auth debug - Client ID exists:', !!GOOGLE_CLIENT_ID);
-      console.log('Auth debug - Client Secret exists:', !!GOOGLE_CLIENT_SECRET);
-      console.log('Auth debug - Client Secret value (first 10 chars):', GOOGLE_CLIENT_SECRET?.substring(0, 10));
-      console.log('Auth debug - All env keys:', Object.keys(process.env).filter(k => k.includes('GOOGLE') || k.includes('SECRET')));
-      console.log('Auth debug - Redirect URI:', getRedirectUri(req));
+      // SECURITY: Removed debug logs that exposed sensitive data
 
       // Exchange code for tokens
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {

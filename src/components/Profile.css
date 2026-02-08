@@ -1580,6 +1580,14 @@
   border-color: var(--primary-teal);
 }
 
+.char-count {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: right;
+  display: block;
+  margin-top: 2px;
+}
+
 .phone-error {
   color: #dc2626;
   font-size: 12px;

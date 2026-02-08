@@ -4,6 +4,7 @@ import '../_lib/env.js';
 import { sql } from '@vercel/postgres';
 import { rateLimit } from '../_lib/auth.js';
 import { requireAuth } from '../_lib/session.js';
+import { sanitizeString, sanitizePhone, sanitizeUrl } from '../_lib/sanitize.js';
 
 export default async function handler(req, res) {
   // SECURITY: Rate limiting
@@ -68,13 +69,13 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
-      // SECURITY: Validate URL
-      try {
-        const parsed = new URL(url);
-        if (!['http:', 'https:'].includes(parsed.protocol)) {
-          return res.status(400).json({ error: 'Invalid URL protocol' });
-        }
-      } catch {
+      // SECURITY: Sanitize all inputs
+      const cleanTitle = sanitizeString(title, 200);
+      const cleanUrl = sanitizeUrl(url);
+      const cleanDescription = sanitizeString(description, 500);
+      const cleanType = sanitizeString(type, 50) || 'article';
+
+      if (!cleanUrl) {
         return res.status(400).json({ error: 'Invalid URL' });
       }
 
@@ -83,10 +84,10 @@ export default async function handler(req, res) {
           UPDATE users 
           SET resources = COALESCE(resources, '[]'::jsonb) || ${JSON.stringify({
             id: Date.now(),
-            title: String(title).slice(0, 200),
-            url: String(url).slice(0, 500),
-            description: String(description || '').slice(0, 500),
-            resource_type: String(type || 'article').slice(0, 50),
+            title: cleanTitle,
+            url: cleanUrl,
+            description: cleanDescription,
+            resource_type: cleanType,
             added_by_admin: true,
             created_at: new Date().toISOString()
           })}::jsonb
@@ -207,12 +208,16 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'userId required' });
     }
 
+    // SECURITY: Sanitize inputs
+    const cleanName = sanitizeString(name, 100);
+    const cleanPhone = sanitizePhone(phone);
+
     try {
       // Update name and phone (preserve existing if not provided)
       await sql`
         UPDATE users 
-        SET name = CASE WHEN ${name || ''} = '' THEN name ELSE ${String(name || '').slice(0, 100)} END,
-            phone = ${String(phone || '').slice(0, 20)},
+        SET name = CASE WHEN ${cleanName} = '' THEN name ELSE ${cleanName} END,
+            phone = ${cleanPhone},
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ${parseInt(userId)}
       `;

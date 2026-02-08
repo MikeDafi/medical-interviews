@@ -1656,6 +1656,14 @@ img {
   padding: 28px;
 }
 
+.time-slots-card h3 {
+  font-family: var(--marketing-font);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--dark-text);
+  margin-bottom: 16px;
+}
+
 .time-slots-card h4 {
   font-family: var(--marketing-font);
   font-size: 18px;

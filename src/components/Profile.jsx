@@ -326,6 +326,21 @@ export default function Profile({ onClose }) {
     }
   }
 
+  const saveProfileUpdate = async (updates) => {
+    try {
+      const response = await fetch('/api/profile/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(updates)
+      })
+      return response.ok
+    } catch (error) {
+      console.error('Failed to save profile update:', error)
+      return false
+    }
+  }
+
   // Coach-provided resources are stored in the user's resources array with added_by_admin: true
   // They will be populated by the admin when they add resources for this user
   const coachResources = resources.filter(r => r.added_by_admin === true)
@@ -651,10 +666,12 @@ export default function Profile({ onClose }) {
                         <input
                           type="text"
                           value={newName}
-                          onChange={(e) => setNewName(e.target.value)}
+                          onChange={(e) => setNewName(e.target.value.slice(0, 50))}
                           placeholder="Enter your name"
                           className="edit-name-input"
+                          maxLength={50}
                         />
+                        <span className="char-count">{newName.length}/50</span>
                         <div className="edit-name-actions">
                           <button className="save-name-btn" onClick={handleSaveName}>Save</button>
                           <button className="cancel-name-btn" onClick={() => { setEditingName(false); setNewName(user.name || '') }}>Cancel</button>
@@ -791,10 +808,10 @@ export default function Profile({ onClose }) {
                       {profileData?.target_schools?.length > 0 ? (
                         <div className="schools-list compact">
                           {profileData.target_schools.map((school, index) => (
-                            <div className="school-card compact" key={school.school_name || `school-${index}`}>
+                            <div className="school-card compact" key={school.name || school.school_name || `school-${index}`}>
                               <div className="school-info">
-                                <span className="school-name">{school.school_name}</span>
-                                <span className="school-type">{school.interview_type}</span>
+                                <span className="school-name">{school.name || school.school_name}</span>
+                                <span className="school-type">{school.interviewType || school.interview_type}</span>
                               </div>
                               <button 
                                 type="button"

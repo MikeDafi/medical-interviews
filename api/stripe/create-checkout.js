@@ -153,13 +153,11 @@ export default async function handler(req, res) {
   // SECURITY: Require authenticated session for purchases
   console.log('Checking auth...');
   const { authenticated, user: sessionUser, error: authError } = await requireAuth(req);
-  console.log('Auth result:', { authenticated, authError, hasUser: !!sessionUser });
-  
   if (!authenticated) {
     return res.status(401).json({ error: authError || 'Please sign in to purchase' });
   }
 
-  console.log('STRIPE_SECRET_KEY exists:', !!process.env.STRIPE_SECRET_KEY);
+  // SECURITY: Removed debug logs
   if (!process.env.STRIPE_SECRET_KEY) {
     return res.status(500).json({ error: 'Payment not configured' });
   }
