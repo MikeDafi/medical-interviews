@@ -1999,6 +1999,16 @@ img {
   text-decoration: underline;
 }
 
+.booking-result .booking-confirmation-details .booking-meet-row {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.booking-result .booking-confirmation-details .booking-meet-row a {
+  color: #1a73e8;
+  text-decoration: underline;
+}
+
 .event-link {
   display: inline-block;
   color: var(--primary-teal);

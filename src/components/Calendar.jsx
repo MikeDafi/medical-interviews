@@ -309,11 +309,12 @@ export default function Calendar() {
         const confirmedTimeLabel = `${selectedSlot?.localTime || selectedTime} (${formatTimezone(userTimezone)})`
         setBookingResult({
           success: true,
-          message: '✅ Booking confirmed! Check your email for the Google Meet link.',
+          message: '✅ Booking confirmed! Your Google Meet link is below, and is also in your confirmation email and your Profile.',
           details: {
             date: confirmedDateLabel,
             time: confirmedTimeLabel,
             coach: COACH_NAME,
+            meetLink: data.booking?.meet_link || null,
             cancelNote: 'Free cancellation up to 1 day before your appointment.'
           }
         })
@@ -652,6 +653,11 @@ export default function Calendar() {
                   <p><strong>Date:</strong> {bookingResult.details.date}</p>
                   <p><strong>Time:</strong> {bookingResult.details.time}</p>
                   <p><strong>Interviewing with:</strong> {bookingResult.details.coach}</p>
+                  {bookingResult.details.meetLink && (
+                    <p className="booking-meet-row">
+                      🎥 <a href={bookingResult.details.meetLink} target="_blank" rel="noopener noreferrer"><strong>Join Google Meet</strong></a>
+                    </p>
+                  )}
                   <p className="booking-cancel-note">{bookingResult.details.cancelNote}</p>
                   <p className="booking-profile-prompt">
                     📝 Next step: update your <a href="#" onClick={(e) => { e.preventDefault(); document.querySelector('.user-avatar-btn')?.click() }}>Profile</a> with your <strong>Main Concerns</strong>, <strong>Target Schools</strong>, and <strong>Background Info About Yourself</strong> so Ashley can tailor your session.

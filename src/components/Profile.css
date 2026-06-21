@@ -421,8 +421,11 @@
 }
 
 .cancel-booking-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.65;
   cursor: not-allowed;
+  background: #f3f4f6;
+  color: #9ca3af;
+  border-color: #e5e7eb;
 }
 
 .cannot-cancel-notice {

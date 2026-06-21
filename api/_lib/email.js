@@ -5,9 +5,10 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const ADMIN_EMAIL = 'premedical1on1@gmail.com';
 // On Resend free tier, must use onboarding@resend.dev or a verified domain
 const FROM_EMAIL = process.env.FROM_EMAIL || 'PreMedical 1-on-1 <onboarding@resend.dev>';
-const SITE_URL = process.env.VERCEL_URL 
-  ? `https://${process.env.VERCEL_URL}` 
-  : process.env.SITE_URL || 'http://localhost:5173';
+// Use an explicit SITE_URL, else the project's production domain (NOT VERCEL_URL, which is the
+// per-deployment URL and is also behind deployment protection). Falls back to localhost for dev.
+const SITE_URL = process.env.SITE_URL
+  || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:5173');
 
 /**
  * Send an email using Resend API
