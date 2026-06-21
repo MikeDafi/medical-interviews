@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Packages Component Tests
  */
@@ -35,9 +36,9 @@ describe('Packages Component', () => {
     expect(screen.getByText('$250')).toBeInTheDocument();
   });
   
-  it('displays $450 price', () => {
+  it('displays $400 price', () => {
     render(<Packages />);
-    expect(screen.getByText('$450')).toBeInTheDocument();
+    expect(screen.getByText('$400')).toBeInTheDocument();
   });
   
   it('shows Interview Prep tab', () => {

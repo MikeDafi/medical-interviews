@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Profile Component Tests
  */

@@ -5,11 +5,9 @@ export default defineConfig({
   plugins: [react()],
   test: {
     globals: true,
-    // Use node environment by default, jsdom only for component tests
+    // Default to node; component tests opt into jsdom via a
+    // `// @vitest-environment jsdom` docblock (environmentMatchGlobs was removed in Vitest 4).
     environment: 'node',
-    environmentMatchGlobs: [
-      ['**/tests/components/**', 'jsdom'],
-    ],
     setupFiles: ['./tests/component-setup.js'],
     testTimeout: 30000,
     hookTimeout: 30000,

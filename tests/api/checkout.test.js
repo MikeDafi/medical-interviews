@@ -7,12 +7,11 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import crypto from 'crypto';
-import { 
+import {
   BASE_URL, 
   authFetch, 
   resetUserPurchases, 
-  getTestUser,
-  testUserId 
+  getTestUser
 } from '../setup.js';
 
 // Get webhook secret from env

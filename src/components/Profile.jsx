@@ -1,10 +1,30 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { calculateSessionCredits, formatDate } from '../utils'
+import { parseTimeLabel, zonedWallClockToUtc, formatTimeLabel, friendlyZoneName, isValidTimeZone } from '../../lib/timezone.js'
 import './Profile.css'
 
 // Constants
 const DELETE_CONFIRMATION_TEXT = 'DELETE'
+
+// Business timezone the slot times are stored in (matches the server's BUSINESS_TIMEZONE).
+const BUSINESS_TZ = 'America/Chicago'
+
+// Format a booking's stored time (business wall-clock) into the customer's timezone with a label,
+// e.g. "10:00 AM Pacific Time". Falls back to the raw time if anything is missing.
+function formatBookingTime(booking) {
+  if (!booking?.time) return ''
+  try {
+    const tz = isValidTimeZone(booking.timezone) ? booking.timezone : BUSINESS_TZ
+    const { hour24, minute } = parseTimeLabel(booking.time)
+    const [year, month, day] = (booking.date || '').split('-').map(Number)
+    if (!year || !month || !day) return `${booking.time} ${friendlyZoneName(tz)}`
+    const instant = zonedWallClockToUtc({ year, month, day, hour: hour24, minute }, BUSINESS_TZ)
+    return `${formatTimeLabel(instant, tz)} ${friendlyZoneName(tz, instant)}`
+  } catch {
+    return booking.time
+  }
+}
 
 // Package name mapping
 const PACKAGE_NAMES = {
@@ -534,7 +554,7 @@ export default function Profile({ onClose }) {
                               <span className="booking-date-num">{bookingDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                             </div>
                             <div className="upcoming-booking-details">
-                              <span className="booking-time-display">{booking.time}</span>
+                              <span className="booking-time-display">{formatBookingTime(booking)}</span>
                               <span className="booking-duration-display">{booking.duration} min</span>
                               {booking.meet_link && (
                                 <a href={booking.meet_link} target="_blank" rel="noopener noreferrer" className="booking-meet-link">
@@ -609,7 +629,7 @@ export default function Profile({ onClose }) {
                             {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </div>
                           <div className="past-session-info">
-                            <span className="past-session-time">{session.time}</span>
+                            <span className="past-session-time">{formatBookingTime(session)}</span>
                             <span className="past-session-duration">{session.duration} min</span>
                           </div>
                         </div>
@@ -834,7 +854,7 @@ export default function Profile({ onClose }) {
                     className="collapsible-header"
                     onClick={() => setExpandedSections(prev => ({ ...prev, resources: !prev.resources }))}
                   >
-                    <span>Resources ({(resources.filter(r => !r.added_by_admin).length || 0) + (coachResources.length || 0)})</span>
+                    <span>Background Info About Yourself ({(resources.filter(r => !r.added_by_admin).length || 0) + (coachResources.length || 0)})</span>
                     <span className={`collapsible-arrow ${expandedSections.resources ? 'expanded' : ''}`}>▸</span>
                   </button>
                   {expandedSections.resources && (

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Calendar Component Tests
  */
@@ -10,9 +11,13 @@ vi.mock('../../src/context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'test-123', email: 'test@example.com', name: 'Test User' } })
 }));
 
-vi.mock('../../src/utils', () => ({
-  calculateSessionCredits: vi.fn(() => ({ thirtyMin: 1, sixtyMin: 2, total: 3 }))
-}));
+vi.mock('../../src/utils', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    calculateSessionCredits: vi.fn(() => ({ thirtyMin: 1, sixtyMin: 2, total: 3 })),
+  };
+});
 
 describe('Calendar Component', () => {
   beforeEach(() => {

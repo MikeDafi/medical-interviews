@@ -5,7 +5,24 @@ import { sql } from '@vercel/postgres';
 import { google } from 'googleapis';
 import { rateLimit } from '../_lib/auth.js';
 import { requireAuth } from '../_lib/session.js';
-import { sendCustomerBookingEmail, sendAdminBookingEmail } from '../_lib/email.js';
+import { sendCustomerBookingEmail, sendAdminBookingEmail, sendCustomerCancellationEmail, sendAdminCancellationEmail } from '../_lib/email.js';
+import { getPackageName } from '../../lib/packages.js';
+import { isOwnerUnavailableResponse } from '../../lib/calendar.js';
+import { formatSlotLabel, slotsForBooking } from '../../lib/slots.js';
+import {
+  zonedWallClockToUtc,
+  parseTimeLabel,
+  formatTimeLabel,
+  formatDateKey,
+  friendlyZoneName,
+  isValidTimeZone,
+} from '../../lib/timezone.js';
+
+// Business timezone — the admin's stable working zone. Configured explicitly via env (NOT read
+// from Google Calendar, whose timezone can drift if it auto-updates to the admin's location).
+// Used internally for availability/slot math, all-day event bounding, and the admin email only;
+// it is never sent to Google when creating an event.
+const BUSINESS_TIMEZONE = process.env.BUSINESS_TIMEZONE?.trim() || 'America/Chicago';
 
 // Calendar where bookings are created
 const BOOKINGS_CALENDAR_ID = process.env.GOOGLE_BOOKINGS_CALENDAR_ID?.trim();
@@ -34,7 +51,7 @@ const BUSINESS_HOURS = {
     end: 15,    // 3 PM CDT
   },
   slotDuration: 30, // minutes
-  timezone: 'America/Chicago'
+  timezone: BUSINESS_TIMEZONE
 };
 
 // Days of week that are available (0=Sunday, 6=Saturday)
@@ -62,11 +79,6 @@ function getCacheAge() {
 function getCachedAvailability(dateStr) {
   if (!isCacheValid()) return null;
   return batchCache.data.get(dateStr) || { availableSlots: [], timezone: BUSINESS_HOURS.timezone };
-}
-
-function setCachedAvailability(dateStr, data) {
-  if (!batchCache.data) batchCache.data = new Map();
-  batchCache.data.set(dateStr, data);
 }
 
 // Get authenticated Google Calendar client
@@ -111,65 +123,19 @@ function isFreeOverrideEvent(title) {
   return FREE_OVERRIDE_PATTERNS.some(pattern => pattern.test(title.trim()));
 }
 
-// Query Events API to get busy times and free override periods
-// Returns { busyPeriods: [], freeOverrides: [] }
-async function getBusyTimes(calendar, date) {
-  if (CALENDAR_IDS.length === 0) {
-    console.warn('No calendar IDs configured - returning empty busy times');
-    return { busyPeriods: [], freeOverrides: [] };
+// Resolve an event's start/end bound to an absolute ISO instant string.
+// - Timed events carry an explicit offset in `dateTime` (already an absolute instant).
+// - All-day events only have a bare `date` (YYYY-MM-DD). Per business rule these are anchored to
+//   midnight in BUSINESS_TIMEZONE (Chicago). Google's all-day `end.date` is exclusive, which this
+//   preserves, so the busy/free block covers exactly the intended local day(s).
+function resolveEventBound(bound) {
+  if (!bound) return null;
+  if (bound.dateTime) return bound.dateTime;
+  if (bound.date) {
+    const [year, month, day] = bound.date.split('-').map(Number);
+    return zonedWallClockToUtc({ year, month, day }, BUSINESS_TIMEZONE).toISOString();
   }
-
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-  
-  const endOfDay = new Date(date);
-  endOfDay.setHours(23, 59, 59, 999);
-
-  const allBusyPeriods = [];
-  const freeOverrides = [];
-
-  // Query each calendar for events
-  for (const calendarId of CALENDAR_IDS) {
-    try {
-      const response = await calendar.events.list({
-        calendarId,
-        timeMin: startOfDay.toISOString(),
-        timeMax: endOfDay.toISOString(),
-        singleEvents: true, // Expand recurring events
-        orderBy: 'startTime'
-      });
-
-      const events = response.data.items || [];
-
-      for (const event of events) {
-        // Get event start/end times
-        const start = event.start?.dateTime || event.start?.date;
-        const end = event.end?.dateTime || event.end?.date;
-
-        if (!start || !end) continue;
-
-        // Check if this is a "free override" event - "Ash is free" marks time as AVAILABLE
-        if (isFreeOverrideEvent(event.summary)) {
-          freeOverrides.push({ start, end, title: event.summary });
-          continue;
-        }
-
-        // Skip events marked as "free" or "transparent"
-        if (event.transparency === 'transparent') continue;
-
-        // Skip ignored events (like "Week #")
-        if (shouldIgnoreEvent(event.summary)) continue;
-
-        // This is a busy period
-        allBusyPeriods.push({ start, end });
-      }
-    } catch (error) {
-      console.warn(`Error querying calendar ${calendarId}:`, error.message);
-      // Continue with other calendars
-    }
-  }
-
-  return { busyPeriods: allBusyPeriods, freeOverrides };
+  return null;
 }
 
 // Generate available 30-min slots for a date, excluding busy times
@@ -195,10 +161,13 @@ function generateAvailableSlots(date, busyPeriods, freeOverrides = []) {
       // Don't start a session in the last 30 mins before closing
       if (hour === hours.end - 1 && minute >= 30) continue;
 
-      // Create slot time in Chicago timezone (CST = -06:00, CDT = -05:00)
-      // Using -06:00 for winter (January)
-      const slotTimeStr = `${dateStr}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00-06:00`;
-      const slotStart = new Date(slotTimeStr);
+      // Resolve the slot's absolute instant from the business wall-clock, DST-aware (correct
+      // year-round). Busy/free events are absolute instants, so this comparison is now accurate.
+      const [slotYear, slotMonth, slotDay] = dateStr.split('-').map(Number);
+      const slotStart = zonedWallClockToUtc(
+        { year: slotYear, month: slotMonth, day: slotDay, hour, minute },
+        BUSINESS_TIMEZONE
+      );
       const slotEnd = new Date(slotStart.getTime() + BUSINESS_HOURS.slotDuration * 60 * 1000);
 
       // FIRST: Check if this slot falls within a "free override" period ("Ash is free")
@@ -212,10 +181,7 @@ function generateAvailableSlots(date, busyPeriods, freeOverrides = []) {
 
       if (hasFreeOverride) {
         // "Ash is free" overrides all busy times - slot is available
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        const ampm = hour >= 12 ? 'PM' : 'AM';
-        const timeStr = `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}`;
-        slots.push(timeStr);
+        slots.push(formatSlotLabel(hour, minute));
         continue;
       }
 
@@ -229,10 +195,7 @@ function generateAvailableSlots(date, busyPeriods, freeOverrides = []) {
 
       if (!isBusy) {
         // Format time for display (e.g., "9:00 AM", "2:30 PM")
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        const ampm = hour >= 12 ? 'PM' : 'AM';
-        const timeStr = `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}`;
-        slots.push(timeStr);
+        slots.push(formatSlotLabel(hour, minute));
       }
     }
   }
@@ -279,8 +242,8 @@ async function batchPreloadAvailability() {
         const events = response.data.items || [];
 
         for (const event of events) {
-          const start = event.start?.dateTime || event.start?.date;
-          const end = event.end?.dateTime || event.end?.date;
+          const start = resolveEventBound(event.start);
+          const end = resolveEventBound(event.end);
           if (!start || !end) continue;
 
           // Check for "Ash is free" - this OVERRIDES busy times
@@ -291,6 +254,8 @@ async function batchPreloadAvailability() {
 
           // Skip transparent/free events
           if (event.transparency === 'transparent') continue;
+          // Skip events the owner declined or only tentatively accepted - they don't block
+          if (isOwnerUnavailableResponse(event)) continue;
           // Skip ignored patterns (Week #)
           if (shouldIgnoreEvent(event.summary)) continue;
 
@@ -614,7 +579,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: authError || 'Authentication required to book' });
     }
 
-    const { date, time, duration } = req.body;
+    const { date, time, duration, timezone: requestedTimezone } = req.body;
 
     if (!date || !time || !duration) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -624,6 +589,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid duration (must be 30 or 60 minutes)' });
     }
 
+    // Customer's timezone (from the client) drives the Google event declaration + customer email.
+    // Validate before trusting it; fall back to the business zone.
+    const customerTimezone = isValidTimeZone(requestedTimezone) ? requestedTimezone : BUSINESS_TIMEZONE;
+
     // SECURITY: Use verified session data, not client-provided data
     const userId = sessionUser.googleId;
     const userEmail = sessionUser.email;
@@ -631,8 +600,7 @@ export default async function handler(req, res) {
 
     // SECURITY: Reject same-day and past bookings
     // Use business timezone for consistent date comparison
-    const businessTimezone = process.env.BUSINESS_TIMEZONE || 'America/Chicago';
-    const todayInBusiness = new Date().toLocaleDateString('en-CA', { timeZone: businessTimezone }); // YYYY-MM-DD format
+    const todayInBusiness = formatDateKey(new Date(), BUSINESS_TIMEZONE); // YYYY-MM-DD format
     const bookingDateStr = date; // Already in YYYY-MM-DD format
     
     if (bookingDateStr === todayInBusiness) {
@@ -665,6 +633,18 @@ export default async function handler(req, res) {
     if (!cachedDay || !cachedDay.availableSlots?.includes(time)) {
       return res.status(409).json({
         error: 'Sorry, this time slot is no longer available. Please select another time.',
+        code: 'SLOT_UNAVAILABLE'
+      });
+    }
+
+    // For multi-slot sessions (e.g. 60-min = two 30-min slots), every occupied slot must be free.
+    // The client gates this via canBookHour, but re-validate server-side to prevent a race or a
+    // crafted request from booking a session that overruns into a busy/already-booked period.
+    const requiredSlots = slotsForBooking(time, duration);
+    const allSlotsAvailable = requiredSlots.every(slot => cachedDay.availableSlots.includes(slot));
+    if (!allSlotsAvailable) {
+      return res.status(409).json({
+        error: `Sorry, there isn't a full ${duration}-minute opening at this time. Please select another time.`,
         code: 'SLOT_UNAVAILABLE'
       });
     }
@@ -706,7 +686,17 @@ export default async function handler(req, res) {
 
       // Static Google Meet link for all sessions
       const meetLink = process.env.GOOGLE_MEET_LINK || 'https://meet.google.com/yrr-qxiw-hjh';
-      
+
+      // Canonical absolute instant for this booking: the slot's business wall-clock interpreted in
+      // BUSINESS_TIMEZONE (DST-aware). Single source of truth for the calendar event and both emails.
+      const { hour24, minute } = parseTimeLabel(time);
+      const [bookingYear, bookingMonth, bookingDay] = date.split('-').map(Number);
+      const bookingStartInstant = zonedWallClockToUtc(
+        { year: bookingYear, month: bookingMonth, day: bookingDay, hour: hour24, minute },
+        BUSINESS_TIMEZONE
+      );
+      const bookingEndInstant = new Date(bookingStartInstant.getTime() + duration * 60 * 1000);
+
       // Create booking in Google Calendar if configured
       let eventLink = null;
       let calendarEventId = null;
@@ -716,64 +706,53 @@ export default async function handler(req, res) {
       });
       
       if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY && BOOKINGS_CALENDAR_ID) {
-        try {
-          const calendar = getCalendarClient();
-          
-          // Parse time and create event
-          const [timePart, ampm] = time.split(' ');
-          const [hours, minutes] = timePart.split(':').map(Number);
-          let hour24 = hours;
-          if (ampm === 'PM' && hours !== 12) hour24 += 12;
-          if (ampm === 'AM' && hours === 12) hour24 = 0;
+        // Declare the event in the CUSTOMER's timezone via an absolute instant. Google stores the
+        // instant and auto-converts on display, so the admin sees it in their own calendar zone
+        // without us looking up (or depending on) the admin/calendar timezone.
+        const startDateTime = bookingStartInstant.toISOString();
+        const endDateTime = bookingEndInstant.toISOString();
+        const sessionLabel = duration === 30 ? '30-min Session' : '1-hour Session';
+        const eventBody = {
+          summary: `${sessionLabel} - ${userName || userEmail}`,
+          description: `PreMedical 1-on-1 Interview Coaching Session\n\nClient: ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes\n\n🎥 Google Meet: ${meetLink}`,
+          location: meetLink,
+          start: { dateTime: startDateTime, timeZone: customerTimezone },
+          end: { dateTime: endDateTime, timeZone: customerTimezone },
+          reminders: {
+            useDefault: false,
+            overrides: [
+              { method: 'email', minutes: 24 * 60 },
+              { method: 'popup', minutes: 30 }
+            ]
+          }
+        };
 
-          // Create datetime strings in local format (NOT UTC) - Google Calendar will handle timezone
-          const startTimeStr = `${date}T${hour24.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}:00`;
-          const endHour = hour24 + Math.floor(duration / 60);
-          const endMinutes = (minutes || 0) + (duration % 60);
-          const endTimeStr = `${date}T${(endHour + Math.floor(endMinutes / 60)).toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}:00`;
+        console.log('Creating calendar event:', {
+          calendarId: BOOKINGS_CALENDAR_ID, date, time, duration, startDateTime, endDateTime, timeZone: customerTimezone
+        });
 
-          console.log('Creating calendar event:', {
-            calendarId: BOOKINGS_CALENDAR_ID,
-            date,
-            time,
-            duration,
-            startTimeStr,
-            endTimeStr,
-            timezone: BUSINESS_HOURS.timezone
-          });
-
-          const sessionLabel = duration === 30 ? '30-min Session' : '1-hour Session';
-          const event = await calendar.events.insert({
-            calendarId: BOOKINGS_CALENDAR_ID,
-            requestBody: {
-              summary: `${sessionLabel} - ${userName || userEmail}`,
-              description: `PreMedical 1-on-1 Interview Coaching Session\n\nClient: ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes\n\n🎥 Google Meet: ${meetLink}`,
-              location: meetLink,
-              start: {
-                dateTime: startTimeStr,  // Pass local time, let Google handle timezone
-                timeZone: BUSINESS_HOURS.timezone
-              },
-              end: {
-                dateTime: endTimeStr,
-                timeZone: BUSINESS_HOURS.timezone
-              },
-              reminders: {
-                useDefault: false,
-                overrides: [
-                  { method: 'email', minutes: 24 * 60 },
-                  { method: 'popup', minutes: 30 }
-                ]
-              }
+        // Retry a few times so a transient Google API error (5xx / rate limit / network) doesn't
+        // silently drop the calendar event while the booking still saves.
+        const maxAttempts = 3;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          try {
+            const calendar = getCalendarClient();
+            const event = await calendar.events.insert({ calendarId: BOOKINGS_CALENDAR_ID, requestBody: eventBody });
+            eventLink = event.data.htmlLink;
+            calendarEventId = event.data.id;
+            console.log('Calendar event created successfully:', { eventId: calendarEventId, attempt });
+            break;
+          } catch (calError) {
+            console.error(`Google Calendar event creation error (attempt ${attempt}/${maxAttempts}):`, calError.message);
+            console.error('Full calendar error:', calError.response?.data || calError.stack);
+            if (attempt < maxAttempts) {
+              await new Promise(r => setTimeout(r, 500 * attempt));
             }
-          });
+          }
+        }
 
-          eventLink = event.data.htmlLink;
-          calendarEventId = event.data.id;
-          console.log('Calendar event created successfully:', { eventId: calendarEventId, eventLink });
-        } catch (calError) {
-          console.error('Google Calendar event creation error:', calError.message);
-          console.error('Full calendar error:', calError.response?.data || calError.stack);
-          // Continue with booking even if calendar event fails
+        if (!calendarEventId) {
+          console.error('Calendar event NOT created after retries for booking:', { date, time, duration, userEmail });
         }
       } else {
         console.log('Skipping calendar event - missing config');
@@ -789,7 +768,8 @@ export default async function handler(req, res) {
         booked_at: new Date().toISOString(),
         calendar_event_link: eventLink,
         calendar_event_id: calendarEventId,
-        meet_link: meetLink
+        meet_link: meetLink,
+        timezone: customerTimezone
       };
 
       // Update the package
@@ -803,27 +783,31 @@ export default async function handler(req, res) {
       `;
 
       // Send confirmation emails (fire and forget - errors logged but don't affect booking)
+      // Customer email: render the time/date in the customer's own timezone.
       sendCustomerBookingEmail({
         customerEmail: userEmail,
         customerName: userName,
-        date,
-        time,
+        date: formatDateKey(bookingStartInstant, customerTimezone),
+        time: formatTimeLabel(bookingStartInstant, customerTimezone),
         duration,
         eventLink,
         meetLink,
-        timezone: 'Central Time'
+        timezone: friendlyZoneName(customerTimezone, bookingStartInstant)
       }).catch(err => console.error('Customer email error:', err));
       
+      // Admin email: render in the business timezone (plain HTML can't auto-convert like the
+      // Google Calendar event does). The calendar event itself shows the admin their local time.
       sendAdminBookingEmail({
         customerEmail: userEmail,
         customerName: userName,
         customerId: user.id,
-        date,
-        time,
+        date: formatDateKey(bookingStartInstant, BUSINESS_TIMEZONE),
+        time: formatTimeLabel(bookingStartInstant, BUSINESS_TIMEZONE),
         duration,
         eventLink,
         meetLink,
-        userProfile
+        userProfile,
+        timezone: friendlyZoneName(BUSINESS_TIMEZONE, bookingStartInstant)
       }).catch(err => console.error('Admin email error:', err));
 
       // Invalidate cache so next user sees updated availability
@@ -858,8 +842,7 @@ export default async function handler(req, res) {
     }
 
     // Validate cancellation is at least 1 day before
-    const businessTimezone = process.env.BUSINESS_TIMEZONE || 'America/Chicago';
-    const todayInBusiness = new Date().toLocaleDateString('en-CA', { timeZone: businessTimezone });
+    const todayInBusiness = formatDateKey(new Date(), BUSINESS_TIMEZONE);
     const bookingDateStr = date;
 
     const bookingDate = new Date(bookingDateStr + 'T00:00:00');
@@ -909,8 +892,7 @@ export default async function handler(req, res) {
       // Try to delete the Google Calendar event if we have the ID
       if (booking.calendar_event_id && BOOKINGS_CALENDAR_ID) {
         try {
-          const auth = await getGoogleAuth();
-          const calendar = google.calendar({ version: 'v3', auth });
+          const calendar = getCalendarClient();
           await calendar.events.delete({
             calendarId: BOOKINGS_CALENDAR_ID,
             eventId: booking.calendar_event_id,
@@ -926,6 +908,56 @@ export default async function handler(req, res) {
       await sql`
         UPDATE users SET purchases = ${JSON.stringify(purchases)}::jsonb WHERE id = ${user.id}
       `;
+
+      // Send cancellation emails to customer + admin (fire and forget). Render the time in the
+      // customer's original booking timezone for them, and in BUSINESS_TIMEZONE for the admin.
+      const customerEmail = sessionUser.email;
+      const customerName = sessionUser.name;
+      const customerTz = booking.timezone || BUSINESS_TIMEZONE;
+
+      let custDate = booking.date;
+      let custTime = booking.time;
+      let custTzLabel = friendlyZoneName(customerTz);
+      let adminDate = booking.date;
+      let adminTime = booking.time;
+      let adminTzLabel = friendlyZoneName(BUSINESS_TIMEZONE);
+      try {
+        const { hour24, minute } = parseTimeLabel(booking.time);
+        const [cy, cm, cd] = booking.date.split('-').map(Number);
+        const startInstant = zonedWallClockToUtc(
+          { year: cy, month: cm, day: cd, hour: hour24, minute },
+          BUSINESS_TIMEZONE
+        );
+        custDate = formatDateKey(startInstant, customerTz);
+        custTime = formatTimeLabel(startInstant, customerTz);
+        custTzLabel = friendlyZoneName(customerTz, startInstant);
+        adminDate = formatDateKey(startInstant, BUSINESS_TIMEZONE);
+        adminTime = formatTimeLabel(startInstant, BUSINESS_TIMEZONE);
+        adminTzLabel = friendlyZoneName(BUSINESS_TIMEZONE, startInstant);
+      } catch (formatErr) {
+        console.warn('Cancellation email time formatting fallback:', formatErr.message);
+      }
+
+      if (customerEmail) {
+        sendCustomerCancellationEmail({
+          customerEmail,
+          customerName,
+          date: custDate,
+          time: custTime,
+          duration: booking.duration,
+          timezone: custTzLabel
+        }).catch(err => console.error('Customer cancellation email error:', err));
+      }
+
+      sendAdminCancellationEmail({
+        customerEmail,
+        customerName,
+        customerId: user.id,
+        date: adminDate,
+        time: adminTime,
+        duration: booking.duration,
+        timezone: adminTzLabel
+      }).catch(err => console.error('Admin cancellation email error:', err));
 
       // Invalidate cache so next user sees updated availability
       console.log('Cancellation successful - invalidating availability cache');

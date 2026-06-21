@@ -1,8 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { calculateSessionCredits } from '../utils'
+import { parseTimeLabel, zonedWallClockToUtc, formatTimeLabel } from '../../lib/timezone.js'
+import { slotsForBooking } from '../../lib/slots.js'
 import RecentBookings from './RecentBookings'
 import Login from './Login'
+
+// Interview coach the sessions are booked with (shown in the booking confirmation).
+const COACH_NAME = 'Ashley Kumar'
 
 export default function Calendar() {
   const { user } = useAuth()
@@ -25,6 +30,10 @@ export default function Calendar() {
   const sectionRef = useRef(null)
   const hoverTimerRef = useRef(null)
   const hasPreloadedOnHover = useRef(false)
+  // Slots this user has booked this session (dateStr -> [slot label]). Kept in a ref so the
+  // filter below is always current and survives async refresh/preload callbacks. Guarantees a
+  // just-booked slot is never shown again even if the server briefly still returns it.
+  const bookedSlotsRef = useRef({})
   
   // Get user's timezone
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -165,35 +174,27 @@ export default function Calendar() {
     }
   }
 
-  // Convert time from business timezone to user's local timezone
+  // Convert a slot's business-timezone wall-clock string to the visitor's local time.
+  // DST-aware: the slot is interpreted in the business zone, resolved to an absolute instant,
+  // then formatted in the visitor's timezone.
   const convertToLocalTime = (timeStr, dateStr, fromTimezone) => {
-    const [timePart, ampm] = timeStr.split(' ')
-    const [hours, minutes] = timePart.split(':').map(Number)
-    let hour24 = hours
-    if (ampm === 'PM' && hours !== 12) hour24 += 12
-    if (ampm === 'AM' && hours === 12) hour24 = 0
-
-    // Create a date string in the business timezone
-    const dateTimeStr = `${dateStr}T${hour24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`
-    
-    // Parse as business timezone and convert to local
-    const businessDate = new Date(dateTimeStr)
-    
-    // Get the offset difference between business and local timezone
-    const localTime = businessDate.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: userTimezone
-    })
-    
-    return localTime
+    const { hour24, minute } = parseTimeLabel(timeStr)
+    const [year, month, day] = dateStr.split('-').map(Number)
+    const instant = zonedWallClockToUtc(
+      { year, month, day, hour: hour24, minute },
+      fromTimezone
+    )
+    return formatTimeLabel(instant, userTimezone)
   }
 
   // Process slots data into display format
   const processSlotsData = (slotsData, dateStr, tz) => {
-    return slotsData.map(time => {
-      const canBookHour = canBookHourSession(time, slotsData)
+    // Hide any slot this user already booked this session (across all render paths: cached,
+    // force-refresh, preload), so a propagation-laggy server response can never resurrect it.
+    const booked = bookedSlotsRef.current[dateStr] || []
+    const visibleSlots = booked.length ? slotsData.filter(time => !booked.includes(time)) : slotsData
+    return visibleSlots.map(time => {
+      const canBookHour = canBookHourSession(time, visibleSlots)
       const localTime = convertToLocalTime(time, dateStr, tz)
       return { time, localTime, canBookHour }
     })
@@ -251,33 +252,6 @@ export default function Calendar() {
     }
   }
 
-  // Force refresh a specific date (used after booking failure)
-  const refreshDateAvailability = async (date) => {
-    // Use local date format to avoid UTC timezone issues
-    const dateStr = date.toLocaleDateString('en-CA') // YYYY-MM-DD in local timezone
-    console.log(`🔄 Force refreshing ${dateStr}`)
-    
-    try {
-      const response = await fetch(`/api/calendar?action=refresh&date=${dateStr}`)
-      if (response.ok) {
-        const data = await response.json()
-        const slotsData = data.availableSlots || []
-        const tz = data.timezone || businessTimezone
-        
-        // Update local cache with fresh data
-        setPreloadedAvailability(prev => ({
-          ...prev,
-          [dateStr]: { availableSlots: slotsData, timezone: tz }
-        }))
-        
-        setAvailableSlots(processSlotsData(slotsData, dateStr, tz))
-        console.log(`✓ Refreshed ${dateStr} with ${slotsData.length} slots`)
-      }
-    } catch (error) {
-      console.error('Error refreshing availability:', error)
-    }
-  }
-
   // Check if an hour session is possible starting at this time
   const canBookHourSession = (startTime, allSlots) => {
     // Parse the time to get the next 30-min slot
@@ -322,23 +296,56 @@ export default function Calendar() {
         body: JSON.stringify({
           date: dateStr,
           time: selectedTime,
-          duration: selectedDuration
+          duration: selectedDuration,
+          timezone: userTimezone
         })
       })
       
       const data = await response.json()
       
       if (response.ok) {
+        // Capture display details before selection state is reset below.
+        const confirmedDateLabel = formatSelectedDate()
+        const confirmedTimeLabel = `${selectedSlot?.localTime || selectedTime} (${formatTimezone(userTimezone)})`
         setBookingResult({
           success: true,
           message: '✅ Booking confirmed! Check your email for the Google Meet link.',
-          eventLink: data.eventLink
+          details: {
+            date: confirmedDateLabel,
+            time: confirmedTimeLabel,
+            coach: COACH_NAME,
+            cancelNote: 'Free cancellation up to 1 day before your appointment.'
+          }
         })
         fetchSessionCredits()
+
+        // Optimistically remove the booked slot(s) immediately so the user never sees their own
+        // just-booked time as still open. A 60-min session consumes two consecutive 30-min slots.
+        const consumedSlots = slotsForBooking(selectedTime, selectedDuration)
+        bookedSlotsRef.current[dateStr] = [
+          ...(bookedSlotsRef.current[dateStr] || []),
+          ...consumedSlots
+        ]
+
+        // Recompute the visible slots for this date from the cached raw list (now filtered by the
+        // ref), and prune the local preload cache so date navigation stays consistent.
+        const rawSlots = preloadedAvailability[dateStr]?.availableSlots
+          || availableSlots.map(s => s.time)
+        setAvailableSlots(processSlotsData(rawSlots, dateStr, businessTimezone))
+        setPreloadedAvailability(prev => {
+          const day = prev[dateStr]
+          if (!day) return prev
+          return {
+            ...prev,
+            [dateStr]: {
+              ...day,
+              availableSlots: (day.availableSlots || []).filter(t => !consumedSlots.includes(t))
+            }
+          }
+        })
+
         setSelectedTime(null)
         setSelectedDuration(null)
-        // Force refresh from API to update available slots (bypass cache)
-        fetchAvailability(selectedDate, true)
       } else {
         // Handle slot unavailable - refresh and let user pick another time
         if (data.code === 'SLOT_UNAVAILABLE') {
@@ -484,12 +491,13 @@ export default function Calendar() {
       <div className="booking-info-box">
         <p>📧 <strong>You'll receive a confirmation email</strong> with your Google Meet link after booking</p>
         <p>🎥 <strong>All sessions are via Google Meet</strong> - join from any device</p>
+        <p>✅ <strong>Free cancellation</strong> up to 1 day before your session</p>
       </div>
 
       {user && (
         <div className="profile-reminder">
           <p>
-            <strong>Tip:</strong> Before your session, make sure to update your <a href="#" onClick={(e) => { e.preventDefault(); document.querySelector('.header-avatar')?.click() }}>Profile</a> with your Main Concerns, Target Schools, and any helpful resources/files.
+            <strong>Tip:</strong> Before your session, make sure to update your <a href="#" onClick={(e) => { e.preventDefault(); document.querySelector('.user-avatar-btn')?.click() }}>Profile</a> with your Main Concerns, Target Schools, and Background Info About Yourself.
           </p>
         </div>
       )}
@@ -639,10 +647,16 @@ export default function Calendar() {
           {bookingResult && (
             <div className={`booking-result ${bookingResult.success ? 'success' : 'error'}`}>
               <p>{bookingResult.message}</p>
-              {bookingResult.eventLink && (
-                <a href={bookingResult.eventLink} target="_blank" rel="noopener noreferrer" className="event-link">
-                  View in Google Calendar →
-                </a>
+              {bookingResult.details && (
+                <div className="booking-confirmation-details">
+                  <p><strong>Date:</strong> {bookingResult.details.date}</p>
+                  <p><strong>Time:</strong> {bookingResult.details.time}</p>
+                  <p><strong>Interviewing with:</strong> {bookingResult.details.coach}</p>
+                  <p className="booking-cancel-note">{bookingResult.details.cancelNote}</p>
+                  <p className="booking-profile-prompt">
+                    📝 Next step: update your <a href="#" onClick={(e) => { e.preventDefault(); document.querySelector('.user-avatar-btn')?.click() }}>Profile</a> with your <strong>Main Concerns</strong>, <strong>Target Schools</strong>, and <strong>Background Info About Yourself</strong> so Ashley can tailor your session.
+                  </p>
+                </div>
               )}
             </div>
           )}

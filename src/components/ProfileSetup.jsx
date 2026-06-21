@@ -245,8 +245,8 @@ export default function ProfileSetup({ user, onComplete }) {
 
           {step === 3 && (
             <div className="setup-step">
-              <h3>Helpful Resources</h3>
-              <p className="step-description">Share any resources you've been using (articles, videos, school pages) so I can understand your prep approach</p>
+              <h3>Background Info About Yourself</h3>
+              <p className="step-description">Share links to anything that helps me understand you and your prep — your resume/CV, articles or videos you've used, school pages, prior feedback, etc.</p>
 
               <div className="resources-form-list">
                 {formData.resources.map((resource, index) => (

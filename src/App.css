@@ -1962,6 +1962,43 @@ img {
   font-weight: 500;
 }
 
+.booking-confirmation-details {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(16, 185, 129, 0.25);
+  text-align: left;
+}
+
+.booking-result .booking-confirmation-details p {
+  color: var(--dark-text);
+  font-size: 14px;
+  font-weight: 400;
+  margin: 0 0 6px;
+}
+
+.booking-result .booking-confirmation-details .booking-cancel-note {
+  margin-top: 10px;
+  margin-bottom: 0;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--light-text);
+}
+
+.booking-result .booking-confirmation-details .booking-profile-prompt {
+  margin-top: 12px;
+  margin-bottom: 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(16, 185, 129, 0.25);
+  font-size: 13px;
+  color: var(--dark-text);
+}
+
+.booking-result .booking-confirmation-details .booking-profile-prompt a {
+  color: var(--primary-teal);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .event-link {
   display: inline-block;
   color: var(--primary-teal);

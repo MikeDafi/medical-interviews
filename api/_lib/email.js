@@ -18,6 +18,19 @@ async function sendEmail({ to, subject, html, text }) {
     return { success: false, reason: 'not_configured' };
   }
 
+  // Common misconfiguration: RESEND_API_KEY is set but FROM_EMAIL is not, so we fall back to
+  // onboarding@resend.dev, which Resend only allows delivering to your own account email.
+  // Warn loudly so this isn't a silent failure when emailing customers/admin.
+  if (!process.env.FROM_EMAIL) {
+    console.warn(
+      `FROM_EMAIL is not set — using fallback sender "${FROM_EMAIL}". Resend only delivers from ` +
+      `onboarding@resend.dev to your own Resend account email; sends to customers/admin will be ` +
+      `rejected. Verify a domain at resend.com/domains and set FROM_EMAIL to a sender on it.`
+    );
+  }
+
+  const recipients = Array.isArray(to) ? to : [to];
+
   try {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -27,7 +40,10 @@ async function sendEmail({ to, subject, html, text }) {
       },
       body: JSON.stringify({
         from: FROM_EMAIL,
-        to: Array.isArray(to) ? to : [to],
+        to: recipients,
+        // Replies go to the business inbox, so the FROM address (e.g. notifications@<domain>)
+        // never needs to be a real mailbox.
+        reply_to: ADMIN_EMAIL,
         subject,
         html,
         text
@@ -36,7 +52,11 @@ async function sendEmail({ to, subject, html, text }) {
 
     if (!response.ok) {
       const error = await response.json();
-      console.error('Resend API error:', error);
+      console.error(
+        `Resend API error (status ${response.status}) sending from "${FROM_EMAIL}" ` +
+        `to ${recipients.join(', ')}:`,
+        error
+      );
       return { success: false, error };
     }
 
@@ -70,7 +90,6 @@ export async function sendCustomerBookingEmail({
   date, 
   time, 
   duration, 
-  eventLink,
   meetLink,
   timezone = 'Central Time'
 }) {
@@ -186,18 +205,18 @@ export async function sendCustomerBookingEmail({
               </table>
               ` : ''}
               
-              ${eventLink ? `
-              <!-- Calendar Button -->
+              <!-- View in Profile note -->
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: ${meetLink ? '16px' : '32px'};">
                 <tr>
                   <td align="center">
-                    <a href="${eventLink}" target="_blank" style="display: inline-block; background: ${meetLink ? '#f3f4f6' : 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)'}; color: ${meetLink ? '#374151' : '#ffffff'}; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600;">
-                      ${meetLink ? '📅 View in Calendar' : 'View in Google Calendar →'}
-                    </a>
+                    <p style="color: #6b7280; font-size: 13px; margin: 0;">
+                      📅 You can view your scheduled sessions and Google Meet link anytime — sign in at
+                      <a href="${SITE_URL}" style="color: #0d9488; font-weight: 600;">premedical1on1.biz</a>
+                      and open your <strong>Profile → Scheduled Sessions</strong>.
+                    </p>
                   </td>
                 </tr>
               </table>
-              ` : ''}
               
               <!-- Preparation Tips -->
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 32px; background-color: #fef3c7; border-radius: 12px; border: 1px solid #fcd34d;">
@@ -207,7 +226,7 @@ export async function sendCustomerBookingEmail({
                       💡 Before Your Session
                     </p>
                     <ul style="color: #78350f; font-size: 14px; line-height: 1.8; margin: 0; padding-left: 20px;">
-                      <li>Update your profile with your main concerns and target schools</li>
+                      <li>Update your profile with your <strong>Main Concerns</strong>, <strong>Target Schools</strong>, and <strong>Background Info About Yourself</strong></li>
                       <li>Have a quiet, well-lit space ready for the video call</li>
                       <li>Prepare any specific questions you'd like to discuss</li>
                     </ul>
@@ -276,10 +295,11 @@ SESSION DETAILS:
 - Location: ${meetLink ? 'Google Meet Video Call' : 'Video Call'}
 
 ${meetLink ? `🎥 JOIN GOOGLE MEET: ${meetLink}` : ''}
-${eventLink ? `📅 View in Google Calendar: ${eventLink}` : ''}
+
+📅 View your scheduled sessions and Google Meet link anytime: sign in at ${SITE_URL} and open your Profile > Scheduled Sessions.
 
 BEFORE YOUR SESSION:
-- Update your profile with your main concerns and target schools
+- Update your profile with your Main Concerns, Target Schools, and Background Info About Yourself
 - Have a quiet, well-lit space ready for the video call
 - Prepare any specific questions you'd like to discuss
 
@@ -321,7 +341,8 @@ export async function sendAdminBookingEmail({
   duration,
   eventLink,
   meetLink,
-  userProfile = {}
+  userProfile = {},
+  timezone = 'Central Time'
 }) {
   const sessionType = duration === 30 ? 'Trial (30 min)' : 'Regular (1 hour)';
   const formattedDate = formatDate(date);
@@ -369,7 +390,7 @@ export async function sendAdminBookingEmail({
                             ${customerName || customerEmail}
                           </p>
                           <p style="color: #047857; font-size: 14px; margin: 4px 0 0;">
-                            ${sessionType} • ${formattedDate} at ${time}
+                            ${sessionType} • ${formattedDate} at ${time} ${timezone}
                           </p>
                         </td>
                       </tr>
@@ -441,7 +462,11 @@ export async function sendAdminBookingEmail({
                     <a href="${eventLink}" target="_blank" style="display: inline-block; background-color: #f1f5f9; color: #475569; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-size: 14px; font-weight: 500;">
                       Calendar Event
                     </a>
-                    ` : ''}
+                    ` : `
+                    <span style="display: inline-block; background-color: #fef2f2; color: #b91c1c; padding: 12px 24px; border-radius: 6px; font-size: 14px; font-weight: 600;">
+                      ⚠️ Calendar event NOT added — please add it manually
+                    </span>
+                    `}
                   </td>
                 </tr>
               </table>
@@ -468,7 +493,7 @@ export async function sendAdminBookingEmail({
 NEW SESSION BOOKED
 
 ${customerName || customerEmail}
-${sessionType} • ${formattedDate} at ${time}
+${sessionType} • ${formattedDate} at ${time} ${timezone}
 
 CLIENT INFORMATION:
 - Name: ${customerName || 'Not provided'}
@@ -481,7 +506,7 @@ ${main_concerns ? `MAIN CONCERNS:\n${main_concerns}\n` : ''}
 
 ${meetLink ? `JOIN GOOGLE MEET: ${meetLink}` : ''}
 View Client Profile: ${adminUserLink}
-${eventLink ? `Calendar Event: ${eventLink}` : ''}
+${eventLink ? `Calendar Event: ${eventLink}` : '⚠️ Calendar event NOT added automatically — please add it manually.'}
 
 ---
 This is an automated notification from PreMedical 1-on-1
@@ -490,6 +515,173 @@ This is an automated notification from PreMedical 1-on-1
   return sendEmail({
     to: ADMIN_EMAIL,
     subject: `🔔 New Booking: ${customerName || customerEmail} - ${formattedDate}`,
+    html,
+    text
+  });
+}
+
+/**
+ * Send a cancellation confirmation email to the customer.
+ */
+export async function sendCustomerCancellationEmail({
+  customerEmail,
+  customerName,
+  date,
+  time,
+  duration,
+  timezone = 'Central Time'
+}) {
+  const sessionType = duration === 30 ? 'Trial Session (30 minutes)' : 'Regular Session (1 hour)';
+  const formattedDate = formatDate(date);
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Session Cancelled</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f4f0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f4f0; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+          <tr>
+            <td style="background-color: #b45309; padding: 32px 40px; text-align: center;">
+              <h1 style="color: #ffffff; font-size: 24px; margin: 0;">Session Cancelled</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 32px 40px;">
+              <p style="color: #134e4a; font-size: 16px; margin: 0 0 16px;">Hi ${customerName || 'there'},</p>
+              <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
+                Your coaching session has been cancelled. Your session credit has been restored, so you can rebook whenever works for you.
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #fef3c7; border-radius: 8px; padding: 20px;">
+                <tr>
+                  <td>
+                    <p style="color: #92400e; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 4px;">Cancelled Session</p>
+                    <p style="color: #134e4a; font-size: 16px; font-weight: 500; margin: 0 0 4px;">${sessionType}</p>
+                    <p style="color: #134e4a; font-size: 16px; font-weight: 500; margin: 0;">${formattedDate} at ${time} ${timezone}</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 24px 0 0;">
+                Ready to pick a new time? <a href="${SITE_URL}" style="color: #0d9488; font-weight: 600;">Book another session</a>.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 24px 40px; border-top: 1px solid #e2e8f0; text-align: center;">
+              <p style="color: #94a3b8; font-size: 13px; margin: 0;">PreMedical 1-on-1 Interview Coaching</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `
+Session Cancelled
+
+Hi ${customerName || 'there'},
+
+Your coaching session has been cancelled and your session credit has been restored.
+
+CANCELLED SESSION:
+- Type: ${sessionType}
+- Date: ${formattedDate}
+- Time: ${time} ${timezone}
+
+Ready to pick a new time? Book another session: ${SITE_URL}
+
+---
+PreMedical 1-on-1 Interview Coaching
+`;
+
+  return sendEmail({
+    to: customerEmail,
+    subject: `Session Cancelled: ${formattedDate} at ${time}`,
+    html,
+    text
+  });
+}
+
+/**
+ * Notify the admin that a booking was cancelled.
+ */
+export async function sendAdminCancellationEmail({
+  customerEmail,
+  customerName,
+  customerId,
+  date,
+  time,
+  duration,
+  timezone = 'Central Time'
+}) {
+  const sessionType = duration === 30 ? 'Trial (30 min)' : 'Regular (1 hour)';
+  const formattedDate = formatDate(date);
+  const adminUserLink = `${SITE_URL}/admin/user/${customerId}`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Booking Cancelled</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f1f5f9;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f1f5f9; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+          <tr>
+            <td style="background-color: #b91c1c; padding: 28px 40px;">
+              <h1 style="color: #ffffff; font-size: 20px; margin: 0;">❌ Booking Cancelled</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 28px 40px;">
+              <p style="color: #065f46; font-size: 18px; font-weight: 600; margin: 0 0 4px;">${customerName || customerEmail}</p>
+              <p style="color: #475569; font-size: 14px; margin: 0 0 16px;">${sessionType} • ${formattedDate} at ${time} ${timezone}</p>
+              <p style="color: #475569; font-size: 14px; margin: 0;">
+                Email: ${customerEmail}<br />
+                The session credit has been restored to the client and the calendar event removed.
+              </p>
+              <p style="margin: 20px 0 0;">
+                <a href="${adminUserLink}" style="color: #0d9488; font-weight: 600;">View Client Profile →</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `
+BOOKING CANCELLED
+
+${customerName || customerEmail}
+${sessionType} • ${formattedDate} at ${time} ${timezone}
+
+Email: ${customerEmail}
+The session credit has been restored to the client and the calendar event removed.
+
+View Client Profile: ${adminUserLink}
+
+---
+This is an automated notification from PreMedical 1-on-1
+`;
+
+  return sendEmail({
+    to: ADMIN_EMAIL,
+    subject: `❌ Cancellation: ${customerName || customerEmail} - ${formattedDate}`,
     html,
     text
   });
