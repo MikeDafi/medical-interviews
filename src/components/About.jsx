@@ -3,7 +3,7 @@ export default function About() {
     {
       id: 'current-m2',
       title: "Current M2 at Rosalind Franklin",
-      description: "Part of the incoming M2 student panel for admissions review and interview feedback"
+      description: "Part of the incoming M1 student panel for admissions review and interview feedback"
     },
     {
       id: 'first-cycle',
