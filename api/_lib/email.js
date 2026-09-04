@@ -1,6 +1,8 @@
 // Email notification utility using Resend
 // Requires RESEND_API_KEY environment variable
 
+import { getPackageName } from '../../lib/packages.js';
+
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const ADMIN_EMAIL = 'premedical1on1@gmail.com';
 // On Resend free tier, must use onboarding@resend.dev or a verified domain
@@ -325,6 +327,194 @@ ${SITE_URL}
   return sendEmail({
     to: customerEmail,
     subject: `✓ Session Confirmed: ${formattedDate} at ${time}`,
+    html,
+    text
+  });
+}
+
+/**
+ * Send a purchase follow-up email to the customer right after checkout completes, clearly
+ * explaining how to book their session(s) — or, for the email-only advisory plan (which has no
+ * sessions to book), how to reach us instead.
+ */
+export async function sendPurchaseFollowUpEmail({
+  customerEmail,
+  customerName,
+  packageId,
+  sessionsTotal,
+  durationMinutes,
+  mode
+}) {
+  const packageName = getPackageName(packageId);
+  const requiresBooking = (sessionsTotal || 0) > 0;
+  const isSubscription = mode === 'subscription';
+  const sessionsLabel = sessionsTotal === 1 ? '1 session' : `${sessionsTotal} sessions`;
+  const durationLabel = durationMinutes === 30
+    ? '30 minutes'
+    : durationMinutes === 60
+      ? '1 hour'
+      : `${durationMinutes} minutes`;
+  const bookUrl = `${SITE_URL}#book`;
+
+  const subject = requiresBooking
+    ? `🎉 Purchase Confirmed — Book Your ${packageName} Session${sessionsTotal > 1 ? 's' : ''}`
+    : `🎉 Welcome to ${packageName}!`;
+
+  const bookingSectionHtml = requiresBooking ? `
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f0fdfa; border-radius: 12px; border: 1px solid #99f6e4; margin-top: 24px;">
+                <tr>
+                  <td style="padding: 28px;">
+                    <p style="color: #0d9488; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 4px;">
+                      What You Purchased
+                    </p>
+                    <p style="color: #134e4a; font-size: 18px; font-weight: 600; margin: 0 0 20px;">
+                      ${packageName} — ${sessionsLabel} (${durationLabel} each)${isSubscription ? ', renews monthly' : ''}
+                    </p>
+                    <p style="color: #0d9488; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px;">
+                      How to Book Your Session
+                    </p>
+                    <ol style="color: #134e4a; font-size: 15px; line-height: 1.9; margin: 0; padding-left: 20px;">
+                      <li>Go to <a href="${SITE_URL}" style="color: #0d9488; font-weight: 600;">premedical1on1.com</a> and sign in with Google</li>
+                      <li>Scroll to (or click) the <strong>"Book a Session"</strong> section</li>
+                      <li>Pick an available date &amp; time that works for you</li>
+                      <li>Confirm — you'll instantly get a calendar invite with your Google Meet link</li>
+                    </ol>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 32px;">
+                <tr>
+                  <td align="center">
+                    <a href="${bookUrl}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-size: 18px; font-weight: 600; box-shadow: 0 4px 12px rgba(13,148,136,0.3);">
+                      📅 Book Your Session →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              ${isSubscription ? `
+              <p style="color: #6b7280; font-size: 13px; margin: 16px 0 0; text-align: center;">
+                Your subscription renews monthly, so a fresh session unlocks every billing period.
+              </p>` : ''}
+  ` : `
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f0fdfa; border-radius: 12px; border: 1px solid #99f6e4; margin-top: 24px;">
+                <tr>
+                  <td style="padding: 28px;">
+                    <p style="color: #0d9488; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 4px;">
+                      What You Purchased
+                    </p>
+                    <p style="color: #134e4a; font-size: 18px; font-weight: 600; margin: 0 0 20px;">
+                      ${packageName}${isSubscription ? ' (renews monthly)' : ''}
+                    </p>
+                    <p style="color: #0d9488; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px;">
+                      How It Works
+                    </p>
+                    <p style="color: #134e4a; font-size: 15px; line-height: 1.7; margin: 0;">
+                      This is an email-only plan — there's nothing to book! Just send your questions any time to
+                      <a href="mailto:${ADMIN_EMAIL}" style="color: #0d9488; font-weight: 600;">${ADMIN_EMAIL}</a> and we'll get back to you.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+  `;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Purchase Confirmation</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f4f0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f4f0; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%); padding: 40px 40px 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.5px;">
+                🎉 Purchase Confirmed
+              </h1>
+              <p style="color: rgba(255,255,255,0.9); margin: 12px 0 0; font-size: 16px;">
+                Thanks for choosing PreMedical 1-on-1
+              </p>
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px;">
+              <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+                Hi ${customerName || 'there'},
+              </p>
+              <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0;">
+                Your payment went through and your <strong>${packageName}</strong> is ready to use.
+              </p>
+              ${bookingSectionHtml}
+              <p style="color: #a1a1aa; font-size: 12px; margin: 32px 0 0; text-align: center;">
+                Questions? Contact us at ${ADMIN_EMAIL}
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f9fafb; padding: 24px 40px; border-top: 1px solid #e5e7eb;">
+              <p style="color: #9ca3af; font-size: 13px; margin: 0; text-align: center;">
+                PreMedical 1-on-1 • Expert Interview Coaching
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
+
+  const text = requiresBooking ? `
+Purchase Confirmed!
+
+Hi ${customerName || 'there'},
+
+Your payment went through. You purchased: ${packageName} — ${sessionsLabel} (${durationLabel} each)${isSubscription ? ', renews monthly' : ''}.
+
+HOW TO BOOK YOUR SESSION:
+1. Go to ${SITE_URL} and sign in with Google
+2. Scroll to (or click) the "Book a Session" section
+3. Pick an available date & time that works for you
+4. Confirm — you'll instantly get a calendar invite with your Google Meet link
+
+Book now: ${bookUrl}
+${isSubscription ? '\nYour subscription renews monthly, so a fresh session unlocks every billing period.\n' : ''}
+Questions? Contact us at ${ADMIN_EMAIL}
+
+---
+PreMedical 1-on-1 • Expert Interview Coaching
+${SITE_URL}
+` : `
+Purchase Confirmed!
+
+Hi ${customerName || 'there'},
+
+Your payment went through. You purchased: ${packageName}${isSubscription ? ' (renews monthly)' : ''}.
+
+HOW IT WORKS:
+This is an email-only plan — there's nothing to book! Just send your questions any time to ${ADMIN_EMAIL} and we'll get back to you.
+
+Questions? Contact us at ${ADMIN_EMAIL}
+
+---
+PreMedical 1-on-1 • Expert Interview Coaching
+${SITE_URL}
+`;
+
+  return sendEmail({
+    to: customerEmail,
+    subject,
     html,
     text
   });

@@ -156,6 +156,59 @@ describe('Checkout API', () => {
       expect(purchase.status).toBe('active');
     });
     
+    it('processes checkout.session.completed for the email-only advisory plan (0 sessions)', async () => {
+      // advisory_email has 0 sessions (no booking, email-only) — `sessions: '0'` must not be
+      // coerced into a truthy fallback (see the `parseInt(sessions) || 1` footgun this guards).
+      const event = {
+        id: `evt_test_${Date.now()}`,
+        type: 'checkout.session.completed',
+        data: {
+          object: {
+            id: `cs_test_webhook_${Date.now()}`,
+            mode: 'subscription',
+            subscription: `sub_test_${Date.now()}`,
+            metadata: {
+              packageId: 'advisory_email',
+              userId: (await getTestUser()).google_id,
+              sessions: '0',
+              duration_minutes: '0',
+              category: 'advisory'
+            },
+            customer_email: (await getTestUser()).email,
+            amount_total: 5000
+          }
+        }
+      };
+      
+      const payload = JSON.stringify(event);
+      const timestamp = Math.floor(Date.now() / 1000);
+      const signedPayload = `${timestamp}.${payload}`;
+      const signature = crypto
+        .createHmac('sha256', WEBHOOK_SECRET)
+        .update(signedPayload)
+        .digest('hex');
+      
+      const response = await fetch(`${BASE_URL}/api/stripe/webhook`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'stripe-signature': `t=${timestamp},v1=${signature}`
+        },
+        body: payload
+      });
+      
+      expect(response.status).toBe(200);
+      
+      const user = await getTestUser();
+      const purchases = user.purchases || [];
+      const purchase = purchases.find(p => p.package_id === 'advisory_email');
+      
+      expect(purchase).toBeDefined();
+      expect(purchase.sessions_total).toBe(0);
+      expect(purchase.is_subscription).toBe(true);
+      expect(purchase.status).toBe('active');
+    });
+    
     it('rejects webhook with invalid signature', async () => {
       const event = {
         type: 'checkout.session.completed',
