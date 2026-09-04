@@ -22,8 +22,8 @@ export default function RecentBookings() {
             </div>
           ))
         ) : (
-          purchases.map((purchase) => (
-            <div className="recent-booking-card" key={purchase.id}>
+          purchases.map((purchase, index) => (
+            <div className="recent-booking-card" key={purchase.id || index}>
               <div className="recent-booking-avatar">
                 {(purchase.first_name || 'U').charAt(0)}
               </div>
