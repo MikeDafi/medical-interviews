@@ -4,6 +4,7 @@ import '../_lib/env.js';
 import { sql } from '@vercel/postgres';
 import { requireAuth } from '../_lib/session.js';
 import { rateLimit } from '../_lib/auth.js';
+import { getPackageName } from '../../lib/packages.js';
 
 export default async function handler(req, res) {
   // SECURITY: Rate limiting
@@ -31,8 +32,13 @@ export default async function handler(req, res) {
           if (p.purchase_date && new Date(p.purchase_date).getTime() > cutoff && purchases.length < 5) {
             const name = (row.name || 'S').split(' ')[0];
             purchases.push({
+              // Purchases already carry a unique id (the Stripe checkout session id) — surface
+              // it so the frontend list has stable React keys instead of colliding on `undefined`.
+              id: p.id,
               first_name: name[0] + '.',
-              package_name: p.package_name || 'Session',
+              // Purchase records store `package_id` (e.g. 'trial'), not `package_name` — the old
+              // code always fell back to the generic "Session" label. Resolve the real name.
+              package_name: getPackageName(p.package_id),
               created_at: p.purchase_date
             });
           }

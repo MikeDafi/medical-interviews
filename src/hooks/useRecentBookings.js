@@ -3,6 +3,10 @@ import { getFallbackBookings } from '../components/RecentBookingNotification'
 
 const CACHE_KEY = 'recentPurchasesShared'
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+// Minimum list size to display. Real purchases (from the last 7 days, per the API) are always
+// shown first/prioritized, but the "recent bookings" social-proof widgets look sparse/broken if
+// there's only 1-2 real entries — pad out with realistic fallback names to keep a fuller list.
+const MIN_DISPLAYED = 5
 
 // Sort by created_at descending (most recent first)
 function sortByRecent(data) {
@@ -60,7 +64,7 @@ function initFromCache() {
   
   // No valid cache - use fallbacks
   if (globalBookings.length === 0) {
-    globalBookings = sortByRecent(getFallbackBookings(5))
+    globalBookings = sortByRecent(getFallbackBookings(MIN_DISPLAYED))
   }
 }
 
@@ -73,6 +77,16 @@ function writeCache(data) {
   }
 }
 
+// Real purchases take priority, but if there aren't enough of them yet (e.g. only 1 booking in
+// the last 7 days), pad the list with realistic fallback names so the display doesn't visibly
+// shrink down to just one (or a couple of) real people. Exported (pure, no side effects) so it
+// can be unit tested directly.
+export function padBookingsForDisplay(realBookings, minCount = MIN_DISPLAYED) {
+  const real = realBookings || []
+  if (real.length >= minCount) return real
+  return [...real, ...getFallbackBookings(minCount - real.length)]
+}
+
 // Fetch from API (called once globally)
 async function fetchGlobalBookings() {
   if (globalFetched) return // Already fetching or fetched
@@ -83,7 +97,8 @@ async function fetchGlobalBookings() {
     if (response.ok) {
       const data = await response.json()
       if (data.purchases?.length > 0) {
-        const sorted = sortByRecent(data.purchases)
+        const combined = padBookingsForDisplay(data.purchases)
+        const sorted = sortByRecent(combined)
         globalBookings = sorted
         writeCache(sorted)
         globalLoading = false
