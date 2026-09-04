@@ -3,6 +3,7 @@ import '../_lib/env.js';
 
 import Stripe from 'stripe';
 import { sql } from '@vercel/postgres';
+import { sendPurchaseFollowUpEmail } from '../_lib/email.js';
 
 // Initialize Stripe lazily to ensure env vars are loaded
 let stripeInstance = null;
@@ -123,12 +124,17 @@ export default async function handler(req, res) {
 
       // Create purchase record using metadata directly
       const durationMins = parseInt(duration_minutes) || (packageId?.includes('trial') || packageId?.includes('snapshot') ? 30 : 60);
+      // NOTE: use Number.isNaN rather than `parseInt(sessions) || 1` — the latter would
+      // incorrectly fall back to 1 for legitimately-zero-session plans (e.g. advisory_email),
+      // since `0` is falsy in JS.
+      const parsedSessions = parseInt(sessions, 10);
+      const sessionsTotal = Number.isNaN(parsedSessions) ? 1 : parsedSessions;
       const newPurchase = {
         id: session.id,
         package_id: packageId,
         duration_minutes: durationMins,
         category: category || 'interview',
-        sessions_total: parseInt(sessions) || 1,
+        sessions_total: sessionsTotal,
         sessions_used: 0,
         purchase_date: new Date().toISOString(),
         status: 'active',
@@ -149,6 +155,22 @@ export default async function handler(req, res) {
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ${dbUser.id}
       `;
+
+      // Tell the customer their purchase went through and how to book their session(s) (or, for
+      // email-only advisory plans, how to reach us instead). Never let an email failure break the
+      // webhook response — Stripe just needs the 200 to consider the event handled.
+      try {
+        await sendPurchaseFollowUpEmail({
+          customerEmail,
+          customerName: dbUser.name || customerEmail.split('@')[0],
+          packageId,
+          sessionsTotal,
+          durationMinutes: durationMins,
+          mode
+        });
+      } catch (emailError) {
+        console.error('Failed to send purchase follow-up email:', emailError);
+      }
     }
 
     // Handle recurring subscription payments
