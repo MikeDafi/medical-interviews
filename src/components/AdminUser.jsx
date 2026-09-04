@@ -128,6 +128,11 @@ export default function AdminUser() {
   const handleAddSession = async () => {
     if (!newSession.sessions || newSession.sessions < 1) return
 
+    // The admin picks a session "type" (trial/regular), but the API expects the actual
+    // duration in minutes — sending `type` as-is here always failed backend validation
+    // (`duration` was never present), which is why "Add" appeared to silently do nothing.
+    const duration = newSession.type === 'trial' ? 30 : 60
+
     try {
       const response = await fetch(`/api/admin?action=addSession&googleId=${user?.id || ''}`, {
         method: 'POST',
@@ -137,7 +142,7 @@ export default function AdminUser() {
         },
         body: JSON.stringify({
           userId: userData.id,
-          type: newSession.type,
+          duration,
           sessions: parseInt(newSession.sessions)
         })
       })
@@ -146,9 +151,13 @@ export default function AdminUser() {
         setNewSession({ type: 'regular', sessions: 1 })
         setAddingSession(false)
         fetchUser()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        alert(data.error || 'Failed to add session(s). Please try again.')
       }
     } catch (err) {
       console.error('Error adding session:', err)
+      alert('Failed to add session(s). Please try again.')
     }
   }
 
