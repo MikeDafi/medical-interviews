@@ -114,6 +114,72 @@ describe('Profile API', () => {
       expect(user.phone).toBe('2222222222');
       expect(user.main_concerns).toBe('Updated concerns');
     });
+
+    it('saves interviewLevel and interviewStyle', async () => {
+      const response = await authFetch(`${BASE_URL}/api/profile/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interviewLevel: 'beginner', interviewStyle: 'MMI' })
+      });
+
+      expect(response.status).toBe(200);
+
+      const user = await getTestUser();
+      expect(user.interview_level).toBe('beginner');
+      expect(user.interview_style).toBe('MMI');
+    });
+
+    it('ignores invalid interviewLevel/interviewStyle values', async () => {
+      const response = await authFetch(`${BASE_URL}/api/profile/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interviewLevel: 'expert', interviewStyle: 'panel' })
+      });
+
+      expect(response.status).toBe(200);
+
+      const user = await getTestUser();
+      expect(user.interview_level).not.toBe('expert');
+      expect(user.interview_style).not.toBe('panel');
+    });
+
+    it('regression: a single-field partial update does not wipe out other profile fields', async () => {
+      // Set several fields first, matching how the initial onboarding form saves everything at once.
+      await authFetch(`${BASE_URL}/api/profile/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: '333-333-3333',
+          applicationStage: 'applying',
+          concerns: 'Original concerns',
+          interviewLevel: 'advanced',
+          interviewStyle: 'both',
+          targetSchools: [{ name: 'UCLA Medical', interviewType: 'MMI' }],
+          resources: [{ title: 'Resume', url: 'https://example.com/resume' }]
+        })
+      });
+
+      // Now perform a single-field partial update, exactly like Profile.jsx's
+      // saveProfileUpdate({ concerns }) call site does.
+      const response = await authFetch(`${BASE_URL}/api/profile/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ concerns: 'Updated concerns only' })
+      });
+
+      expect(response.status).toBe(200);
+
+      const user = await getTestUser();
+      // The field that was actually updated:
+      expect(user.main_concerns).toBe('Updated concerns only');
+      // Everything else must survive the partial update untouched:
+      expect(user.phone).toBe('3333333333');
+      expect(user.application_stage).toBe('applying');
+      expect(user.interview_level).toBe('advanced');
+      expect(user.interview_style).toBe('both');
+      expect(user.target_schools?.length).toBe(1);
+      expect(user.resources?.length).toBe(1);
+    });
     
   });
   

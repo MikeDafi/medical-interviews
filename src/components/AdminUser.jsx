@@ -3,6 +3,18 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import './AdminUser.css'
 
+// Interview preference display labels (same values used by Profile.jsx/ProfileSetup.jsx)
+const INTERVIEW_LEVEL_LABELS = {
+  beginner: 'Beginner',
+  mid: 'Intermediate',
+  advanced: 'Advanced'
+}
+const INTERVIEW_STYLE_LABELS = {
+  MMI: 'MMI',
+  traditional: 'Traditional',
+  both: 'Both'
+}
+
 export default function AdminUser() {
   const { userId } = useParams()
   const { user, isAdmin, loading: authLoading } = useAuth()
@@ -376,6 +388,14 @@ export default function AdminUser() {
                 <div className="detail-row">
                   <span className="detail-label">Stage:</span>
                   <span className="detail-value">{userData.application_stage || 'Not specified'}</span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Level:</span>
+                  <span className="detail-value">{INTERVIEW_LEVEL_LABELS[userData.interview_level] || 'Not specified'}</span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Interview Style:</span>
+                  <span className="detail-value">{INTERVIEW_STYLE_LABELS[userData.interview_style] || 'Not specified'}</span>
                 </div>
                 <div className="detail-row">
                   <span className="detail-label">Profile Complete:</span>

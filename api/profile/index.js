@@ -108,6 +108,8 @@ export default async function handler(req, res) {
         application_stage: profile.application_stage,
         target_schools: profile.target_schools,
         main_concerns: profile.main_concerns,
+        interview_level: profile.interview_level,
+        interview_style: profile.interview_style,
         resources: profile.resources,
         purchases: profile.purchases,
         profile_complete: profile.profile_complete,
