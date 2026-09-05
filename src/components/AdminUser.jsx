@@ -224,7 +224,9 @@ export default function AdminUser() {
     userData.purchases.forEach(pkg => {
       if (pkg.bookings) {
         pkg.bookings.forEach(b => {
-          bookings.push({ ...b, packageType: pkg.type })
+          // Purchases never actually have a `type` field (they store `duration_minutes`), so this
+          // was always undefined. Derive it the same way the "Booking History" list below does.
+          bookings.push({ ...b, packageType: pkg.duration_minutes === 30 ? 'trial' : 'regular' })
         })
       }
     })
@@ -527,8 +529,8 @@ export default function AdminUser() {
                   {userData.purchases.map((pkg) => (
                     <li key={pkg.id} className="package-item">
                       <div className="package-main">
-                        <span className={`package-type-badge ${pkg.type === 'trial' ? 'trial' : 'regular'}`}>
-                          {pkg.type === 'trial' ? 'Trial' : 'Regular'}
+                        <span className={`package-type-badge ${pkg.duration_minutes === 30 ? 'trial' : 'regular'}`}>
+                          {pkg.duration_minutes === 30 ? 'Trial' : 'Regular'}
                         </span>
                         <span className="package-sessions">
                           {(pkg.sessions_total || 0) - (pkg.sessions_used || 0)} / {pkg.sessions_total || 0} left
