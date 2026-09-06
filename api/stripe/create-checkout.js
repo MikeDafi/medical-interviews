@@ -212,7 +212,10 @@ export default async function handler(req, res) {
     const origin = req.headers.origin;
     let safeOrigin = 'http://localhost:3000';
     
-    if (origin && ALLOWED_ORIGINS.some(allowed => origin.startsWith(allowed))) {
+    // SECURITY: exact match only - `startsWith` would let an attacker pass an Origin like
+    // "https://premedical1on1.vercel.app.attacker.com" (which starts with an allowed origin but
+    // is actually attacker-controlled), letting them control the Stripe redirect URL.
+    if (origin && ALLOWED_ORIGINS.includes(origin)) {
       safeOrigin = origin;
     } else if (process.env.VERCEL_URL) {
       safeOrigin = `https://${process.env.VERCEL_URL}`;

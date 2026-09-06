@@ -144,7 +144,7 @@ export function getTokenFromRequest(req) {
 /**
  * Simple cookie parser
  */
-function parseCookies(cookieString) {
+export function parseCookies(cookieString) {
   const cookies = {};
   if (!cookieString) return cookies;
   

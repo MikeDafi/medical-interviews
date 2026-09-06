@@ -8,20 +8,15 @@ import '../_lib/env.js';
 
 import { sql } from '@vercel/postgres';
 import { rateLimit } from '../_lib/auth.js';
-import { sanitizeString, sanitizeEmail, sanitizeUrl } from '../_lib/sanitize.js';
 import { 
   createSession, 
   setSessionCookie, 
   verifySession, 
   invalidateSession, 
   getTokenFromRequest, 
-  clearSessionCookie 
+  clearSessionCookie,
+  parseCookies
 } from '../_lib/session.js';
-
-// Google-specific URL sanitizer
-const sanitizeGooglePictureUrl = (url) => {
-  return sanitizeUrl(url, { allowedHosts: ['googleusercontent.com', 'google.com'] });
-};
 
 // Get redirect URI based on environment
 function getRedirectUri(req) {
@@ -115,9 +110,27 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Invalid state' });
       }
 
-      const { verifier } = stateData;
+      const { verifier, nonce } = stateData;
       if (!verifier) {
         return res.status(400).json({ error: 'Missing PKCE verifier' });
+      }
+
+      // SECURITY: Verify the state nonce matches a cookie set by our own origin immediately
+      // before the redirect to Google (see signInWithGoogle() in AuthContext.jsx). Without this,
+      // an attacker could complete their own OAuth authorization (obtaining a valid code+state
+      // for their own Google account) and lure a victim into loading that callback URL, silently
+      // logging the victim's browser into the attacker's account (OAuth login-CSRF). A cross-site
+      // attacker cannot set a cookie for our origin, so this binding can only be satisfied by a
+      // request that actually originated from our own sign-in flow.
+      const cookies = parseCookies(req.headers.cookie || '');
+      const cookieNonce = cookies.oauth_state_nonce;
+      if (!nonce || !cookieNonce || cookieNonce !== nonce) {
+        // Clear the (already-invalid) nonce cookie - safe to do here since no other Set-Cookie
+        // header is written on this exit path (unlike the success path below, where
+        // setSessionCookie() sets its own Set-Cookie header and res.setHeader would otherwise
+        // silently replace one cookie with the other instead of sending both).
+        res.setHeader('Set-Cookie', 'oauth_state_nonce=; Path=/; SameSite=Lax; Max-Age=0');
+        return res.redirect('/?auth_error=invalid_state');
       }
 
       // Read env vars at RUNTIME (not module load time)
@@ -204,45 +217,6 @@ export default async function handler(req, res) {
       res.redirect('/?auth_error=server_error');
     }
     return;
-  }
-
-  // ============ LEGACY GOOGLE AUTH (POST - no action) ============
-  if (req.method === 'POST' && !action) {
-    try {
-      const { userData } = req.body;
-      
-      if (!userData || !userData.email) {
-        return res.status(400).json({ error: 'Invalid user data' });
-      }
-
-      const cleanEmail = sanitizeEmail(userData.email);
-      if (!cleanEmail) {
-        return res.status(400).json({ error: 'Invalid email' });
-      }
-
-      const cleanGoogleId = sanitizeString(userData.id, 100);
-      const cleanName = sanitizeString(userData.name, 100);
-      const cleanPicture = sanitizeGooglePictureUrl(userData.picture);
-
-      if (!cleanGoogleId) {
-        return res.status(400).json({ error: 'Invalid Google ID' });
-      }
-
-      const result = await sql`
-        INSERT INTO users (google_id, email, name, picture, updated_at)
-        VALUES (${cleanGoogleId}, ${cleanEmail}, ${cleanName}, ${cleanPicture}, CURRENT_TIMESTAMP)
-        ON CONFLICT (google_id) 
-        DO UPDATE SET email = EXCLUDED.email, name = EXCLUDED.name, picture = EXCLUDED.picture, updated_at = CURRENT_TIMESTAMP
-        RETURNING id, email, name, picture, profile_complete
-      `;
-
-      const user = result.rows[0];
-      return res.status(200).json({ 
-        user: { id: user.id, email: user.email, name: user.name, picture: user.picture, profile_complete: user.profile_complete }
-      });
-    } catch {
-      return res.status(500).json({ error: 'Authentication failed' });
-    }
   }
 
   return res.status(405).json({ error: 'Method not allowed' });

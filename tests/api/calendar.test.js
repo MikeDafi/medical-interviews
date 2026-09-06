@@ -376,6 +376,57 @@ describe('Calendar API', () => {
         }
       }
     });
+
+    it('does not let two concurrent requests double-spend a single session credit (TOCTOU race)', async () => {
+      // Exactly one credit available. Fire two booking requests for two different slots at
+      // (nearly) the same time - without the atomic row-locked reservation, both could read
+      // "1 credit available" before either write committed, and both would succeed.
+      await addTestPurchase({
+        package_id: 'single',
+        duration_minutes: 60,
+        category: 'interview',
+        sessions_total: 1,
+        sessions_used: 0,
+        status: 'active'
+      });
+
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const dateStr = futureDate.toISOString().split('T')[0];
+
+      const availResponse = await authFetch(
+        `${BASE_URL}/api/calendar?action=availability&date=${dateStr}`
+      );
+      const availData = await availResponse.json();
+
+      if (availData.slots && availData.slots.length >= 2) {
+        const [slotA, slotB] = availData.slots;
+        const bookOne = (slot) => authFetch(`${BASE_URL}/api/calendar?action=book`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: dateStr,
+            time: slot,
+            duration: 60,
+            category: 'interview',
+            interviewLevel: 'beginner',
+            interviewStyle: 'MMI'
+          })
+        });
+
+        const [responseA, responseB] = await Promise.all([bookOne(slotA), bookOne(slotB)]);
+        const statuses = [responseA.status, responseB.status].sort();
+
+        // Exactly one of the two concurrent requests must succeed; the other must be rejected
+        // for lack of credit (never both 200).
+        expect(statuses).toEqual([200, 400]);
+
+        const user = await getTestUser();
+        const purchase = user.purchases.find(p => p.package_id === 'single');
+        expect(purchase.sessions_used).toBe(1);
+        expect(purchase.bookings?.length || 0).toBe(1);
+      }
+    });
     
   });
   

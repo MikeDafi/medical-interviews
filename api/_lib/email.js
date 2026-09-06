@@ -85,6 +85,23 @@ function formatDate(dateStr) {
 }
 
 /**
+ * Escape a value for safe interpolation into HTML email templates. Every user-controlled string
+ * rendered into these templates (Google account name, profile fields, school names, uploaded
+ * filenames, etc.) MUST go through this first - none of the sanitize.js helpers used elsewhere
+ * strip/escape HTML, so unescaped interpolation here would let a user's own display name/profile
+ * data break out of the surrounding markup in the admin's inbox.
+ */
+function escapeHtml(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Send booking confirmation email to customer
  */
 export async function sendCustomerBookingEmail({ 
@@ -99,6 +116,9 @@ export async function sendCustomerBookingEmail({
 }) {
   const sessionType = `${getCategoryLabel(category)} (${duration === 30 ? '30 minutes' : '1 hour'})`;
   const formattedDate = formatDate(date);
+  // Escaped alias for HTML interpolation only - `customerName` itself stays raw for the text
+  // version below.
+  const customerNameHtml = escapeHtml(customerName);
   
   const html = `
 <!DOCTYPE html>
@@ -129,7 +149,7 @@ export async function sendCustomerBookingEmail({
           <tr>
             <td style="padding: 40px;">
               <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-                Hi ${customerName || 'there'},
+                Hi ${customerNameHtml || 'there'},
               </p>
               <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 32px;">
                 Great news! Your medical school interview coaching session has been confirmed. Here are the details:
@@ -356,6 +376,7 @@ export async function sendPurchaseFollowUpEmail({
       ? '1 hour'
       : `${durationMinutes} minutes`;
   const bookUrl = `${SITE_URL}#book`;
+  const customerNameHtml = escapeHtml(customerName);
 
   const subject = requiresBooking
     ? `🎉 Purchase Confirmed — Book Your ${packageName} Session${sessionsTotal > 1 ? 's' : ''}`
@@ -448,7 +469,7 @@ export async function sendPurchaseFollowUpEmail({
           <tr>
             <td style="padding: 40px;">
               <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-                Hi ${customerName || 'there'},
+                Hi ${customerNameHtml || 'there'},
               </p>
               <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0;">
                 Your payment went through and your <strong>${packageName}</strong> is ready to use.
@@ -556,6 +577,19 @@ export async function sendAdminBookingEmail({
   const { interviewLevel, interviewStyle, targetSchool: bookingSchool, attachments = [] } = bookingDetails;
   const hasBookingDetails = interviewLevel || interviewStyle || bookingSchool || attachments.length > 0;
 
+  // Escaped aliases for HTML interpolation only - every one of these can contain arbitrary
+  // characters chosen by the client themselves (Google display name, profile fields, school
+  // names, uploaded filenames), so none of them may be interpolated into the HTML template
+  // unescaped. Raw versions are kept for the plain-text template below.
+  const customerNameHtml = escapeHtml(customerName);
+  const customerEmailHtml = escapeHtml(customerEmail);
+  const applicationStageHtml = escapeHtml(application_stage);
+  const schoolsListHtml = escapeHtml(schoolsList);
+  const mainConcernsHtml = escapeHtml(main_concerns);
+  const interviewLevelHtml = escapeHtml(interviewLevel);
+  const interviewStyleHtml = escapeHtml(interviewStyle);
+  const bookingSchoolHtml = escapeHtml(bookingSchool);
+
   const html = `
 <!DOCTYPE html>
 <html>
@@ -589,7 +623,7 @@ export async function sendAdminBookingEmail({
                       <tr>
                         <td>
                           <p style="color: #065f46; font-size: 18px; font-weight: 600; margin: 0;">
-                            ${customerName || customerEmail}
+                            ${customerNameHtml || customerEmailHtml}
                           </p>
                           <p style="color: #047857; font-size: 14px; margin: 4px 0 0;">
                             ${sessionType} • ${formattedDate} at ${time} ${timezone}
@@ -609,13 +643,13 @@ export async function sendAdminBookingEmail({
                 <tr>
                   <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">
                     <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">Name:</span>
-                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${customerName || 'Not provided'}</span>
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${customerNameHtml || 'Not provided'}</span>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">
                     <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">Email:</span>
-                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${customerEmail}</span>
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${customerEmailHtml}</span>
                   </td>
                 </tr>
                 <tr>
@@ -627,13 +661,13 @@ export async function sendAdminBookingEmail({
                 <tr>
                   <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">
                     <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">Stage:</span>
-                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${application_stage || 'Not specified'}</span>
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${applicationStageHtml || 'Not specified'}</span>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 8px 0;">
                     <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">Target Schools:</span>
-                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${schoolsList}</span>
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${schoolsListHtml}</span>
                   </td>
                 </tr>
               </table>
@@ -648,21 +682,21 @@ export async function sendAdminBookingEmail({
                 <tr>
                   <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">
                     <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">Level:</span>
-                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${interviewLevel}</span>
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${interviewLevelHtml}</span>
                   </td>
                 </tr>` : ''}
                 ${interviewStyle ? `
                 <tr>
                   <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">
                     <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">Interview Style:</span>
-                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${interviewStyle}</span>
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${interviewStyleHtml}</span>
                   </td>
                 </tr>` : ''}
                 ${bookingSchool ? `
                 <tr>
                   <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">
                     <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">School:</span>
-                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${bookingSchool}</span>
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${bookingSchoolHtml}</span>
                   </td>
                 </tr>` : ''}
                 ${attachments.length > 0 ? `
@@ -670,7 +704,7 @@ export async function sendAdminBookingEmail({
                   <td style="padding: 8px 0;">
                     <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">Attachments:</span>
                     <span style="color: #1e293b; font-size: 14px; font-weight: 500;">
-                      ${attachments.map(f => `<a href="${f.url}" target="_blank" style="color: #0d9488;">${f.filename}</a>`).join(', ')}
+                      ${attachments.map(f => `<a href="${escapeHtml(f.url)}" target="_blank" style="color: #0d9488;">${escapeHtml(f.filename)}</a>`).join(', ')}
                     </span>
                   </td>
                 </tr>` : ''}
@@ -683,7 +717,7 @@ export async function sendAdminBookingEmail({
                 Main Concerns
               </h3>
               <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px; padding: 12px; background-color: #f8fafc; border-radius: 6px; border-left: 3px solid #0d9488;">
-                ${main_concerns}
+                ${mainConcernsHtml}
               </p>
               ` : ''}
               
@@ -779,6 +813,7 @@ export async function sendCustomerCancellationEmail({
 }) {
   const sessionType = `${getCategoryLabel(category)} (${duration === 30 ? '30 minutes' : '1 hour'})`;
   const formattedDate = formatDate(date);
+  const customerNameHtml = escapeHtml(customerName);
 
   const html = `
 <!DOCTYPE html>
@@ -800,7 +835,7 @@ export async function sendCustomerCancellationEmail({
           </tr>
           <tr>
             <td style="padding: 32px 40px;">
-              <p style="color: #134e4a; font-size: 16px; margin: 0 0 16px;">Hi ${customerName || 'there'},</p>
+              <p style="color: #134e4a; font-size: 16px; margin: 0 0 16px;">Hi ${customerNameHtml || 'there'},</p>
               <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
                 Your coaching session has been cancelled. Your session credit has been restored, so you can rebook whenever works for you.
               </p>
@@ -872,6 +907,8 @@ export async function sendAdminCancellationEmail({
   const sessionType = `${getCategoryLabel(category)} (${duration === 30 ? '30 min' : '1 hour'})`;
   const formattedDate = formatDate(date);
   const adminUserLink = `${SITE_URL}/admin/user/${customerId}`;
+  const customerNameHtml = escapeHtml(customerName);
+  const customerEmailHtml = escapeHtml(customerEmail);
 
   const html = `
 <!DOCTYPE html>
@@ -893,10 +930,10 @@ export async function sendAdminCancellationEmail({
           </tr>
           <tr>
             <td style="padding: 28px 40px;">
-              <p style="color: #065f46; font-size: 18px; font-weight: 600; margin: 0 0 4px;">${customerName || customerEmail}</p>
+              <p style="color: #065f46; font-size: 18px; font-weight: 600; margin: 0 0 4px;">${customerNameHtml || customerEmailHtml}</p>
               <p style="color: #475569; font-size: 14px; margin: 0 0 16px;">${sessionType} • ${formattedDate} at ${time} ${timezone}</p>
               <p style="color: #475569; font-size: 14px; margin: 0;">
-                Email: ${customerEmail}<br />
+                Email: ${customerEmailHtml}<br />
                 The session credit has been restored to the client and the calendar event removed.
               </p>
               <p style="margin: 20px 0 0;">
@@ -934,5 +971,5 @@ This is an automated notification from PreMedical 1-on-1
   });
 }
 
-export { sendEmail, ADMIN_EMAIL };
+export { sendEmail, ADMIN_EMAIL, escapeHtml };
 
