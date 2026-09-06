@@ -266,6 +266,12 @@
   color: #1e293b;
 }
 
+.school-type {
+  font-size: 12px;
+  font-weight: 400;
+  color: #64748b;
+}
+
 .school-date {
   font-size: 12px;
   color: #64748b;
