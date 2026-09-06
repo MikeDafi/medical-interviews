@@ -40,10 +40,19 @@ export default async function handler(req, res) {
         resources JSONB DEFAULT '[]',
         profile_complete BOOLEAN DEFAULT FALSE,
         is_admin BOOLEAN DEFAULT FALSE,
+        interview_level VARCHAR(20),
+        interview_style VARCHAR(20),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
+
+    // Migration: add interview_level/interview_style to a `users` table that already existed
+    // before this feature (CREATE TABLE IF NOT EXISTS above only applies to brand-new tables).
+    // 'beginner'/'mid'/'advanced' and 'MMI'/'traditional'/'both' respectively; validated at the
+    // API layer, same lightweight-validation style as the rest of this table's free-text columns.
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS interview_level VARCHAR(20)`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS interview_style VARCHAR(20)`;
 
     // Create performance indexes for common query patterns
     // Index on email for login lookups

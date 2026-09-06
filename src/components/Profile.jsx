@@ -27,6 +27,18 @@ function formatBookingTimeRange(booking) {
   }
 }
 
+// Interview preference display labels
+const INTERVIEW_LEVEL_LABELS = {
+  beginner: 'Beginner',
+  mid: 'Intermediate',
+  advanced: 'Advanced'
+}
+const INTERVIEW_STYLE_LABELS = {
+  MMI: 'MMI',
+  traditional: 'Traditional',
+  both: 'Both'
+}
+
 // Package name mapping
 const PACKAGE_NAMES = {
   // Interview packages
@@ -73,6 +85,9 @@ export default function Profile({ onClose }) {
   const [newSchool, setNewSchool] = useState({ name: '', interviewType: 'MMI', interviewDate: '' })
   const [editingConcerns, setEditingConcerns] = useState(false)
   const [concerns, setConcerns] = useState('')
+  const [editingInterviewPreferences, setEditingInterviewPreferences] = useState(false)
+  const [interviewLevel, setInterviewLevel] = useState('')
+  const [interviewStyle, setInterviewStyle] = useState('')
   const [sessionCredits, setSessionCredits] = useState({ thirtyMin: 0, sixtyMin: 0, total: 0, loading: true })
   const [purchasedPackages, setPurchasedPackages] = useState([])
   const [editingName, setEditingName] = useState(false)
@@ -82,7 +97,7 @@ export default function Profile({ onClose }) {
   const [phoneError, setPhoneError] = useState('')
   const [cancellingBooking, setCancellingBooking] = useState(null)
   const [upcomingBookings, setUpcomingBookings] = useState([])
-  const [expandedSections, setExpandedSections] = useState({ concerns: false, schools: false, resources: false })
+  const [expandedSections, setExpandedSections] = useState({ concerns: false, schools: false, resources: false, interviewPreferences: false })
 
   // Extract upcoming bookings from purchases
   const extractUpcomingBookings = (purchases) => {
@@ -220,10 +235,14 @@ export default function Profile({ onClose }) {
           phone: parsed.phone,
           application_stage: parsed.applicationStage,
           target_schools: parsed.targetSchools?.map(s => ({ school_name: s.name, interview_type: s.interviewType, interview_date: s.interviewDate })) || [],
-          current_concerns: parsed.currentConcerns || ''
+          current_concerns: parsed.currentConcerns || '',
+          interview_level: parsed.interviewLevel || '',
+          interview_style: parsed.interviewStyle || ''
         })
         setResources(parsed.resources?.filter(r => r.title && r.url) || [])
         setConcerns(parsed.currentConcerns || '')
+        setInterviewLevel(parsed.interviewLevel || '')
+        setInterviewStyle(parsed.interviewStyle || '')
       }
 
       // Try API for profile
@@ -236,6 +255,8 @@ export default function Profile({ onClose }) {
         setResources(data.profile?.resources || [])
         // Set concerns from server data
         setConcerns(data.profile?.main_concerns || '')
+        setInterviewLevel(data.profile?.interview_level || '')
+        setInterviewStyle(data.profile?.interview_style || '')
       }
     } catch (error) {
       console.error('Error fetching profile data:', error)
@@ -427,6 +448,25 @@ export default function Profile({ onClose }) {
       setProfileData(prev => ({ ...prev, main_concerns: previousConcerns }))
       setConcerns(previousConcerns)
       setEditingConcerns(true)
+    }
+  }
+
+  const handleSaveInterviewPreferences = async () => {
+    const previousLevel = profileData?.interview_level || ''
+    const previousStyle = profileData?.interview_style || ''
+
+    // Optimistically update UI
+    setProfileData(prev => ({ ...prev, interview_level: interviewLevel, interview_style: interviewStyle }))
+    setEditingInterviewPreferences(false)
+
+    // Save to DB
+    const saved = await saveProfileUpdate({ interviewLevel, interviewStyle })
+    if (!saved) {
+      // Revert on failure
+      setProfileData(prev => ({ ...prev, interview_level: previousLevel, interview_style: previousStyle }))
+      setInterviewLevel(previousLevel)
+      setInterviewStyle(previousStyle)
+      setEditingInterviewPreferences(true)
     }
   }
 
@@ -731,6 +771,54 @@ export default function Profile({ onClose }) {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Interview Preferences - Collapsible */}
+                <div className="collapsible-section">
+                  <button 
+                    className="collapsible-header"
+                    onClick={() => setExpandedSections(prev => ({ ...prev, interviewPreferences: !prev.interviewPreferences }))}
+                  >
+                    <span>Interview Preferences</span>
+                    <span className={`collapsible-arrow ${expandedSections.interviewPreferences ? 'expanded' : ''}`}>▸</span>
+                  </button>
+                  {expandedSections.interviewPreferences && (
+                    <div className="collapsible-content">
+                      {editingInterviewPreferences ? (
+                        <div className="concerns-edit-inline">
+                          <div className="form-group">
+                            <label>Interview experience level</label>
+                            <select value={interviewLevel} onChange={(e) => setInterviewLevel(e.target.value)}>
+                              <option value="">Not set</option>
+                              <option value="beginner">Beginner</option>
+                              <option value="mid">Intermediate</option>
+                              <option value="advanced">Advanced</option>
+                            </select>
+                          </div>
+                          <div className="form-group">
+                            <label>Interview style focus</label>
+                            <select value={interviewStyle} onChange={(e) => setInterviewStyle(e.target.value)}>
+                              <option value="">Not set</option>
+                              <option value="MMI">MMI</option>
+                              <option value="traditional">Traditional</option>
+                              <option value="both">Both</option>
+                            </select>
+                          </div>
+                          <div className="concerns-edit-actions">
+                            <button className="save-name-btn" onClick={handleSaveInterviewPreferences}>Save</button>
+                            <button className="cancel-name-btn" onClick={() => setEditingInterviewPreferences(false)}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="collapsible-value">
+                          <span>
+                            Level: {INTERVIEW_LEVEL_LABELS[profileData?.interview_level] || 'Not set'} · Style: {INTERVIEW_STYLE_LABELS[profileData?.interview_style] || 'Not set'}
+                          </span>
+                          <button className="edit-name-btn" onClick={() => setEditingInterviewPreferences(true)}>Edit</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Main Concerns - Collapsible */}

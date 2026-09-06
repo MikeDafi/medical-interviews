@@ -11,6 +11,8 @@ export default function ProfileSetup({ user, onComplete }) {
   const [formData, setFormData] = useState({
     phone: '',
     applicationStage: '',
+    interviewLevel: '',
+    interviewStyle: '',
     targetSchools: [{ id: generateId(), name: '', interviewType: 'MMI', interviewDate: '', priority: 1 }],
     currentConcerns: '',
     resources: [{ id: generateId(), title: '', url: '' }]
@@ -109,6 +111,8 @@ export default function ProfileSetup({ user, onComplete }) {
           name: user.name,
           phone: formData.phone,
           applicationStage: formData.applicationStage,
+          interviewLevel: formData.interviewLevel,
+          interviewStyle: formData.interviewStyle,
           targetSchools: formData.targetSchools.filter(s => s.name.trim()),
           concerns: formData.currentConcerns,
           resources: formData.resources.filter(r => r.title.trim() && r.url.trim())
@@ -177,6 +181,34 @@ export default function ProfileSetup({ user, onComplete }) {
                   <option value="applying">Currently applying this cycle</option>
                   <option value="interviews-scheduled">Have interviews scheduled</option>
                   <option value="reapplicant">Reapplicant</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Your interview experience level</label>
+                <select
+                  name="interviewLevel"
+                  value={formData.interviewLevel}
+                  onChange={handleInputChange}
+                >
+                  <option value="">Select your level</option>
+                  <option value="beginner">Beginner (little to no interview practice)</option>
+                  <option value="mid">Intermediate (some practice/experience)</option>
+                  <option value="advanced">Advanced (extensive practice/experience)</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Which interview style do you want to focus on?</label>
+                <select
+                  name="interviewStyle"
+                  value={formData.interviewStyle}
+                  onChange={handleInputChange}
+                >
+                  <option value="">Select a focus</option>
+                  <option value="MMI">MMI</option>
+                  <option value="traditional">Traditional</option>
+                  <option value="both">Both</option>
                 </select>
               </div>
 
@@ -341,6 +373,8 @@ export default function ProfileSetup({ user, onComplete }) {
                 name: user.name,
                 phone: '',
                 applicationStage: '',
+                interviewLevel: '',
+                interviewStyle: '',
                 targetSchools: [],
                 concerns: '',
                 resources: []
