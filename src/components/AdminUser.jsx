@@ -419,14 +419,26 @@ export default function AdminUser() {
               <h3>Target Schools ({userData.target_schools?.length || 0})</h3>
               {userData.target_schools?.length > 0 ? (
                 <ul className="schools-list">
-                  {userData.target_schools.map((school, idx) => (
-                    <li key={school.school_name || idx}>
-                      <span className="school-name">{school.school_name}</span>
-                      {school.interview_date && (
-                        <span className="school-date">Interview: {formatDateShort(school.interview_date)}</span>
-                      )}
-                    </li>
-                  ))}
+                  {userData.target_schools.map((school, idx) => {
+                    // Purchases store schools as { name, interviewType, interviewDate }
+                    // (camelCase) - school_name/interview_type/interview_date never actually
+                    // exist in the DB, so this always rendered blank. Fall back to both, matching
+                    // the defensive pattern already used in Profile.jsx.
+                    const schoolName = school.name || school.school_name
+                    const interviewType = school.interviewType || school.interview_type
+                    const interviewDate = school.interviewDate || school.interview_date
+                    return (
+                      <li key={schoolName || idx}>
+                        <span className="school-name">
+                          {schoolName || 'Unnamed school'}
+                          {interviewType && <span className="school-type"> ({interviewType})</span>}
+                        </span>
+                        {interviewDate && (
+                          <span className="school-date">Interview: {formatDateShort(interviewDate)}</span>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               ) : (
                 <p className="empty-state">No target schools added</p>
