@@ -14,6 +14,7 @@ export default function Footer() {
         <div className="footer-brand">
           <span className="footer-logo">PreMedical 1-on-1</span>
           <p className="footer-tagline">Expert medical school interview preparation</p>
+          <a href="mailto:premedical1on1@gmail.com" rel="noopener" className="footer-brand-email">premedical1on1@gmail.com</a>
         </div>
         
         <div className="footer-links">
