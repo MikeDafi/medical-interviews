@@ -2131,6 +2131,18 @@ img {
   color: var(--light-text);
 }
 
+.footer-brand-email {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-teal);
+}
+
+.footer-brand-email:hover {
+  text-decoration: underline;
+}
+
 .footer-links {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
