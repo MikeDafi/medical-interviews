@@ -30,12 +30,15 @@ export default async function handler(req, res) {
       for (const row of result.rows) {
         for (const p of (row.purchases || [])) {
           if (p.purchase_date && new Date(p.purchase_date).getTime() > cutoff && purchases.length < 5) {
-            const name = (row.name || 'S').split(' ')[0];
+            const name = (row.name || 'Someone').split(' ')[0];
             purchases.push({
               // Purchases already carry a unique id (the Stripe checkout session id) — surface
               // it so the frontend list has stable React keys instead of colliding on `undefined`.
               id: p.id,
-              first_name: name[0] + '.',
+              // Show the real customer's full first name for genuine social proof, matching the
+              // fallback/dummy data (e.g. "Sarah", "Michael") which already uses full first names
+              // rather than an initial.
+              first_name: name,
               // Purchase records store `package_id` (e.g. 'trial'), not `package_name` — the old
               // code always fell back to the generic "Session" label. Resolve the real name.
               package_name: getPackageName(p.package_id),
