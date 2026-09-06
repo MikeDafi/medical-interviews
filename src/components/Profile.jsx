@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { calculateSessionCredits, formatDate } from '../utils'
 import { parseTimeLabel, zonedWallClockToUtc, formatTimeLabel, friendlyZoneName, isValidTimeZone } from '../../lib/timezone.js'
+import { getCategoryLabel } from '../../lib/packages.js'
 import './Profile.css'
 
 // Constants
@@ -595,6 +596,7 @@ export default function Profile({ onClose }) {
                               <span className="booking-date-num">{bookingDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                             </div>
                             <div className="upcoming-booking-details">
+                              <span className="booking-service-label">{getCategoryLabel(booking.category)}</span>
                               <span className="booking-time-display">{formatBookingTimeRange(booking)}</span>
                               {booking.meet_link && (
                                 <a href={booking.meet_link} target="_blank" rel="noopener noreferrer" className="booking-meet-link">

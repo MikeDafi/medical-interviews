@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { getCategoryLabel } from '../../lib/packages.js'
 import './AdminUser.css'
 
 // Interview preference display labels (same values used by Profile.jsx/ProfileSetup.jsx)
@@ -236,9 +237,9 @@ export default function AdminUser() {
     userData.purchases.forEach(pkg => {
       if (pkg.bookings) {
         pkg.bookings.forEach(b => {
-          // Purchases never actually have a `type` field (they store `duration_minutes`), so this
-          // was always undefined. Derive it the same way the "Booking History" list below does.
-          bookings.push({ ...b, packageType: pkg.duration_minutes === 30 ? 'trial' : 'regular' })
+          // Prefer the booking's own category (set at booking time); fall back to the parent
+          // purchase's category for bookings created before that field existed.
+          bookings.push({ ...b, category: b.category || pkg.category })
         })
       }
     })
@@ -583,6 +584,7 @@ export default function AdminUser() {
                   {bookings.map((booking) => (
                     <li key={booking.id} className="booking-item">
                       <div className="booking-main">
+                        <span className="booking-service-label">{getCategoryLabel(booking.category)}</span>
                         <span className="booking-date">{formatDateShort(booking.date)}</span>
                         <span className="booking-time">{booking.time}</span>
                         <span className={`booking-duration ${booking.duration === 30 ? 'trial' : 'regular'}`}>
