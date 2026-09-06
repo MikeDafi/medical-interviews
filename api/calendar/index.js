@@ -1,7 +1,7 @@
 // Load .env.local for local development
 import '../_lib/env.js';
 
-import { sql } from '@vercel/postgres';
+import { sql, createClient } from '@vercel/postgres';
 import { google } from 'googleapis';
 import { rateLimit } from '../_lib/auth.js';
 import { requireAuth } from '../_lib/session.js';
@@ -668,57 +668,128 @@ export default async function handler(req, res) {
     }
 
     try {
-      // Fetch user data
-      const userResult = await sql`
-        SELECT id, purchases, phone, application_stage, main_concerns, target_schools, cv_files FROM users 
-        WHERE google_id = ${userId} OR email = ${userEmail}
-      `;
+      // SECURITY: Atomically check-and-reserve the session credit using a row lock, closing a
+      // TOCTOU race where two concurrent booking requests for the same user could both read "1
+      // credit available" before either write committed - each would pass the credit check and
+      // create a real Google Calendar event, silently consuming the same single credit twice.
+      // This uses a dedicated client (not the pooled `sql` tagged template used everywhere else
+      // in this file) so BEGIN/SELECT...FOR UPDATE/UPDATE/COMMIT all run on the same connection,
+      // which is required for the row lock to actually hold across statements. The lock is held
+      // only for this quick reserve step - the slow Google Calendar API call below happens after
+      // COMMIT/end(), once the connection (and lock) has already been released.
+      const client = createClient();
+      await client.connect();
 
-      if (userResult.rows.length === 0) {
-        return res.status(404).json({ error: 'User not found. Please sign in again.' });
-      }
+      let user, purchases, packageIndex, cleanTargetSchool, cleanAttachments, userProfile, bookingArrayIndex;
+      try {
+        await client.sql`BEGIN`;
 
-      const user = userResult.rows[0];
-      const purchases = user.purchases || [];
-      const userProfile = {
-        phone: user.phone,
-        application_stage: user.application_stage,
-        main_concerns: user.main_concerns,
-        target_schools: user.target_schools
-      };
+        const userResult = await client.sql`
+          SELECT id, purchases, phone, application_stage, main_concerns, target_schools, cv_files FROM users 
+          WHERE google_id = ${userId} OR email = ${userEmail}
+          FOR UPDATE
+        `;
 
-      // SECURITY: targetSchool must reference one of the client's own existing target schools -
-      // never trust a client-submitted freeform name as authoritative, since the booking UI only
-      // ever offers a select-from-existing dropdown (see plan.md decision on schools at booking).
-      const existingSchools = user.target_schools || [];
-      const cleanTargetSchool = targetSchool && existingSchools.some(s => s.name === targetSchool)
-        ? targetSchool
-        : null;
+        if (userResult.rows.length === 0) {
+          await client.sql`ROLLBACK`;
+          return res.status(404).json({ error: 'User not found. Please sign in again.' });
+        }
 
-      // SECURITY: attachmentIds must reference the client's own previously-uploaded cv_files -
-      // resolve to the actual stored file metadata rather than trusting whatever the client sends.
-      const existingCvFiles = user.cv_files || [];
-      const cleanAttachments = Array.isArray(attachmentIds)
-        ? existingCvFiles.filter(f => attachmentIds.includes(f.id))
-        : [];
+        user = userResult.rows[0];
+        purchases = user.purchases || [];
+        userProfile = {
+          phone: user.phone,
+          application_stage: user.application_stage,
+          main_concerns: user.main_concerns,
+          target_schools: user.target_schools
+        };
 
-      // Find an active package with matching duration, category, and available sessions.
-      // Purchases created before categories existed (PR #6) have no `category` field - treat
-      // those as 'interview' (the only offering before CV/Advisory existed), matching
-      // calculateSessionCredits()'s same fallback in src/utils/index.js.
-      const packageIndex = purchases.findIndex(p => {
-        if (p.status !== 'active') return false;
-        const remaining = (p.sessions_total || 0) - (p.sessions_used || 0);
-        if (remaining <= 0) return false;
-        
-        // Check duration_minutes (new format) or fall back to type (legacy)
-        const pkgDuration = p.duration_minutes || (p.type === 'trial' ? 30 : 60);
-        const pkgCategory = p.category || 'interview';
-        return pkgDuration === duration && pkgCategory === category;
-      });
+        // SECURITY: targetSchool must reference one of the client's own existing target schools -
+        // never trust a client-submitted freeform name as authoritative, since the booking UI only
+        // ever offers a select-from-existing dropdown (see plan.md decision on schools at booking).
+        const existingSchools = user.target_schools || [];
+        cleanTargetSchool = targetSchool && existingSchools.some(s => s.name === targetSchool)
+          ? targetSchool
+          : null;
 
-      if (packageIndex === -1) {
-        return res.status(400).json({ error: `No ${duration}-minute ${getCategoryLabel(category)} sessions available. Please purchase a package.` });
+        // SECURITY: attachmentIds must reference the client's own previously-uploaded cv_files -
+        // resolve to the actual stored file metadata rather than trusting whatever the client sends.
+        const existingCvFiles = user.cv_files || [];
+        cleanAttachments = Array.isArray(attachmentIds)
+          ? existingCvFiles.filter(f => attachmentIds.includes(f.id))
+          : [];
+
+        // Find an active package with matching duration, category, and available sessions.
+        // Purchases created before categories existed (PR #6) have no `category` field - treat
+        // those as 'interview' (the only offering before CV/Advisory existed), matching
+        // calculateSessionCredits()'s same fallback in src/utils/index.js.
+        packageIndex = purchases.findIndex(p => {
+          if (p.status !== 'active') return false;
+          const remaining = (p.sessions_total || 0) - (p.sessions_used || 0);
+          if (remaining <= 0) return false;
+          
+          // Check duration_minutes (new format) or fall back to type (legacy)
+          const pkgDuration = p.duration_minutes || (p.type === 'trial' ? 30 : 60);
+          const pkgCategory = p.category || 'interview';
+          return pkgDuration === duration && pkgCategory === category;
+        });
+
+        if (packageIndex === -1) {
+          await client.sql`ROLLBACK`;
+          return res.status(400).json({ error: `No ${duration}-minute ${getCategoryLabel(category)} sessions available. Please purchase a package.` });
+        }
+
+        // Reserve the credit and a placeholder booking record now, while the row is still locked.
+        // calendar_event_id/calendar_event_link are filled in with a quick follow-up update after
+        // the (slow, retry-prone) Google Calendar API call below, once this transaction has
+        // already committed and released the lock.
+        const placeholderBooking = {
+          id: `booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          date,
+          time,
+          duration,
+          category,
+          package_id: purchases[packageIndex].package_id,
+          ...(category === 'interview' ? { interview_level: interviewLevel, interview_style: interviewStyle } : {}),
+          ...(cleanTargetSchool ? { target_school: cleanTargetSchool } : {}),
+          ...(cleanAttachments.length > 0 ? { attachments: cleanAttachments } : {}),
+          status: 'confirmed',
+          booked_at: new Date().toISOString(),
+          calendar_event_link: null,
+          calendar_event_id: null,
+          meet_link: process.env.GOOGLE_MEET_LINK || 'https://meet.google.com/yrr-qxiw-hjh',
+          timezone: customerTimezone
+        };
+
+        purchases[packageIndex].sessions_used = (purchases[packageIndex].sessions_used || 0) + 1;
+        purchases[packageIndex].bookings = purchases[packageIndex].bookings || [];
+        bookingArrayIndex = purchases[packageIndex].bookings.length;
+        purchases[packageIndex].bookings.push(placeholderBooking);
+
+        // For Interview bookings, also sync interview_level/interview_style back onto the profile
+        // as the client's new "current" value (two-way sync - see plan.md), so the booking form
+        // pre-fills with whatever was last used next time.
+        if (category === 'interview') {
+          await client.sql`
+            UPDATE users 
+            SET purchases = ${JSON.stringify(purchases)}::jsonb,
+                interview_level = ${interviewLevel},
+                interview_style = ${interviewStyle},
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ${user.id}
+          `;
+        } else {
+          await client.sql`
+            UPDATE users SET purchases = ${JSON.stringify(purchases)}::jsonb WHERE id = ${user.id}
+          `;
+        }
+
+        await client.sql`COMMIT`;
+      } catch (txError) {
+        await client.sql`ROLLBACK`.catch(() => {});
+        throw txError;
+      } finally {
+        await client.end();
       }
 
       // Service metadata from the matched purchase, so the booking record, calendar event, and
@@ -727,9 +798,6 @@ export default async function handler(req, res) {
       // purchases[packageIndex].category) since legacy purchases may have no category field at
       // all - the match above already guarantees it's equivalent to `category` either way.
       const bookingCategory = category;
-      const bookingPackageId = purchases[packageIndex].package_id;
-
-      // Static Google Meet link for all sessions
       const meetLink = process.env.GOOGLE_MEET_LINK || 'https://meet.google.com/yrr-qxiw-hjh';
 
       // Canonical absolute instant for this booking: the slot's business wall-clock interpreted in
@@ -742,7 +810,8 @@ export default async function handler(req, res) {
       );
       const bookingEndInstant = new Date(bookingStartInstant.getTime() + duration * 60 * 1000);
 
-      // Create booking in Google Calendar if configured
+      // Create booking in Google Calendar if configured. The credit is already reserved (see
+      // above), so this slow, retry-prone external API call no longer holds any DB lock.
       let eventLink = null;
       let calendarEventId = null;
       console.log('Calendar config check:', {
@@ -814,50 +883,40 @@ export default async function handler(req, res) {
         console.log('Skipping calendar event - missing config');
       }
 
-      // Create booking record
+      // Booking record for the response/emails, reflecting the final calendar details (the DB
+      // copy is patched separately below via a targeted jsonb_set, not a full purchases rewrite,
+      // since another concurrent booking may have already been reserved for this same user by now).
       const booking = {
-        id: `booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: purchases[packageIndex].bookings[bookingArrayIndex].id,
         date,
         time,
         duration,
-        // Which service this booking is for - copied from the purchase it draws a session from,
-        // so booking details and confirmation emails can clearly state the service (e.g. CV
-        // Advice vs Interview Prep) instead of only ever showing the duration.
         category: bookingCategory,
-        package_id: bookingPackageId,
-        // Interview-specific fields (required for category 'interview', absent otherwise).
+        package_id: purchases[packageIndex].package_id,
         ...(category === 'interview' ? { interview_level: interviewLevel, interview_style: interviewStyle } : {}),
         ...(cleanTargetSchool ? { target_school: cleanTargetSchool } : {}),
-        // CV & Strategy attachments (empty for other categories).
         ...(cleanAttachments.length > 0 ? { attachments: cleanAttachments } : {}),
         status: 'confirmed',
-        booked_at: new Date().toISOString(),
+        booked_at: purchases[packageIndex].bookings[bookingArrayIndex].booked_at,
         calendar_event_link: eventLink,
         calendar_event_id: calendarEventId,
         meet_link: meetLink,
         timezone: customerTimezone
       };
 
-      // Update the package
-      purchases[packageIndex].sessions_used = (purchases[packageIndex].sessions_used || 0) + 1;
-      purchases[packageIndex].bookings = purchases[packageIndex].bookings || [];
-      purchases[packageIndex].bookings.push(booking);
-
-      // Save back to DB. For Interview bookings, also sync interview_level/interview_style back
-      // onto the profile as the client's new "current" value (two-way sync - see plan.md), so the
-      // booking form pre-fills with whatever was last used next time.
-      if (category === 'interview') {
+      // Patch the calendar event id/link into the already-reserved booking record. Targeted via
+      // jsonb_set at the exact (packageIndex, bookingArrayIndex) path rather than re-reading and
+      // rewriting the whole `purchases` column, so this can't clobber a different booking that
+      // another concurrent request for this same user may have reserved in the meantime.
+      if (eventLink || calendarEventId) {
+        const path = [String(packageIndex), 'bookings', String(bookingArrayIndex)];
         await sql`
-          UPDATE users 
-          SET purchases = ${JSON.stringify(purchases)}::jsonb,
-              interview_level = ${interviewLevel},
-              interview_style = ${interviewStyle},
-              updated_at = CURRENT_TIMESTAMP
+          UPDATE users
+          SET purchases = jsonb_set(
+            jsonb_set(purchases, ${path}::text[] || '{calendar_event_link}'::text[], to_jsonb(${eventLink}::text)),
+            ${path}::text[] || '{calendar_event_id}'::text[], to_jsonb(${calendarEventId}::text)
+          )
           WHERE id = ${user.id}
-        `;
-      } else {
-        await sql`
-          UPDATE users SET purchases = ${JSON.stringify(purchases)}::jsonb WHERE id = ${user.id}
         `;
       }
 

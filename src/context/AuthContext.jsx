@@ -110,6 +110,15 @@ export function AuthProvider({ children }) {
       
       // Generate state nonce for CSRF protection
       const nonce = generateRandomString(32)
+
+      // SECURITY: Bind the nonce to a cookie set by our own origin, verified against the state's
+      // nonce on the callback (api/auth/index.js). A cross-site attacker cannot set a cookie for
+      // our origin, so this closes an OAuth login-CSRF where an attacker could otherwise complete
+      // their own Google authorization and lure a victim into loading the resulting callback URL,
+      // silently signing the victim's browser into the attacker's account. 10-minute expiry is a
+      // generous window to complete the Google sign-in redirect.
+      const secureAttr = window.location.protocol === 'https:' ? '; Secure' : ''
+      document.cookie = `oauth_state_nonce=${nonce}; Path=/; Max-Age=600; SameSite=Lax${secureAttr}`
       
       // Store verifier in state (sent to callback, not stored client-side)
       const stateData = JSON.stringify({ verifier, nonce })
