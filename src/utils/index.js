@@ -32,11 +32,16 @@ export function formatDate(dateStr, options = {}) {
 
 /**
  * Calculate session credits from purchases array
- * Tracks by duration: 30-minute sessions vs 60-minute sessions
+ * Tracks by duration: 30-minute sessions vs 60-minute sessions (pooled across all categories,
+ * preserved for backward compatibility), plus a `byCategory` breakdown so callers that need to
+ * know "how many CV & Strategy 60-min sessions does this client have left" can ask for exactly
+ * that combination (used by the booking page's combined service+duration selector).
  */
 export function calculateSessionCredits(purchases = []) {
   let thirtyMin = 0
   let sixtyMin = 0
+  // { [category]: { [duration]: remainingCount } }
+  const byCategory = {}
   
   purchases.forEach(p => {
     if (p.status !== 'active') return
@@ -46,12 +51,18 @@ export function calculateSessionCredits(purchases = []) {
     
     // Check duration_minutes first (new format), fall back to type (legacy)
     const duration = p.duration_minutes || (p.type === 'trial' ? 30 : 60)
+    // Older purchases (pre-category, see PR #6) won't have a category - group them under
+    // 'interview' since that was the only offering before CV/Advisory existed.
+    const category = p.category || 'interview'
     
     if (duration === 30) {
       thirtyMin += remaining
     } else {
       sixtyMin += remaining
     }
+
+    if (!byCategory[category]) byCategory[category] = {}
+    byCategory[category][duration] = (byCategory[category][duration] || 0) + remaining
   })
   
   // Return both new format and legacy format for backwards compatibility
@@ -59,10 +70,20 @@ export function calculateSessionCredits(purchases = []) {
     thirtyMin, 
     sixtyMin, 
     total: thirtyMin + sixtyMin,
+    byCategory,
     // Legacy names for backwards compatibility
     trial: thirtyMin, 
     regular: sixtyMin 
   }
+}
+
+/**
+ * Look up the remaining session count for one specific service+duration combination from the
+ * `byCategory` breakdown returned by calculateSessionCredits(). Used by the booking page to show
+ * (and enable/disable) each combined service+duration option.
+ */
+export function getCreditsForOption(credits, category, duration) {
+  return credits?.byCategory?.[category]?.[duration] || 0
 }
 
 /**

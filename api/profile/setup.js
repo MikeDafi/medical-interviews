@@ -31,7 +31,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { phone, applicationStage, targetSchools, concerns, resources, name, interviewLevel, interviewStyle } = req.body;
+    const { phone, applicationStage, targetSchools, concerns, resources, name, interviewLevel, interviewStyle, cvFiles } = req.body;
 
     // SECURITY: Use verified email from session, not from body
     const cleanEmail = sessionUser.email;
@@ -75,6 +75,22 @@ export default async function handler(req, res) {
         })).filter(r => r.title && r.url)
       : null;
 
+    // Sanitize CV & Strategy file attachments (null when the key is absent - see providedOrNull
+    // above). Like resources/targetSchools, the client sends the full desired list (existing +
+    // any newly uploaded file), which is why this is a full-array replace rather than an append -
+    // consistent with the pattern already used for those two fields. Restricting the URL host to
+    // our own Vercel Blob store prevents this field from being used to store/serve an arbitrary
+    // attacker-supplied URL.
+    const cleanCvFiles = Array.isArray(cvFiles)
+      ? cvFiles.slice(0, 20).map(f => ({
+          id: sanitizeString(f.id, 100),
+          url: sanitizeUrl(f.url, { allowedHosts: ['blob.vercel-storage.com'] }),
+          filename: sanitizeString(f.filename, 255),
+          size: Number.isFinite(f.size) ? Math.max(0, Math.min(f.size, 5 * 1024 * 1024)) : 0,
+          uploaded_at: sanitizeString(f.uploaded_at, 30) || new Date().toISOString()
+        })).filter(f => f.id && f.url && f.filename)
+      : null;
+
     // Check if user exists
     let user = await sql`SELECT * FROM users WHERE google_id = ${cleanGoogleId}`;
     
@@ -90,7 +106,7 @@ export default async function handler(req, res) {
       await sql`
         INSERT INTO users (
           google_id, email, name, phone, application_stage, target_schools, main_concerns,
-          resources, interview_level, interview_style, profile_complete
+          resources, interview_level, interview_style, cv_files, profile_complete
         )
         VALUES (
           ${cleanGoogleId}, 
@@ -103,6 +119,7 @@ export default async function handler(req, res) {
           ${JSON.stringify(cleanResources ?? [])}::jsonb,
           ${cleanInterviewLevel},
           ${cleanInterviewStyle},
+          ${JSON.stringify(cleanCvFiles ?? [])}::jsonb,
           true
         )
       `;
@@ -127,6 +144,7 @@ export default async function handler(req, res) {
           resources = COALESCE(${cleanResources !== null ? JSON.stringify(cleanResources) : null}::jsonb, resources),
           interview_level = COALESCE(${cleanInterviewLevel}, interview_level),
           interview_style = COALESCE(${cleanInterviewStyle}, interview_style),
+          cv_files = COALESCE(${cleanCvFiles !== null ? JSON.stringify(cleanCvFiles) : null}::jsonb, cv_files),
           profile_complete = true,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ${existingUser.id}

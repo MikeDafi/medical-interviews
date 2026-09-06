@@ -6,7 +6,7 @@ import { google } from 'googleapis';
 import { rateLimit } from '../_lib/auth.js';
 import { requireAuth } from '../_lib/session.js';
 import { sendCustomerBookingEmail, sendAdminBookingEmail, sendCustomerCancellationEmail, sendAdminCancellationEmail } from '../_lib/email.js';
-import { getPackageName, getCategoryLabel } from '../../lib/packages.js';
+import { getPackageName, getCategoryLabel, BOOKABLE_CATEGORIES } from '../../lib/packages.js';
 import { isOwnerUnavailableResponse } from '../../lib/calendar.js';
 import { formatSlotLabel, slotsForBooking } from '../../lib/slots.js';
 import {
@@ -579,14 +579,32 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: authError || 'Authentication required to book' });
     }
 
-    const { date, time, duration, timezone: requestedTimezone } = req.body;
+    const { date, time, duration, timezone: requestedTimezone, category, interviewLevel, interviewStyle, targetSchool, attachmentIds } = req.body;
 
-    if (!date || !time || !duration) {
+    if (!date || !time || !duration || !category) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
     if (![30, 60].includes(duration)) {
       return res.status(400).json({ error: 'Invalid duration (must be 30 or 60 minutes)' });
+    }
+
+    if (!BOOKABLE_CATEGORIES.includes(category)) {
+      return res.status(400).json({ error: 'Invalid service category' });
+    }
+
+    // SECURITY: Interview bookings require level/style - re-validated server-side even though
+    // the booking UI enforces this too, since a client could otherwise bypass the UI and book an
+    // Interview session with no level/style captured at all.
+    const ALLOWED_INTERVIEW_LEVELS = ['beginner', 'mid', 'advanced'];
+    const ALLOWED_INTERVIEW_STYLES = ['MMI', 'traditional', 'both'];
+    if (category === 'interview') {
+      if (!ALLOWED_INTERVIEW_LEVELS.includes(interviewLevel)) {
+        return res.status(400).json({ error: 'Interview level is required (beginner, mid, or advanced)' });
+      }
+      if (!ALLOWED_INTERVIEW_STYLES.includes(interviewStyle)) {
+        return res.status(400).json({ error: 'Interview style is required (MMI, traditional, or both)' });
+      }
     }
 
     // Customer's timezone (from the client) drives the Google event declaration + customer email.
@@ -652,7 +670,7 @@ export default async function handler(req, res) {
     try {
       // Fetch user data
       const userResult = await sql`
-        SELECT id, purchases, phone, application_stage, main_concerns, target_schools FROM users 
+        SELECT id, purchases, phone, application_stage, main_concerns, target_schools, cv_files FROM users 
         WHERE google_id = ${userId} OR email = ${userEmail}
       `;
 
@@ -669,7 +687,25 @@ export default async function handler(req, res) {
         target_schools: user.target_schools
       };
 
-      // Find an active package with matching duration and available sessions
+      // SECURITY: targetSchool must reference one of the client's own existing target schools -
+      // never trust a client-submitted freeform name as authoritative, since the booking UI only
+      // ever offers a select-from-existing dropdown (see plan.md decision on schools at booking).
+      const existingSchools = user.target_schools || [];
+      const cleanTargetSchool = targetSchool && existingSchools.some(s => s.name === targetSchool)
+        ? targetSchool
+        : null;
+
+      // SECURITY: attachmentIds must reference the client's own previously-uploaded cv_files -
+      // resolve to the actual stored file metadata rather than trusting whatever the client sends.
+      const existingCvFiles = user.cv_files || [];
+      const cleanAttachments = Array.isArray(attachmentIds)
+        ? existingCvFiles.filter(f => attachmentIds.includes(f.id))
+        : [];
+
+      // Find an active package with matching duration, category, and available sessions.
+      // Purchases created before categories existed (PR #6) have no `category` field - treat
+      // those as 'interview' (the only offering before CV/Advisory existed), matching
+      // calculateSessionCredits()'s same fallback in src/utils/index.js.
       const packageIndex = purchases.findIndex(p => {
         if (p.status !== 'active') return false;
         const remaining = (p.sessions_total || 0) - (p.sessions_used || 0);
@@ -677,17 +713,20 @@ export default async function handler(req, res) {
         
         // Check duration_minutes (new format) or fall back to type (legacy)
         const pkgDuration = p.duration_minutes || (p.type === 'trial' ? 30 : 60);
-        return pkgDuration === duration;
+        const pkgCategory = p.category || 'interview';
+        return pkgDuration === duration && pkgCategory === category;
       });
 
       if (packageIndex === -1) {
-        return res.status(400).json({ error: `No ${duration}-minute sessions available. Please purchase a package.` });
+        return res.status(400).json({ error: `No ${duration}-minute ${getCategoryLabel(category)} sessions available. Please purchase a package.` });
       }
 
       // Service metadata from the matched purchase, so the booking record, calendar event, and
       // confirmation emails can all clearly state which service this session is for (rather than
-      // only ever showing the duration).
-      const bookingCategory = purchases[packageIndex].category;
+      // only ever showing the duration). Use the validated request `category` directly (not
+      // purchases[packageIndex].category) since legacy purchases may have no category field at
+      // all - the match above already guarantees it's equivalent to `category` either way.
+      const bookingCategory = category;
       const bookingPackageId = purchases[packageIndex].package_id;
 
       // Static Google Meet link for all sessions
@@ -719,9 +758,19 @@ export default async function handler(req, res) {
         const endDateTime = bookingEndInstant.toISOString();
         const serviceLabel = getCategoryLabel(bookingCategory);
         const sessionLabel = `${serviceLabel} (${duration === 30 ? '30 min' : '1 hour'})`;
+        // Extra service-specific detail lines for the admin's calendar event description - level/
+        // style/school for Interview bookings, attached file names for CV & Strategy bookings.
+        const extraDetailLines = [
+          category === 'interview' && interviewLevel ? `Level: ${interviewLevel}` : null,
+          category === 'interview' && interviewStyle ? `Interview Style: ${interviewStyle}` : null,
+          cleanTargetSchool ? `Target School: ${cleanTargetSchool}` : null,
+          cleanAttachments.length > 0
+            ? `Attachments: ${cleanAttachments.map(f => f.filename).join(', ')}`
+            : null
+        ].filter(Boolean).map(line => `${line}\n`).join('');
         const eventBody = {
           summary: `${sessionLabel} - ${userName || userEmail}`,
-          description: `PreMedical 1-on-1 ${serviceLabel} Session\n\nClient: ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes\n\n🎥 Google Meet: ${meetLink}`,
+          description: `PreMedical 1-on-1 ${serviceLabel} Session\n\nClient: ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes\n${extraDetailLines}\n🎥 Google Meet: ${meetLink}`,
           location: meetLink,
           start: { dateTime: startDateTime, timeZone: customerTimezone },
           end: { dateTime: endDateTime, timeZone: customerTimezone },
@@ -776,6 +825,11 @@ export default async function handler(req, res) {
         // Advice vs Interview Prep) instead of only ever showing the duration.
         category: bookingCategory,
         package_id: bookingPackageId,
+        // Interview-specific fields (required for category 'interview', absent otherwise).
+        ...(category === 'interview' ? { interview_level: interviewLevel, interview_style: interviewStyle } : {}),
+        ...(cleanTargetSchool ? { target_school: cleanTargetSchool } : {}),
+        // CV & Strategy attachments (empty for other categories).
+        ...(cleanAttachments.length > 0 ? { attachments: cleanAttachments } : {}),
         status: 'confirmed',
         booked_at: new Date().toISOString(),
         calendar_event_link: eventLink,
@@ -789,10 +843,23 @@ export default async function handler(req, res) {
       purchases[packageIndex].bookings = purchases[packageIndex].bookings || [];
       purchases[packageIndex].bookings.push(booking);
 
-      // Save back to DB
-      await sql`
-        UPDATE users SET purchases = ${JSON.stringify(purchases)}::jsonb WHERE id = ${user.id}
-      `;
+      // Save back to DB. For Interview bookings, also sync interview_level/interview_style back
+      // onto the profile as the client's new "current" value (two-way sync - see plan.md), so the
+      // booking form pre-fills with whatever was last used next time.
+      if (category === 'interview') {
+        await sql`
+          UPDATE users 
+          SET purchases = ${JSON.stringify(purchases)}::jsonb,
+              interview_level = ${interviewLevel},
+              interview_style = ${interviewStyle},
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ${user.id}
+        `;
+      } else {
+        await sql`
+          UPDATE users SET purchases = ${JSON.stringify(purchases)}::jsonb WHERE id = ${user.id}
+        `;
+      }
 
       // Send confirmation emails (fire and forget - errors logged but don't affect booking)
       // Customer email: render the time/date in the customer's own timezone.
@@ -818,6 +885,12 @@ export default async function handler(req, res) {
         time: formatTimeLabel(bookingStartInstant, BUSINESS_TIMEZONE),
         duration,
         category: bookingCategory,
+        bookingDetails: {
+          interviewLevel: category === 'interview' ? interviewLevel : null,
+          interviewStyle: category === 'interview' ? interviewStyle : null,
+          targetSchool: cleanTargetSchool,
+          attachments: cleanAttachments
+        },
         eventLink,
         meetLink,
         userProfile,

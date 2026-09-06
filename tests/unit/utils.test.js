@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { calculateSessionCredits as calculateSessionCreditsReal, getCreditsForOption } from '../../src/utils/index.js';
 
 // Import the function directly - inline for unit tests
 function calculateSessionCredits(purchases = []) {
@@ -177,4 +178,59 @@ describe('calculateSessionCredits', () => {
     expect(result.total).toBe(0);
   });
   
+});
+
+/**
+ * Tests for the real calculateSessionCredits()/getCreditsForOption() from src/utils/index.js -
+ * specifically the `byCategory` breakdown added for the booking page's combined service+duration
+ * selector (Interview Prep / CV & Strategy / Advisory Check-In).
+ */
+describe('calculateSessionCredits byCategory breakdown (real implementation)', () => {
+
+  it('breaks credits down per category and duration', () => {
+    const purchases = [
+      { category: 'interview', duration_minutes: 30, sessions_total: 3, sessions_used: 0, status: 'active' },
+      { category: 'interview', duration_minutes: 60, sessions_total: 3, sessions_used: 1, status: 'active' },
+      { category: 'cv', duration_minutes: 60, sessions_total: 1, sessions_used: 0, status: 'active' },
+      { category: 'advisory', duration_minutes: 30, sessions_total: 1, sessions_used: 0, status: 'active' }
+    ];
+
+    const credits = calculateSessionCreditsReal(purchases);
+
+    expect(getCreditsForOption(credits, 'interview', 30)).toBe(3);
+    expect(getCreditsForOption(credits, 'interview', 60)).toBe(2);
+    expect(getCreditsForOption(credits, 'cv', 60)).toBe(1);
+    expect(getCreditsForOption(credits, 'cv', 30)).toBe(0);
+    expect(getCreditsForOption(credits, 'advisory', 30)).toBe(1);
+    // Pooled totals must still match the sum across categories (backward compatibility)
+    expect(credits.thirtyMin).toBe(4);
+    expect(credits.sixtyMin).toBe(3);
+  });
+
+  it('groups legacy purchases with no category under interview', () => {
+    const purchases = [
+      { duration_minutes: 30, sessions_total: 2, sessions_used: 0, status: 'active' } // no category field
+    ];
+
+    const credits = calculateSessionCreditsReal(purchases);
+
+    expect(getCreditsForOption(credits, 'interview', 30)).toBe(2);
+  });
+
+  it('excludes exhausted and inactive purchases from the breakdown', () => {
+    const purchases = [
+      { category: 'cv', duration_minutes: 60, sessions_total: 1, sessions_used: 1, status: 'active' }, // exhausted
+      { category: 'cv', duration_minutes: 60, sessions_total: 1, sessions_used: 0, status: 'cancelled' } // inactive
+    ];
+
+    const credits = calculateSessionCreditsReal(purchases);
+
+    expect(getCreditsForOption(credits, 'cv', 60)).toBe(0);
+  });
+
+  it('getCreditsForOption returns 0 for a combination with no credits at all', () => {
+    const credits = calculateSessionCreditsReal([]);
+    expect(getCreditsForOption(credits, 'advisory', 30)).toBe(0);
+  });
+
 });

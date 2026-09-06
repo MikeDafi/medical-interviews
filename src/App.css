@@ -1749,7 +1749,13 @@ img {
 
 .session-type-options {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
+}
+
+.session-type-options .session-type-btn {
+  flex: 1 1 calc(50% - 6px);
+  min-width: 140px;
 }
 
 .session-type-btn {
@@ -1839,6 +1845,82 @@ img {
   color: white;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
+}
+
+/* Service-specific booking fields (Interview level/style/school, CV & Strategy attachments) */
+.service-fields {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.service-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.service-field-group label {
+  font-family: var(--marketing-font);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dark-text);
+}
+
+.service-field-group select,
+.service-field-group input[type="file"] {
+  padding: 10px 12px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+}
+
+.required-mark {
+  color: #dc2626;
+}
+
+.service-fields-required-note {
+  color: #dc2626;
+  font-size: 13px;
+  margin: 8px 0 0;
+}
+
+.cv-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.cv-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--dark-text);
+  font-weight: 400 !important;
+}
+
+.cv-upload-status {
+  font-size: 13px;
+  color: var(--primary-teal);
+  margin: 4px 0 0;
+}
+
+.cv-upload-error {
+  font-size: 13px;
+  color: #dc2626;
+  margin: 4px 0 0;
+}
+
+.cv-upload-hint {
+  font-size: 12px;
+  color: var(--light-text);
+  margin: 4px 0 0;
 }
 
 .slot-badge {

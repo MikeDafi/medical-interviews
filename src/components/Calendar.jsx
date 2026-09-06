@@ -1,13 +1,27 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { calculateSessionCredits } from '../utils'
+import { calculateSessionCredits, getCreditsForOption } from '../utils'
 import { parseTimeLabel, zonedWallClockToUtc, formatTimeLabel } from '../../lib/timezone.js'
 import { slotsForBooking } from '../../lib/slots.js'
+import { getBookableServiceOptions } from '../../lib/packages.js'
 import RecentBookings from './RecentBookings'
 import Login from './Login'
 
 // Interview coach the sessions are booked with (shown in the booking confirmation).
 const COACH_NAME = 'Ashley Kumar'
+
+const INTERVIEW_LEVEL_OPTIONS = [
+  { value: 'beginner', label: 'Beginner' },
+  { value: 'mid', label: 'Intermediate' },
+  { value: 'advanced', label: 'Advanced' }
+]
+const INTERVIEW_STYLE_OPTIONS = [
+  { value: 'MMI', label: 'MMI' },
+  { value: 'traditional', label: 'Traditional' },
+  { value: 'both', label: 'Both' }
+]
+const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024 // 5MB, matches api/upload/index.js
+const ALLOWED_ATTACHMENT_EXTENSIONS = ['.pdf', '.doc', '.docx']
 
 export default function Calendar() {
   const { user } = useAuth()
@@ -19,12 +33,25 @@ export default function Calendar() {
   })
   const [selectedTime, setSelectedTime] = useState(null)
   const [selectedDuration, setSelectedDuration] = useState(null) // 30 or 60 minutes
+  const [selectedCategory, setSelectedCategory] = useState(null) // 'interview' | 'cv' | 'advisory'
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [availableSlots, setAvailableSlots] = useState([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [businessTimezone, setBusinessTimezone] = useState('America/Chicago')
   const [cacheStatus, setCacheStatus] = useState({ loaded: false, loading: false, expiresIn: 0 })
   const [preloadedAvailability, setPreloadedAvailability] = useState({}) // All 28 days cached locally
+
+  // Profile fields needed to pre-fill/populate the service-specific booking fields below -
+  // fetched alongside session credits (same /api/profile call).
+  const [bookingProfile, setBookingProfile] = useState({ interviewLevel: '', interviewStyle: '', targetSchools: [], cvFiles: [] })
+  // Interview-specific booking fields (required to confirm an Interview booking)
+  const [interviewLevel, setInterviewLevel] = useState('')
+  const [interviewStyle, setInterviewStyle] = useState('')
+  const [selectedTargetSchool, setSelectedTargetSchool] = useState('')
+  // CV & Strategy-specific booking fields (optional)
+  const [selectedAttachmentIds, setSelectedAttachmentIds] = useState([])
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [uploadError, setUploadError] = useState('')
   
   // Hover-triggered preload refs
   const sectionRef = useRef(null)
@@ -165,6 +192,19 @@ export default function Calendar() {
         const data = await response.json()
         const credits = calculateSessionCredits(data.profile?.purchases)
         setSessionCredits({ ...credits, loading: false })
+
+        // Pre-fill the Interview level/style booking fields with whatever's currently on the
+        // profile (synced back after each Interview booking - see api/calendar/index.js), and
+        // stash target schools / cv_files for the school-select and CV attach controls below.
+        const profile = data.profile || {}
+        setBookingProfile({
+          interviewLevel: profile.interview_level || '',
+          interviewStyle: profile.interview_style || '',
+          targetSchools: profile.target_schools || [],
+          cvFiles: profile.cv_files || []
+        })
+        setInterviewLevel(profile.interview_level || '')
+        setInterviewStyle(profile.interview_style || '')
       } else {
         setSessionCredits({ thirtyMin: 0, sixtyMin: 0, loading: false })
       }
@@ -279,7 +319,10 @@ export default function Calendar() {
   }
 
   const handleBooking = async () => {
-    if (!selectedDate || !selectedTime || !user || !selectedDuration) return
+    if (!selectedDate || !selectedTime || !user || !selectedDuration || !selectedCategory) return
+    // SECURITY: also re-validated server-side - this is just to keep the button appropriately
+    // disabled/prevent an obviously-incomplete submit.
+    if (selectedCategory === 'interview' && (!interviewLevel || !interviewStyle)) return
     
     setBooking(true)
     setBookingResult(null)
@@ -297,7 +340,11 @@ export default function Calendar() {
           date: dateStr,
           time: selectedTime,
           duration: selectedDuration,
-          timezone: userTimezone
+          category: selectedCategory,
+          timezone: userTimezone,
+          ...(selectedCategory === 'interview' ? { interviewLevel, interviewStyle } : {}),
+          ...(selectedTargetSchool ? { targetSchool: selectedTargetSchool } : {}),
+          ...(selectedAttachmentIds.length > 0 ? { attachmentIds: selectedAttachmentIds } : {})
         })
       })
       
@@ -346,7 +393,7 @@ export default function Calendar() {
         })
 
         setSelectedTime(null)
-        setSelectedDuration(null)
+        resetServiceSelection()
       } else {
         // Handle slot unavailable - refresh and let user pick another time
         if (data.code === 'SLOT_UNAVAILABLE') {
@@ -358,7 +405,7 @@ export default function Calendar() {
           // Refresh this date's availability
           await fetchAvailability(selectedDate)
           setSelectedTime(null)
-          setSelectedDuration(null)
+          resetServiceSelection()
           setBookingResult({
             success: false,
             message: data.error || 'Please select another available time.'
@@ -419,11 +466,90 @@ export default function Calendar() {
   const days = getDaysInMonth(currentMonth)
   const totalSessions = sessionCredits.total || (sessionCredits.thirtyMin + sessionCredits.sixtyMin)
 
+  // Clears the chosen service+duration option and its service-specific fields (target school,
+  // attachments). Does NOT reset interviewLevel/interviewStyle - those describe the client, not
+  // the specific slot, so they persist across date/time re-selection within the same visit.
+  const resetServiceSelection = () => {
+    setSelectedDuration(null)
+    setSelectedCategory(null)
+    setSelectedTargetSchool('')
+    setSelectedAttachmentIds([])
+    setUploadError('')
+  }
+
+  // Upload a CV & Strategy attachment. Streams directly from the browser to Vercel Blob storage
+  // (bypassing our serverless function's body-size limit) via a short-lived token issued by
+  // api/upload/index.js, which also enforces the size/type allowlist server-side. Once uploaded,
+  // saves the file to the profile's reusable cv_files list (see api/profile/setup.js) and
+  // auto-selects it as an attachment for this booking.
+  const handleFileUpload = async (file) => {
+    setUploadError('')
+
+    const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+    if (!ALLOWED_ATTACHMENT_EXTENSIONS.includes(extension)) {
+      setUploadError('Only PDF, DOC, and DOCX files are allowed.')
+      return
+    }
+    if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+      setUploadError('File is too large. Maximum size is 5MB.')
+      return
+    }
+
+    setUploadingFile(true)
+    try {
+      const { upload } = await import('@vercel/blob/client')
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const pathname = `cv-uploads/${user.id}/${Date.now()}-${sanitizedName}`
+
+      const blob = await upload(pathname, file, {
+        access: 'public',
+        handleUploadUrl: '/api/upload'
+      })
+
+      const newFile = {
+        id: `cv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        url: blob.url,
+        filename: file.name,
+        size: file.size,
+        uploaded_at: new Date().toISOString()
+      }
+      const updatedCvFiles = [...bookingProfile.cvFiles, newFile]
+
+      // Persist to the profile so it's reusable on future bookings (same COALESCE-safe partial
+      // update pattern as the rest of api/profile/setup.js).
+      await fetch('/api/profile/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ cvFiles: updatedCvFiles })
+      })
+
+      setBookingProfile(prev => ({ ...prev, cvFiles: updatedCvFiles }))
+      setSelectedAttachmentIds(prev => [...prev, newFile.id])
+    } catch (error) {
+      console.error('File upload error:', error)
+      setUploadError(error.message || 'Failed to upload file. Please try again.')
+    } finally {
+      setUploadingFile(false)
+    }
+  }
+
+  const toggleAttachment = (fileId) => {
+    setSelectedAttachmentIds(prev =>
+      prev.includes(fileId) ? prev.filter(id => id !== fileId) : [...prev, fileId]
+    )
+  }
+
+  const handleSelectServiceOption = (category, duration) => {
+    setSelectedCategory(category)
+    setSelectedDuration(duration)
+  }
+
   const prevMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))
     setSelectedDate(null)
     setSelectedTime(null)
-    setSelectedDuration(null)
+    resetServiceSelection()
     setAvailableSlots([])
     setBookingResult(null)
   }
@@ -432,7 +558,7 @@ export default function Calendar() {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))
     setSelectedDate(null)
     setSelectedTime(null)
-    setSelectedDuration(null)
+    resetServiceSelection()
     setAvailableSlots([])
     setBookingResult(null)
   }
@@ -441,14 +567,14 @@ export default function Calendar() {
     if (!dayObj.disabled && dayObj.day) {
       setSelectedDate(dayObj.date)
       setSelectedTime(null)
-      setSelectedDuration(null)
+      resetServiceSelection()
       setBookingResult(null)
     }
   }
 
   const handleTimeClick = (slot) => {
     setSelectedTime(slot.time)
-    setSelectedDuration(null) // Reset duration when time changes
+    resetServiceSelection() // Reset service+duration when time changes
     setBookingResult(null)
   }
 
@@ -459,8 +585,15 @@ export default function Calendar() {
 
   // Get the selected slot info
   const selectedSlot = availableSlots.find(s => s.time === selectedTime)
-  const canSelect30Min = sessionCredits.thirtyMin > 0
-  const canSelect60Min = sessionCredits.sixtyMin > 0 && selectedSlot?.canBookHour
+  // Whether a given service+duration option can be selected: must have remaining credits for
+  // that exact category+duration, and (for 60-min options) the slot must support a full hour.
+  const canSelectOption = (category, duration) => {
+    const hasCredits = getCreditsForOption(sessionCredits, category, duration) > 0
+    if (duration === 60) return hasCredits && selectedSlot?.canBookHour
+    return hasCredits
+  }
+  const serviceOptions = getBookableServiceOptions()
+  const isInterviewFieldsValid = selectedCategory !== 'interview' || (interviewLevel && interviewStyle)
 
   // Format timezone for display (e.g., "America/Chicago" -> "Central Time")
   const formatTimezone = (tz) => {
@@ -609,30 +742,31 @@ export default function Calendar() {
             <p className="select-date-prompt">Select a date to see available times</p>
           )}
 
-          {/* Session Duration Selection - Show for logged in users */}
+          {/* Combined Service + Duration Selection - Show for logged in users */}
           {selectedTime && user && (
             <div className="session-type-selection">
-              <h3>Choose Session Duration</h3>
+              <h3>Choose Your Session</h3>
               <div className="session-type-options">
-                <button
-                  className={`session-type-btn thirty-min ${selectedDuration === 30 ? 'selected' : ''} ${!canSelect30Min ? 'disabled' : ''}`}
-                  onClick={() => canSelect30Min && setSelectedDuration(30)}
-                  disabled={!canSelect30Min}
-                >
-                  <span className="type-name">30-Minute Session</span>
-                  <span className="type-duration">{sessionCredits.thirtyMin} available</span>
-                  {sessionCredits.thirtyMin === 0 && <span className="type-note">None available</span>}
-                </button>
-                <button
-                  className={`session-type-btn sixty-min ${selectedDuration === 60 ? 'selected' : ''} ${!canSelect60Min ? 'disabled' : ''}`}
-                  onClick={() => canSelect60Min && setSelectedDuration(60)}
-                  disabled={!canSelect60Min}
-                >
-                  <span className="type-name">60-Minute Session</span>
-                  <span className="type-duration">{sessionCredits.sixtyMin} available</span>
-                  {!selectedSlot?.canBookHour && <span className="type-note">Not enough time in slot</span>}
-                  {selectedSlot?.canBookHour && sessionCredits.sixtyMin === 0 && <span className="type-note">None available</span>}
-                </button>
+                {serviceOptions.map(({ category, duration, label }) => {
+                  const isSelected = selectedCategory === category && selectedDuration === duration
+                  const enabled = canSelectOption(category, duration)
+                  const credits = getCreditsForOption(sessionCredits, category, duration)
+                  return (
+                    <button
+                      key={`${category}-${duration}`}
+                      className={`session-type-btn ${duration === 30 ? 'thirty-min' : 'sixty-min'} ${isSelected ? 'selected' : ''} ${!enabled ? 'disabled' : ''}`}
+                      onClick={() => enabled && handleSelectServiceOption(category, duration)}
+                      disabled={!enabled}
+                    >
+                      <span className="type-name">{label}</span>
+                      <span className="type-duration">{credits} available</span>
+                      {credits === 0 && <span className="type-note">None available</span>}
+                      {credits > 0 && duration === 60 && !selectedSlot?.canBookHour && (
+                        <span className="type-note">Not enough time in slot</span>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
               {totalSessions === 0 && (
                 <div className="no-sessions-prompt">
@@ -640,6 +774,71 @@ export default function Calendar() {
                   <a href="#packages" className="purchase-sessions-link">
                     Browse Prep Packages →
                   </a>
+                </div>
+              )}
+
+              {/* Interview Prep: level + style required, target school optional */}
+              {selectedCategory === 'interview' && (
+                <div className="service-fields">
+                  <div className="service-field-group">
+                    <label htmlFor="interview-level">Your interview experience level <span className="required-mark">*</span></label>
+                    <select id="interview-level" value={interviewLevel} onChange={(e) => setInterviewLevel(e.target.value)}>
+                      <option value="">Select your level</option>
+                      {INTERVIEW_LEVEL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="service-field-group">
+                    <label htmlFor="interview-style">Interview style focus <span className="required-mark">*</span></label>
+                    <select id="interview-style" value={interviewStyle} onChange={(e) => setInterviewStyle(e.target.value)}>
+                      <option value="">Select a style</option>
+                      {INTERVIEW_STYLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="service-field-group">
+                    <label htmlFor="target-school">Which school is this for? (optional)</label>
+                    <select id="target-school" value={selectedTargetSchool} onChange={(e) => setSelectedTargetSchool(e.target.value)}>
+                      <option value="">None specified</option>
+                      {bookingProfile.targetSchools.map((school, idx) => (
+                        <option key={school.name || idx} value={school.name}>{school.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* CV & Strategy: optional file attachments */}
+              {selectedCategory === 'cv' && (
+                <div className="service-fields">
+                  <div className="service-field-group">
+                    <label>Attach your CV and/or activities list (optional)</label>
+                    {bookingProfile.cvFiles.length > 0 && (
+                      <div className="cv-files-list">
+                        {bookingProfile.cvFiles.map(f => (
+                          <label key={f.id} className="cv-file-item">
+                            <input
+                              type="checkbox"
+                              checked={selectedAttachmentIds.includes(f.id)}
+                              onChange={() => toggleAttachment(f.id)}
+                            />
+                            {f.filename}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      disabled={uploadingFile}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) handleFileUpload(file)
+                        e.target.value = ''
+                      }}
+                    />
+                    {uploadingFile && <p className="cv-upload-status">Uploading...</p>}
+                    {uploadError && <p className="cv-upload-error">{uploadError}</p>}
+                    <p className="cv-upload-hint">PDF, DOC, or DOCX only. Max 5MB.</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -667,19 +866,22 @@ export default function Calendar() {
             </div>
           )}
 
-          {selectedDate && selectedTime && selectedDuration && !bookingResult?.success && (
+          {selectedDate && selectedTime && selectedDuration && selectedCategory && !bookingResult?.success && (
             <div className="booking-summary">
               <p>
                 <strong>Selected:</strong> {formatSelectedDate()} at {selectedSlot?.localTime || selectedTime}
                 <br />
                 <span className="timezone-detail">({selectedTime} {formatTimezone(businessTimezone)})</span>
                 <br />
-                <strong>Duration:</strong> {selectedDuration} minutes
+                <strong>Service:</strong> {serviceOptions.find(o => o.category === selectedCategory && o.duration === selectedDuration)?.label}
               </p>
+              {!isInterviewFieldsValid && (
+                <p className="service-fields-required-note">Please select your interview level and style above to continue.</p>
+              )}
               <button 
                 className="confirm-booking-btn" 
                 onClick={handleBooking}
-                disabled={booking}
+                disabled={booking || !isInterviewFieldsValid}
               >
                 {booking ? 'Booking...' : 'Confirm Booking'}
               </button>

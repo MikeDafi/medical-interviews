@@ -603,6 +603,22 @@ export default function AdminUser() {
                           {booking.duration} min
                         </span>
                       </div>
+                      {(booking.interview_level || booking.interview_style || booking.target_school) && (
+                        <div className="booking-service-details">
+                          {booking.interview_level && <span>Level: {booking.interview_level}</span>}
+                          {booking.interview_style && <span>Style: {booking.interview_style}</span>}
+                          {booking.target_school && <span>School: {booking.target_school}</span>}
+                        </div>
+                      )}
+                      {booking.attachments?.length > 0 && (
+                        <div className="booking-attachments">
+                          {booking.attachments.map(f => (
+                            <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer" className="booking-attachment-link">
+                              📎 {f.filename}
+                            </a>
+                          ))}
+                        </div>
+                      )}
                       <div className="booking-meta">
                         <span className={`booking-status ${booking.status}`}>{booking.status}</span>
                         <span className="booking-booked">Booked: {formatDate(booking.booked_at)}</span>

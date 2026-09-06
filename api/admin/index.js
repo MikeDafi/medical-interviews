@@ -44,7 +44,7 @@ export default async function handler(req, res) {
         SELECT 
           id, email, name, picture, phone,
           application_stage, main_concerns, target_schools,
-          interview_level, interview_style,
+          interview_level, interview_style, cv_files,
           purchases, resources, profile_complete, is_admin, 
           created_at, updated_at
         FROM users
