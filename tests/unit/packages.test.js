@@ -6,7 +6,7 @@
  * (e.g. CV Advice vs Interview Prep vs Advisory Check-In), instead of only ever showing duration.
  */
 import { describe, it, expect } from 'vitest';
-import { getCategoryLabel } from '../../lib/packages.js';
+import { getCategoryLabel, getBookableServiceOptions, CATEGORY_DURATIONS, BOOKABLE_CATEGORIES } from '../../lib/packages.js';
 
 describe('getCategoryLabel', () => {
   it('maps interview to Interview Prep', () => {
@@ -25,5 +25,32 @@ describe('getCategoryLabel', () => {
     expect(getCategoryLabel(undefined)).toBe('Session');
     expect(getCategoryLabel(null)).toBe('Session');
     expect(getCategoryLabel('something-unexpected')).toBe('Session');
+  });
+});
+
+describe('getBookableServiceOptions', () => {
+  it('returns one option per category+duration combination', () => {
+    const options = getBookableServiceOptions();
+
+    expect(options).toContainEqual({ category: 'interview', duration: 30, label: 'Interview Prep – 30 min' });
+    expect(options).toContainEqual({ category: 'interview', duration: 60, label: 'Interview Prep – 60 min' });
+    expect(options).toContainEqual({ category: 'cv', duration: 30, label: 'CV Advice – 30 min' });
+    expect(options).toContainEqual({ category: 'cv', duration: 60, label: 'CV Advice – 60 min' });
+    expect(options).toContainEqual({ category: 'advisory', duration: 30, label: 'Advisory Check-In – 30 min' });
+  });
+
+  it('excludes advisory_email (the 0-min, not-bookable email-only tier)', () => {
+    const options = getBookableServiceOptions();
+    const advisoryOptions = options.filter(o => o.category === 'advisory');
+
+    expect(advisoryOptions).toHaveLength(1);
+    expect(advisoryOptions[0].duration).toBe(30);
+  });
+
+  it('matches CATEGORY_DURATIONS exactly', () => {
+    const options = getBookableServiceOptions();
+    const totalExpected = BOOKABLE_CATEGORIES.reduce((sum, c) => sum + CATEGORY_DURATIONS[c].length, 0);
+
+    expect(options).toHaveLength(totalExpected);
   });
 });

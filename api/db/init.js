@@ -42,6 +42,7 @@ export default async function handler(req, res) {
         is_admin BOOLEAN DEFAULT FALSE,
         interview_level VARCHAR(20),
         interview_style VARCHAR(20),
+        cv_files JSONB DEFAULT '[]',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -53,6 +54,11 @@ export default async function handler(req, res) {
     // API layer, same lightweight-validation style as the rest of this table's free-text columns.
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS interview_level VARCHAR(20)`;
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS interview_style VARCHAR(20)`;
+
+    // Migration: add cv_files for the CV & Strategy booking attachment feature - an array of
+    // { id, url, filename, size, uploaded_at } for files the client has uploaded, reusable across
+    // future CV & Strategy bookings (not just the one they were originally attached to).
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS cv_files JSONB DEFAULT '[]'`;
 
     // Create performance indexes for common query patterns
     // Index on email for login lookups

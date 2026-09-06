@@ -532,6 +532,7 @@ export async function sendAdminBookingEmail({
   time,
   duration,
   category,
+  bookingDetails = {},
   eventLink,
   meetLink,
   userProfile = {},
@@ -543,9 +544,17 @@ export async function sendAdminBookingEmail({
   
   // Extract profile info
   const { phone, application_stage, main_concerns, target_schools } = userProfile;
+  // Purchases/target_schools store the school under `name`, not `school_name` - fall back for
+  // safety, matching the same field-name fix applied to AdminUser.jsx.
   const schoolsList = target_schools?.length 
-    ? target_schools.map(s => s.school_name || s).join(', ')
+    ? target_schools.map(s => s.name || s.school_name || s).join(', ')
     : 'Not specified';
+
+  // Booking-specific details captured at booking time (as distinct from the client's general,
+  // whole-history profile info above) - only present for Interview (level/style/school) or
+  // CV & Strategy (attachments) bookings.
+  const { interviewLevel, interviewStyle, targetSchool: bookingSchool, attachments = [] } = bookingDetails;
+  const hasBookingDetails = interviewLevel || interviewStyle || bookingSchool || attachments.length > 0;
 
   const html = `
 <!DOCTYPE html>
@@ -629,6 +638,45 @@ export async function sendAdminBookingEmail({
                 </tr>
               </table>
               
+              ${hasBookingDetails ? `
+              <!-- Booking Details (captured for this specific session) -->
+              <h3 style="color: #1e293b; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">
+                Booking Details
+              </h3>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                ${interviewLevel ? `
+                <tr>
+                  <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">
+                    <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">Level:</span>
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${interviewLevel}</span>
+                  </td>
+                </tr>` : ''}
+                ${interviewStyle ? `
+                <tr>
+                  <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">
+                    <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">Interview Style:</span>
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${interviewStyle}</span>
+                  </td>
+                </tr>` : ''}
+                ${bookingSchool ? `
+                <tr>
+                  <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">
+                    <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">School:</span>
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${bookingSchool}</span>
+                  </td>
+                </tr>` : ''}
+                ${attachments.length > 0 ? `
+                <tr>
+                  <td style="padding: 8px 0;">
+                    <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">Attachments:</span>
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">
+                      ${attachments.map(f => `<a href="${f.url}" target="_blank" style="color: #0d9488;">${f.filename}</a>`).join(', ')}
+                    </span>
+                  </td>
+                </tr>` : ''}
+              </table>
+              ` : ''}
+              
               ${main_concerns ? `
               <!-- Main Concerns -->
               <h3 style="color: #1e293b; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">
@@ -682,6 +730,10 @@ export async function sendAdminBookingEmail({
 </html>
 `;
 
+  const bookingDetailsText = hasBookingDetails ? `
+BOOKING DETAILS:
+${interviewLevel ? `- Level: ${interviewLevel}\n` : ''}${interviewStyle ? `- Interview Style: ${interviewStyle}\n` : ''}${bookingSchool ? `- School: ${bookingSchool}\n` : ''}${attachments.length > 0 ? `- Attachments: ${attachments.map(f => `${f.filename} (${f.url})`).join(', ')}\n` : ''}` : '';
+
   const text = `
 NEW SESSION BOOKED
 
@@ -694,7 +746,7 @@ CLIENT INFORMATION:
 - Phone: ${phone || 'Not provided'}
 - Stage: ${application_stage || 'Not specified'}
 - Target Schools: ${schoolsList}
-
+${bookingDetailsText}
 ${main_concerns ? `MAIN CONCERNS:\n${main_concerns}\n` : ''}
 
 ${meetLink ? `JOIN GOOGLE MEET: ${meetLink}` : ''}
