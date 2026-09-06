@@ -6,7 +6,7 @@ import { google } from 'googleapis';
 import { rateLimit } from '../_lib/auth.js';
 import { requireAuth } from '../_lib/session.js';
 import { sendCustomerBookingEmail, sendAdminBookingEmail, sendCustomerCancellationEmail, sendAdminCancellationEmail } from '../_lib/email.js';
-import { getPackageName } from '../../lib/packages.js';
+import { getPackageName, getCategoryLabel } from '../../lib/packages.js';
 import { isOwnerUnavailableResponse } from '../../lib/calendar.js';
 import { formatSlotLabel, slotsForBooking } from '../../lib/slots.js';
 import {
@@ -684,6 +684,12 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: `No ${duration}-minute sessions available. Please purchase a package.` });
       }
 
+      // Service metadata from the matched purchase, so the booking record, calendar event, and
+      // confirmation emails can all clearly state which service this session is for (rather than
+      // only ever showing the duration).
+      const bookingCategory = purchases[packageIndex].category;
+      const bookingPackageId = purchases[packageIndex].package_id;
+
       // Static Google Meet link for all sessions
       const meetLink = process.env.GOOGLE_MEET_LINK || 'https://meet.google.com/yrr-qxiw-hjh';
 
@@ -711,10 +717,11 @@ export default async function handler(req, res) {
         // without us looking up (or depending on) the admin/calendar timezone.
         const startDateTime = bookingStartInstant.toISOString();
         const endDateTime = bookingEndInstant.toISOString();
-        const sessionLabel = duration === 30 ? '30-min Session' : '1-hour Session';
+        const serviceLabel = getCategoryLabel(bookingCategory);
+        const sessionLabel = `${serviceLabel} (${duration === 30 ? '30 min' : '1 hour'})`;
         const eventBody = {
           summary: `${sessionLabel} - ${userName || userEmail}`,
-          description: `PreMedical 1-on-1 Interview Coaching Session\n\nClient: ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes\n\n🎥 Google Meet: ${meetLink}`,
+          description: `PreMedical 1-on-1 ${serviceLabel} Session\n\nClient: ${userName || userEmail}\nEmail: ${userEmail}\nDuration: ${duration} minutes\n\n🎥 Google Meet: ${meetLink}`,
           location: meetLink,
           start: { dateTime: startDateTime, timeZone: customerTimezone },
           end: { dateTime: endDateTime, timeZone: customerTimezone },
@@ -764,6 +771,11 @@ export default async function handler(req, res) {
         date,
         time,
         duration,
+        // Which service this booking is for - copied from the purchase it draws a session from,
+        // so booking details and confirmation emails can clearly state the service (e.g. CV
+        // Advice vs Interview Prep) instead of only ever showing the duration.
+        category: bookingCategory,
+        package_id: bookingPackageId,
         status: 'confirmed',
         booked_at: new Date().toISOString(),
         calendar_event_link: eventLink,
@@ -790,6 +802,7 @@ export default async function handler(req, res) {
         date: formatDateKey(bookingStartInstant, customerTimezone),
         time: formatTimeLabel(bookingStartInstant, customerTimezone),
         duration,
+        category: bookingCategory,
         eventLink,
         meetLink,
         timezone: friendlyZoneName(customerTimezone, bookingStartInstant)
@@ -804,6 +817,7 @@ export default async function handler(req, res) {
         date: formatDateKey(bookingStartInstant, BUSINESS_TIMEZONE),
         time: formatTimeLabel(bookingStartInstant, BUSINESS_TIMEZONE),
         duration,
+        category: bookingCategory,
         eventLink,
         meetLink,
         userProfile,
@@ -945,6 +959,9 @@ export default async function handler(req, res) {
           date: custDate,
           time: custTime,
           duration: booking.duration,
+          // Fall back to the parent purchase's category for bookings created before this field
+          // existed on the booking record itself.
+          category: booking.category || pkg.category,
           timezone: custTzLabel
         }).catch(err => console.error('Customer cancellation email error:', err));
       }
@@ -956,6 +973,7 @@ export default async function handler(req, res) {
         date: adminDate,
         time: adminTime,
         duration: booking.duration,
+        category: booking.category || pkg.category,
         timezone: adminTzLabel
       }).catch(err => console.error('Admin cancellation email error:', err));
 

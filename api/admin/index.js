@@ -179,6 +179,10 @@ export default async function handler(req, res) {
         status: 'active',
         package_id: `admin_${durationNum}min`,
         name: `${durationNum}-Min Session (Admin)`,
+        // Admin-granted sessions don't have a category picker in this form yet - default to
+        // 'interview' (the most common case) so bookings drawn from this package still get a
+        // sensible service label instead of falling through to the generic "Session" fallback.
+        category: 'interview',
         purchase_date: new Date().toISOString(),
         sessions_total: sessionCount,
         sessions_used: 0,

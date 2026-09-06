@@ -374,6 +374,14 @@
   gap: 4px;
 }
 
+.booking-service-label {
+  color: #0d9488;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .booking-time-display {
   font-weight: 600;
   color: #1f2937;

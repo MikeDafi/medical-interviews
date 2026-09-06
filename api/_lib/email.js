@@ -1,7 +1,7 @@
 // Email notification utility using Resend
 // Requires RESEND_API_KEY environment variable
 
-import { getPackageName } from '../../lib/packages.js';
+import { getPackageName, getCategoryLabel } from '../../lib/packages.js';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const ADMIN_EMAIL = 'premedical1on1@gmail.com';
@@ -93,10 +93,11 @@ export async function sendCustomerBookingEmail({
   date, 
   time, 
   duration, 
+  category,
   meetLink,
   timezone = 'Central Time'
 }) {
-  const sessionType = duration === 30 ? 'Trial Session (30 minutes)' : 'Regular Session (1 hour)';
+  const sessionType = `${getCategoryLabel(category)} (${duration === 30 ? '30 minutes' : '1 hour'})`;
   const formattedDate = formatDate(date);
   
   const html = `
@@ -530,12 +531,13 @@ export async function sendAdminBookingEmail({
   date,
   time,
   duration,
+  category,
   eventLink,
   meetLink,
   userProfile = {},
   timezone = 'Central Time'
 }) {
-  const sessionType = duration === 30 ? 'Trial (30 min)' : 'Regular (1 hour)';
+  const sessionType = `${getCategoryLabel(category)} (${duration === 30 ? '30 min' : '1 hour'})`;
   const formattedDate = formatDate(date);
   const adminUserLink = `${SITE_URL}/admin/user/${customerId}`;
   
@@ -720,9 +722,10 @@ export async function sendCustomerCancellationEmail({
   date,
   time,
   duration,
+  category,
   timezone = 'Central Time'
 }) {
-  const sessionType = duration === 30 ? 'Trial Session (30 minutes)' : 'Regular Session (1 hour)';
+  const sessionType = `${getCategoryLabel(category)} (${duration === 30 ? '30 minutes' : '1 hour'})`;
   const formattedDate = formatDate(date);
 
   const html = `
@@ -811,9 +814,10 @@ export async function sendAdminCancellationEmail({
   date,
   time,
   duration,
+  category,
   timezone = 'Central Time'
 }) {
-  const sessionType = duration === 30 ? 'Trial (30 min)' : 'Regular (1 hour)';
+  const sessionType = `${getCategoryLabel(category)} (${duration === 30 ? '30 min' : '1 hour'})`;
   const formattedDate = formatDate(date);
   const adminUserLink = `${SITE_URL}/admin/user/${customerId}`;
 
