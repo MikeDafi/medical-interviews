@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { calculateSessionCredits, formatDate } from '../utils'
+import { calculateSessionCredits, formatDate, getTotalCreditsForCategory } from '../utils'
 import { parseTimeLabel, zonedWallClockToUtc, formatTimeLabel, friendlyZoneName, isValidTimeZone } from '../../lib/timezone.js'
-import { getCategoryLabel } from '../../lib/packages.js'
+import { getCategoryLabel, BOOKABLE_CATEGORIES } from '../../lib/packages.js'
 import './Profile.css'
 
 // Constants
 const DELETE_CONFIRMATION_TEXT = 'DELETE'
+const MAX_NOTES_LENGTH = 1000 // matches the cap enforced in api/calendar/index.js
 
 // Business timezone the slot times are stored in (matches the server's BUSINESS_TIMEZONE).
 const BUSINESS_TZ = 'America/Chicago'
@@ -78,11 +79,12 @@ export default function Profile({ onClose }) {
   const [purchasedPackages, setPurchasedPackages] = useState([])
   const [editingName, setEditingName] = useState(false)
   const [newName, setNewName] = useState('')
-  const [editingPhone, setEditingPhone] = useState(false)
-  const [newPhone, setNewPhone] = useState('')
-  const [phoneError, setPhoneError] = useState('')
   const [cancellingBooking, setCancellingBooking] = useState(null)
   const [upcomingBookings, setUpcomingBookings] = useState([])
+  const [editingBookingId, setEditingBookingId] = useState(null)
+  const [editNotes, setEditNotes] = useState('')
+  const [editAttachmentIds, setEditAttachmentIds] = useState([])
+  const [savingBookingEdit, setSavingBookingEdit] = useState(false)
   const [expandedSections, setExpandedSections] = useState({ concerns: false, schools: false, resources: false })
 
   // Extract upcoming bookings from purchases
@@ -110,6 +112,7 @@ export default function Profile({ onClose }) {
           if (bookingDate > now && booking.status !== 'cancelled') {
             bookings.push({
               ...booking,
+              category: booking.category || pkg.category,
               packageId: pkg.id,
               packageName: getPackageName(pkg)
             })
@@ -177,6 +180,57 @@ export default function Profile({ onClose }) {
     }
   }
 
+  const startEditingBooking = (booking) => {
+    setEditingBookingId(booking.id)
+    setEditNotes(booking.notes || '')
+    setEditAttachmentIds((booking.attachments || []).map(f => f.id))
+  }
+
+  const cancelEditingBooking = () => {
+    setEditingBookingId(null)
+    setEditNotes('')
+    setEditAttachmentIds([])
+  }
+
+  const toggleEditAttachment = (fileId) => {
+    setEditAttachmentIds(prev =>
+      prev.includes(fileId) ? prev.filter(id => id !== fileId) : [...prev, fileId]
+    )
+  }
+
+  // Save edited notes/attachments for an already-made booking (see api/calendar/index.js's
+  // updateBooking action) - lets a client change what they want out of a session, or which
+  // on-file documents are attached, without needing to cancel and rebook.
+  const handleSaveBookingEdit = async (booking) => {
+    setSavingBookingEdit(true)
+    try {
+      const response = await fetch('/api/calendar?action=updateBooking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          bookingId: booking.id,
+          packageId: booking.packageId,
+          notes: editNotes,
+          ...(booking.category === 'cv' ? { attachmentIds: editAttachmentIds } : {})
+        })
+      })
+
+      if (response.ok) {
+        await fetchSessionData()
+        cancelEditingBooking()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        alert(data.error || 'Failed to save changes. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error updating booking:', error)
+      alert('Failed to save changes. Please try again.')
+    } finally {
+      setSavingBookingEdit(false)
+    }
+  }
+
   useEffect(() => {
     fetchProfileData()
     fetchSessionData()
@@ -196,7 +250,10 @@ export default function Profile({ onClose }) {
         const data = await response.json()
         const purchases = data.profile?.purchases || []
         const credits = calculateSessionCredits(purchases)
-        setSessionCredits({ ...credits, loading: false })
+        // Simple, generic "how much have you used so far" figure - total sessions consumed
+        // across every package ever purchased, regardless of category/duration.
+        const completedCount = purchases.reduce((sum, p) => sum + (p.sessions_used || 0), 0)
+        setSessionCredits({ ...credits, completedCount, loading: false })
         setPurchasedPackages(purchases)
         setUpcomingBookings(extractUpcomingBookings(purchases))
       } else {
@@ -218,7 +275,6 @@ export default function Profile({ onClose }) {
         const parsed = JSON.parse(localProfile)
         setProfileData({
           ...parsed,
-          phone: parsed.phone,
           application_stage: parsed.applicationStage,
           target_schools: parsed.targetSchools?.map(s => ({ school_name: s.name, interview_type: s.interviewType, interview_date: s.interviewDate })) || [],
           current_concerns: parsed.currentConcerns || '',
@@ -314,39 +370,6 @@ export default function Profile({ onClose }) {
       }
     } catch (error) {
       console.error('Failed to update name:', error)
-    }
-  }
-
-  const handleSavePhone = async () => {
-    // Validate phone - digits only
-    const cleanPhone = newPhone.replace(/\D/g, '')
-    if (cleanPhone.length < 10) {
-      setPhoneError('Please enter a valid phone number (at least 10 digits)')
-      return
-    }
-    
-    setPhoneError('')
-    
-    try {
-      // Update in backend (session authenticates user)
-      await fetch('/api/profile/setup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ phone: cleanPhone })
-      })
-      
-      // Update local storage
-      const localProfile = JSON.parse(localStorage.getItem('profileData') || '{}')
-      localProfile.phone = cleanPhone
-      localStorage.setItem('profileData', JSON.stringify(localProfile))
-      
-      // Update profile data state
-      setProfileData(prev => ({ ...prev, phone: cleanPhone }))
-      setEditingPhone(false)
-    } catch (error) {
-      console.error('Failed to update phone:', error)
-      setPhoneError('Failed to save. Please try again.')
     }
   }
 
@@ -491,7 +514,6 @@ export default function Profile({ onClose }) {
           <div className="profile-info">
             <h2>{user.name}</h2>
             <p>{user.email}</p>
-            {profileData?.phone && <p className="profile-phone">📞 {profileData.phone}</p>}
           </div>
         </div>
 
@@ -525,19 +547,18 @@ export default function Profile({ onClose }) {
               <div className="overview-card session-credits-card">
                 <h4>Available Sessions</h4>
                 <div className="session-credits-display">
-                  <div className="credit-box">
-                    <span className="credit-number">{sessionCredits.thirtyMin || 0}</span>
-                    <span className="credit-type">30-min</span>
-                  </div>
-                  <div className="credit-box">
-                    <span className="credit-number">{sessionCredits.sixtyMin || 0}</span>
-                    <span className="credit-type">60-min</span>
-                  </div>
-                  <div className="credit-box total">
-                    <span className="credit-number">{sessionCredits.total || 0}</span>
-                    <span className="credit-type">Total</span>
-                  </div>
+                  {BOOKABLE_CATEGORIES.map(category => (
+                    <div className="credit-box" key={category}>
+                      <span className="credit-number">{getTotalCreditsForCategory(sessionCredits, category)}</span>
+                      <span className="credit-type">{getCategoryLabel(category)}</span>
+                    </div>
+                  ))}
                 </div>
+                {sessionCredits.completedCount > 0 && (
+                  <p className="credits-completed-note">
+                    {sessionCredits.completedCount} session{sessionCredits.completedCount === 1 ? '' : 's'} completed so far
+                  </p>
+                )}
               </div>
 
               {/* Upcoming Sessions */}
@@ -549,6 +570,7 @@ export default function Profile({ onClose }) {
                       const bookingDate = new Date(booking.date + 'T12:00:00')
                       const canCancel = canCancelBooking(booking)
                       const isCancelling = cancellingBooking === booking.id
+                      const isEditing = editingBookingId === booking.id
                       
                       return (
                         <div key={booking.id} className="upcoming-booking-item compact">
@@ -565,9 +587,70 @@ export default function Profile({ onClose }) {
                                   🎥 Join Meet
                                 </a>
                               )}
+                              {!isEditing && booking.notes && (
+                                <p className="booking-notes-display">📝 {booking.notes}</p>
+                              )}
+                              {!isEditing && booking.attachments?.length > 0 && (
+                                <div className="booking-attachments-display">
+                                  {booking.attachments.map(f => (
+                                    <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer" className="booking-attachment-link">
+                                      📎 {f.filename}
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+                              {isEditing && (
+                                <div className="booking-edit-form">
+                                  <label htmlFor={`booking-notes-${booking.id}`}>Notes for this session</label>
+                                  <textarea
+                                    id={`booking-notes-${booking.id}`}
+                                    value={editNotes}
+                                    onChange={(e) => setEditNotes(e.target.value.slice(0, MAX_NOTES_LENGTH))}
+                                    placeholder="What would you like to focus on?"
+                                    rows={3}
+                                    maxLength={MAX_NOTES_LENGTH}
+                                  />
+                                  <p className="booking-notes-count">{editNotes.length}/{MAX_NOTES_LENGTH}</p>
+                                  {booking.category === 'cv' && profileData?.cv_files?.length > 0 && (
+                                    <div className="booking-edit-attachments">
+                                      <span className="settings-label">Attached files</span>
+                                      {profileData.cv_files.map(f => (
+                                        <label key={f.id} className="cv-file-item">
+                                          <input
+                                            type="checkbox"
+                                            checked={editAttachmentIds.includes(f.id)}
+                                            onChange={() => toggleEditAttachment(f.id)}
+                                          />
+                                          {f.filename}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <div className="booking-edit-actions">
+                                    <button
+                                      className="save-name-btn"
+                                      onClick={() => handleSaveBookingEdit(booking)}
+                                      disabled={savingBookingEdit}
+                                    >
+                                      {savingBookingEdit ? 'Saving...' : 'Save'}
+                                    </button>
+                                    <button className="cancel-name-btn" onClick={cancelEditingBooking} disabled={savingBookingEdit}>
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                           <div className="upcoming-booking-actions">
+                            {!isEditing && (
+                              <button
+                                className="edit-name-btn"
+                                onClick={() => startEditingBooking(booking)}
+                              >
+                                Edit
+                              </button>
+                            )}
                             <button 
                               className="cancel-booking-btn"
                               onClick={() => handleCancelBooking(booking)}
@@ -609,7 +692,9 @@ export default function Profile({ onClose }) {
                       pkg.bookings.forEach(booking => {
                         const bookingDate = new Date(booking.date + 'T' + (booking.time?.split(' ')[0] || '00:00') + ':00')
                         if (bookingDate < new Date() || booking.status === 'completed') {
-                          pastSessions.push({ ...booking, packageName: getPackageName(pkg) })
+                          // Fall back to the parent purchase's category for bookings created
+                          // before booking.category existed (see PR #6).
+                          pastSessions.push({ ...booking, category: booking.category || pkg.category, packageName: getPackageName(pkg) })
                         }
                       })
                     }
@@ -628,6 +713,7 @@ export default function Profile({ onClose }) {
                             {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </div>
                           <div className="past-session-info">
+                            <span className="past-session-service">{getCategoryLabel(session.category)}</span>
                             <span className="past-session-time">{formatBookingTimeRange(session)}</span>
                           </div>
                         </div>
@@ -642,7 +728,9 @@ export default function Profile({ onClose }) {
                 <h4>Package History</h4>
                 {purchasedPackages.length > 0 ? (
                   <div className="past-packages-list">
-                    {purchasedPackages.map(pkg => {
+                    {[...purchasedPackages]
+                      .sort((a, b) => new Date(b.purchase_date) - new Date(a.purchase_date))
+                      .map(pkg => {
                       const remaining = (pkg.sessions_total || 1) - (pkg.sessions_used || 0)
                       const isSub = isSubscription(pkg)
                       const category = getPackageCategory(pkg.package_id)
@@ -699,39 +787,6 @@ export default function Profile({ onClose }) {
                       <div className="name-display">
                         <span className="settings-value">{user.name || 'Not set'}</span>
                         <button className="edit-name-btn" onClick={() => { setEditingName(true); setNewName(user.name || '') }}>Edit</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Phone Number */}
-                <div className="settings-item">
-                  <div className="settings-info">
-                    <span className="settings-label">Phone Number</span>
-                    {editingPhone ? (
-                      <div className="edit-name-form">
-                        <input
-                          type="tel"
-                          value={newPhone}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/\D/g, '')
-                            setNewPhone(value)
-                            setPhoneError('')
-                          }}
-                          placeholder="Enter phone number"
-                          className="edit-name-input"
-                          maxLength={15}
-                        />
-                        {phoneError && <span className="phone-error">{phoneError}</span>}
-                        <div className="edit-name-actions">
-                          <button className="save-name-btn" onClick={handleSavePhone}>Save</button>
-                          <button className="cancel-name-btn" onClick={() => { setEditingPhone(false); setNewPhone(profileData?.phone || ''); setPhoneError('') }}>Cancel</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="name-display">
-                        <span className="settings-value">{profileData?.phone || 'Not set'}</span>
-                        <button className="edit-name-btn" onClick={() => { setEditingPhone(true); setNewPhone(profileData?.phone || '') }}>Edit</button>
                       </div>
                     )}
                   </div>
@@ -803,6 +858,7 @@ export default function Profile({ onClose }) {
                             value={newSchool.name}
                             onChange={(e) => setNewSchool(prev => ({ ...prev, name: e.target.value }))}
                           />
+                          <p className="add-school-hint">Interview format, and date if you have one scheduled (optional)</p>
                           <div className="add-school-row">
                             <select
                               value={newSchool.interviewType}
@@ -815,6 +871,8 @@ export default function Profile({ onClose }) {
                             </select>
                             <input
                               type="date"
+                              aria-label="Interview date (optional)"
+                              title="Interview date (optional)"
                               value={newSchool.interviewDate}
                               onChange={(e) => setNewSchool(prev => ({ ...prev, interviewDate: e.target.value }))}
                             />

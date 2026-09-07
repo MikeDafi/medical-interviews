@@ -4,7 +4,7 @@ import '../_lib/env.js';
 import { sql } from '@vercel/postgres';
 import { rateLimit } from '../_lib/auth.js';
 import { requireAuth } from '../_lib/session.js';
-import { sanitizeString, sanitizePhone, sanitizeUrl } from '../_lib/sanitize.js';
+import { sanitizeString, sanitizeUrl } from '../_lib/sanitize.js';
 import { ADMIN_GRANTABLE_PACKAGES, getPackageName } from '../../lib/packages.js';
 
 export default async function handler(req, res) {
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     try {
       const result = await sql`
         SELECT 
-          id, email, name, picture, phone,
+          id, email, name, picture,
           application_stage, main_concerns, target_schools,
           interview_level, interview_style, cv_files,
           purchases, resources, profile_complete, is_admin, 
@@ -211,7 +211,7 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { userId, name, phone } = req.body;
+    const { userId, name } = req.body;
 
     if (!userId) {
       return res.status(400).json({ error: 'userId required' });
@@ -219,14 +219,12 @@ export default async function handler(req, res) {
 
     // SECURITY: Sanitize inputs
     const cleanName = sanitizeString(name, 100);
-    const cleanPhone = sanitizePhone(phone);
 
     try {
-      // Update name and phone (preserve existing if not provided)
+      // Update name (preserve existing if not provided)
       await sql`
         UPDATE users 
         SET name = CASE WHEN ${cleanName} = '' THEN name ELSE ${cleanName} END,
-            phone = ${cleanPhone},
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ${parseInt(userId)}
       `;
@@ -247,7 +245,7 @@ export default async function handler(req, res) {
   try {
     const usersQuery = await sql`
       SELECT 
-        id, email, name, picture, phone,
+        id, email, name, picture,
         application_stage, main_concerns, target_schools,
         purchases, resources, profile_complete, is_admin, 
         created_at, updated_at

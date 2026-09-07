@@ -43,7 +43,7 @@ export default function AdminUser() {
     sessions: ADMIN_PACKAGE_OPTIONS[0].sessions
   })
   const [editingUser, setEditingUser] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', phone: '' })
+  const [editForm, setEditForm] = useState({ name: '' })
 
   useEffect(() => {
     if (!authLoading && isAdmin && userId) {
@@ -63,7 +63,7 @@ export default function AdminUser() {
       if (response.ok) {
         const data = await response.json()
         setUserData(data.user)
-        setEditForm({ name: data.user?.name || '', phone: data.user?.phone || '' })
+        setEditForm({ name: data.user?.name || '' })
       } else if (response.status === 404) {
         setError('User not found')
       } else if (response.status === 403) {
@@ -194,8 +194,7 @@ export default function AdminUser() {
         },
         body: JSON.stringify({
           userId: userData.id,
-          name: editForm.name,
-          phone: editForm.phone
+          name: editForm.name
         })
       })
 
@@ -340,12 +339,6 @@ export default function AdminUser() {
                     value={editForm.name}
                     onChange={e => setEditForm({ ...editForm, name: e.target.value })}
                   />
-                  <input
-                    type="tel"
-                    placeholder="Phone"
-                    value={editForm.phone}
-                    onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
-                  />
                   <div className="edit-actions">
                     <button className="save-btn" onClick={handleEditUser}>Save</button>
                     <button className="cancel-btn" onClick={() => setEditingUser(false)}>Cancel</button>
@@ -358,7 +351,6 @@ export default function AdminUser() {
                     {userData.is_admin && <span className="admin-badge">Admin</span>}
                   </h2>
                   <p className="profile-email">{userData.email}</p>
-                  {userData.phone && <p className="profile-phone">📞 {userData.phone}</p>}
                   <button className="edit-profile-btn" onClick={() => setEditingUser(true)}>
                     Edit Profile
                   </button>
@@ -579,7 +571,9 @@ export default function AdminUser() {
 
               {userData.purchases?.length > 0 ? (
                 <ul className="packages-list">
-                  {userData.purchases.map((pkg) => (
+                  {[...userData.purchases]
+                    .sort((a, b) => new Date(b.purchase_date) - new Date(a.purchase_date))
+                    .map((pkg) => (
                     <li key={pkg.id} className="package-item">
                       <div className="package-main">
                         <span className={`package-type-badge ${pkg.duration_minutes === 30 ? 'trial' : 'regular'}`}>
@@ -638,6 +632,9 @@ export default function AdminUser() {
                             </a>
                           ))}
                         </div>
+                      )}
+                      {booking.notes && (
+                        <p className="booking-notes">📝 {booking.notes}</p>
                       )}
                       <div className="booking-meta">
                         <span className={`booking-status ${booking.status}`}>{booking.status}</span>

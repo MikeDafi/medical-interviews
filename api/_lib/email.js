@@ -569,7 +569,7 @@ export async function sendAdminBookingEmail({
   const adminUserLink = `${SITE_URL}/admin/user/${customerId}`;
   
   // Extract profile info
-  const { phone, application_stage, main_concerns, target_schools } = userProfile;
+  const { application_stage, main_concerns, target_schools } = userProfile;
   // Purchases/target_schools store the school under `name`, not `school_name` - fall back for
   // safety, matching the same field-name fix applied to AdminUser.jsx.
   const schoolsList = target_schools?.length 
@@ -577,10 +577,10 @@ export async function sendAdminBookingEmail({
     : 'Not specified';
 
   // Booking-specific details captured at booking time (as distinct from the client's general,
-  // whole-history profile info above) - only present for Interview (level/style/school) or
-  // CV & Strategy (attachments) bookings.
-  const { interviewLevel, interviewStyle, targetSchool: bookingSchool, attachments = [] } = bookingDetails;
-  const hasBookingDetails = interviewLevel || interviewStyle || bookingSchool || attachments.length > 0;
+  // whole-history profile info above) - only present for Interview (level/style/school),
+  // CV & Strategy (attachments), or a client-written note (offered for any category).
+  const { interviewLevel, interviewStyle, targetSchool: bookingSchool, attachments = [], notes: bookingNotes } = bookingDetails;
+  const hasBookingDetails = interviewLevel || interviewStyle || bookingSchool || attachments.length > 0 || bookingNotes;
 
   // Escaped aliases for HTML interpolation only - every one of these can contain arbitrary
   // characters chosen by the client themselves (Google display name, profile fields, school
@@ -594,6 +594,7 @@ export async function sendAdminBookingEmail({
   const interviewLevelHtml = escapeHtml(interviewLevel);
   const interviewStyleHtml = escapeHtml(interviewStyle);
   const bookingSchoolHtml = escapeHtml(bookingSchool);
+  const bookingNotesHtml = escapeHtml(bookingNotes);
 
   const html = `
 <!DOCTYPE html>
@@ -659,12 +660,6 @@ export async function sendAdminBookingEmail({
                 </tr>
                 <tr>
                   <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">
-                    <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">Phone:</span>
-                    <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${phone || 'Not provided'}</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">
                     <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">Stage:</span>
                     <span style="color: #1e293b; font-size: 14px; font-weight: 500;">${applicationStageHtml || 'Not specified'}</span>
                   </td>
@@ -706,11 +701,18 @@ export async function sendAdminBookingEmail({
                 </tr>` : ''}
                 ${attachments.length > 0 ? `
                 <tr>
-                  <td style="padding: 8px 0;">
+                  <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">
                     <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px;">Attachments:</span>
                     <span style="color: #1e293b; font-size: 14px; font-weight: 500;">
                       ${attachments.map(f => `<a href="${escapeHtml(f.url)}" target="_blank" style="color: #0d9488;">${escapeHtml(f.filename)}</a>`).join(', ')}
                     </span>
+                  </td>
+                </tr>` : ''}
+                ${bookingNotes ? `
+                <tr>
+                  <td style="padding: 8px 0;">
+                    <span style="color: #64748b; font-size: 13px; display: inline-block; width: 120px; vertical-align: top;">Notes:</span>
+                    <span style="color: #1e293b; font-size: 14px; font-weight: 500; white-space: pre-wrap;">${bookingNotesHtml}</span>
                   </td>
                 </tr>` : ''}
               </table>
@@ -771,7 +773,7 @@ export async function sendAdminBookingEmail({
 
   const bookingDetailsText = hasBookingDetails ? `
 BOOKING DETAILS:
-${interviewLevel ? `- Level: ${interviewLevel}\n` : ''}${interviewStyle ? `- Interview Style: ${interviewStyle}\n` : ''}${bookingSchool ? `- School: ${bookingSchool}\n` : ''}${attachments.length > 0 ? `- Attachments: ${attachments.map(f => `${f.filename} (${f.url})`).join(', ')}\n` : ''}` : '';
+${interviewLevel ? `- Level: ${interviewLevel}\n` : ''}${interviewStyle ? `- Interview Style: ${interviewStyle}\n` : ''}${bookingSchool ? `- School: ${bookingSchool}\n` : ''}${attachments.length > 0 ? `- Attachments: ${attachments.map(f => `${f.filename} (${f.url})`).join(', ')}\n` : ''}${bookingNotes ? `- Notes: ${bookingNotes}\n` : ''}` : '';
 
   const text = `
 NEW SESSION BOOKED
@@ -782,7 +784,6 @@ ${sessionType} • ${formattedDate} at ${time} ${timezone}
 CLIENT INFORMATION:
 - Name: ${customerName || 'Not provided'}
 - Email: ${customerEmail}
-- Phone: ${phone || 'Not provided'}
 - Stage: ${application_stage || 'Not specified'}
 - Target Schools: ${schoolsList}
 ${bookingDetailsText}

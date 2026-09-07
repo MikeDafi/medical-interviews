@@ -9,29 +9,15 @@ const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9
 export default function ProfileSetup({ user, onComplete }) {
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
-    phone: '',
     applicationStage: '',
     targetSchools: [{ id: generateId(), name: '', interviewType: 'MMI', interviewDate: '', priority: 1 }],
     currentConcerns: '',
     resources: [{ id: generateId(), title: '', url: '' }]
   })
   const [loading, setLoading] = useState(false)
-  const [phoneError, setPhoneError] = useState('')
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
-    
-    // Special handling for phone - only allow numbers
-    if (name === 'phone') {
-      const numbersOnly = value.replace(/[^0-9]/g, '')
-      if (value !== numbersOnly && value !== '') {
-        setPhoneError('Please enter numbers only')
-      } else {
-        setPhoneError('')
-      }
-      setFormData(prev => ({ ...prev, [name]: numbersOnly }))
-      return
-    }
     
     // Special handling for concerns - enforce character limit
     if (name === 'currentConcerns' && value.length > MAX_CONCERNS_LENGTH) {
@@ -107,7 +93,6 @@ export default function ProfileSetup({ user, onComplete }) {
         credentials: 'include',
         body: JSON.stringify({
           name: user.name,
-          phone: formData.phone,
           applicationStage: formData.applicationStage,
           targetSchools: formData.targetSchools.filter(s => s.name.trim()),
           concerns: formData.currentConcerns,
@@ -150,19 +135,6 @@ export default function ProfileSetup({ user, onComplete }) {
             <div className="setup-step">
               <h3>About You</h3>
               
-              <div className="form-group">
-                <label>Phone Number (optional)</label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  placeholder="For session reminders (numbers only)"
-                  maxLength={15}
-                />
-                {phoneError && <span className="field-error">{phoneError}</span>}
-              </div>
-
               <div className="form-group">
                 <label>Where are you in your application?</label>
                 <select
@@ -339,7 +311,6 @@ export default function ProfileSetup({ user, onComplete }) {
               credentials: 'include',
               body: JSON.stringify({
                 name: user.name,
-                phone: '',
                 applicationStage: '',
                 targetSchools: [],
                 concerns: '',

@@ -87,15 +87,21 @@ export function getCreditsForOption(credits, category, duration) {
 }
 
 /**
+ * Total remaining sessions for one category, summed across all its durations. Used to show a
+ * simple per-service availability summary (e.g. "Interview Prep: 2 available") instead of the
+ * old pooled-across-categories 30-min/60-min/Total breakdown, which became confusing/misleading
+ * once multiple service categories existed (it could show non-zero totals while every option a
+ * client can actually book shows "None available", since the credits belong to a different
+ * category+duration combination than what's offered).
+ */
+export function getTotalCreditsForCategory(credits, category) {
+  const perDuration = credits?.byCategory?.[category] || {}
+  return Object.values(perDuration).reduce((sum, n) => sum + n, 0)
+}
+
+/**
  * Validate email format
  */
 export function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-}
-
-/**
- * Validate phone number (digits only)
- */
-export function isValidPhone(phone) {
-  return /^\d{10,15}$/.test(phone.replace(/\D/g, ''))
 }

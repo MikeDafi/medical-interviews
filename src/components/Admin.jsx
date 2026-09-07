@@ -17,7 +17,7 @@ export default function Admin() {
   const [addingSessionFor, setAddingSessionFor] = useState(null)
   const [newSession, setNewSession] = useState({ duration: 60, sessions: 1 })
   const [editingUser, setEditingUser] = useState(null)
-  const [editForm, setEditForm] = useState({ name: '', phone: '' })
+  const [editForm, setEditForm] = useState({ name: '' })
 
   useEffect(() => {
     if (!authLoading && isAdmin) {
@@ -183,14 +183,13 @@ export default function Admin() {
         },
         body: JSON.stringify({
           userId,
-          name: editForm.name,
-          phone: editForm.phone
+          name: editForm.name
         })
       })
 
       if (response.ok) {
         setEditingUser(null)
-        setEditForm({ name: '', phone: '' })
+        setEditForm({ name: '' })
         fetchUsers()
       }
     } catch (error) {
@@ -200,7 +199,7 @@ export default function Admin() {
 
   const startEditingUser = (u) => {
     setEditingUser(u.id)
-    setEditForm({ name: u.name || '', phone: u.phone || '' })
+    setEditForm({ name: u.name || '' })
   }
 
   const filteredUsers = users.filter(u => 
@@ -404,15 +403,6 @@ export default function Admin() {
                                   placeholder="User name"
                                 />
                               </div>
-                              <div className="edit-field">
-                                <label>Phone:</label>
-                                <input
-                                  type="text"
-                                  value={editForm.phone}
-                                  onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
-                                  placeholder="Phone number"
-                                />
-                              </div>
                               <button 
                                 className="admin-save-resource-btn"
                                 onClick={() => handleEditUser(u.id)}
@@ -422,7 +412,6 @@ export default function Admin() {
                             </div>
                           ) : (
                             <div className="admin-detail-list">
-                              <div><strong>Phone:</strong> {u.phone || 'Not provided'}</div>
                               <div><strong>Main Concerns:</strong> {u.main_concerns || 'None specified'}</div>
                             </div>
                           )}
