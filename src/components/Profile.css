@@ -409,6 +409,65 @@
 .upcoming-booking-actions {
   display: flex;
   align-items: center;
+  gap: 8px;
+}
+
+.booking-notes-display {
+  font-size: 13px;
+  color: #475569;
+  background: #f8fafc;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
+
+.booking-attachments-display {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.booking-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.booking-edit-form label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dark-text);
+}
+
+.booking-edit-form textarea {
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.booking-notes-count {
+  margin: 0;
+  font-size: 11px;
+  color: #6b7280;
+  text-align: right;
+}
+
+.booking-edit-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.booking-edit-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .cancel-booking-btn {
@@ -485,6 +544,13 @@
 .credit-box.total .credit-number,
 .credit-box.total .credit-type {
   color: white;
+}
+
+.credits-completed-note {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--light-text, #6b7280);
+  text-align: center;
 }
 
 .credit-number {
@@ -848,6 +914,12 @@
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   font-size: 14px;
+}
+
+.add-school-hint {
+  margin: -4px 0 0;
+  font-size: 12px;
+  color: #6b7280;
 }
 
 .add-school-row {

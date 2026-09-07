@@ -15,7 +15,7 @@ export default function Privacy() {
           <p>When you use PreMedical 1-on-1, we collect:</p>
           <ul>
             <li><strong>Account Information:</strong> Name, email address, and profile picture from your Google account</li>
-            <li><strong>Profile Data:</strong> Phone number (optional), application stage, target schools, and interview concerns you provide</li>
+            <li><strong>Profile Data:</strong> Application stage, target schools, and interview concerns you provide</li>
             <li><strong>Session Data:</strong> Booking history, session notes, and feedback</li>
             <li><strong>Payment Information:</strong> Processed securely by Stripe; we do not store your card details</li>
           </ul>

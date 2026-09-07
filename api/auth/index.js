@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
     try {
       const userResult = await sql`
-        SELECT id, email, name, picture, is_admin, profile_complete, application_stage, phone
+        SELECT id, email, name, picture, is_admin, profile_complete, application_stage
         FROM users WHERE google_id = ${user.googleId}
       `;
 

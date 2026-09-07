@@ -8,8 +8,7 @@ import { sendErrorAlertEmail } from '../_lib/email.js';
 import { 
   sanitizeString, 
   sanitizeEmail, 
-  sanitizeUrl, 
-  sanitizePhone
+  sanitizeUrl
 } from '../_lib/sanitize.js';
 
 export default async function handler(req, res) {
@@ -32,7 +31,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { phone, applicationStage, targetSchools, concerns, resources, name, interviewLevel, interviewStyle, cvFiles } = req.body;
+    const { applicationStage, targetSchools, concerns, resources, name, interviewLevel, interviewStyle, cvFiles } = req.body;
 
     // SECURITY: Use verified email from session, not from body
     const cleanEmail = sessionUser.email;
@@ -48,7 +47,6 @@ export default async function handler(req, res) {
 
     // Sanitize inputs
     const cleanName = sanitizeString(name, 100) || sessionUser.name;
-    const cleanPhone = providedOrNull(phone, sanitizePhone);
     const cleanApplicationStage = providedOrNull(applicationStage, v => sanitizeString(v, 50));
     const cleanConcerns = providedOrNull(concerns, v => sanitizeString(v, 1000));
 
@@ -81,9 +79,10 @@ export default async function handler(req, res) {
     // any newly uploaded file), which is why this is a full-array replace rather than an append -
     // consistent with the pattern already used for those two fields. Restricting the URL host to
     // our own Vercel Blob store prevents this field from being used to store/serve an arbitrary
-    // attacker-supplied URL.
+    // attacker-supplied URL. Capped at 3 files per client (re-validated here, not just in the
+    // Calendar.jsx upload UI, since this endpoint is the actual authority over what gets stored).
     const cleanCvFiles = Array.isArray(cvFiles)
-      ? cvFiles.slice(0, 20).map(f => ({
+      ? cvFiles.slice(0, 3).map(f => ({
           id: sanitizeString(f.id, 100),
           url: sanitizeUrl(f.url, { allowedHosts: ['blob.vercel-storage.com'] }),
           filename: sanitizeString(f.filename, 255),
@@ -106,14 +105,13 @@ export default async function handler(req, res) {
       // defaults for anything that wasn't provided.
       await sql`
         INSERT INTO users (
-          google_id, email, name, phone, application_stage, target_schools, main_concerns,
+          google_id, email, name, application_stage, target_schools, main_concerns,
           resources, interview_level, interview_style, cv_files, profile_complete
         )
         VALUES (
           ${cleanGoogleId}, 
           ${cleanEmail}, 
           ${cleanName}, 
-          ${cleanPhone ?? ''}, 
           ${cleanApplicationStage ?? ''}, 
           ${JSON.stringify(cleanTargetSchools ?? [])}::jsonb, 
           ${cleanConcerns ?? ''}, 
@@ -138,7 +136,6 @@ export default async function handler(req, res) {
         UPDATE users SET
           google_id = COALESCE(${cleanGoogleId}, google_id),
           name = COALESCE(${cleanName}, name),
-          phone = COALESCE(${cleanPhone}, phone),
           application_stage = COALESCE(${cleanApplicationStage}, application_stage),
           target_schools = COALESCE(${cleanTargetSchools !== null ? JSON.stringify(cleanTargetSchools) : null}::jsonb, target_schools),
           main_concerns = COALESCE(${cleanConcerns}, main_concerns),

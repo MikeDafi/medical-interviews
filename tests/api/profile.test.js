@@ -68,7 +68,6 @@ describe('Profile API', () => {
     
     it('saves profile data', async () => {
       const profileData = {
-        phone: '555-123-4567',
         applicationStage: 'Applying this cycle',
         mainConcerns: 'Need help with MMI practice',
         targetSchools: [
@@ -86,7 +85,7 @@ describe('Profile API', () => {
       
       // Verify data was saved
       const user = await getTestUser();
-      expect(user.phone).toBe('5551234567'); // Sanitized
+      expect(user.application_stage).toBe('Applying this cycle');
       expect(user.profile_complete).toBe(true);
     });
     
@@ -95,7 +94,7 @@ describe('Profile API', () => {
       await authFetch(`${BASE_URL}/api/profile/setup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: '111-111-1111' })
+        body: JSON.stringify({ applicationStage: 'Not yet applying' })
       });
       
       // Update
@@ -103,7 +102,7 @@ describe('Profile API', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          phone: '222-222-2222',
+          applicationStage: 'Applying this cycle',
           mainConcerns: 'Updated concerns'
         })
       });
@@ -111,7 +110,7 @@ describe('Profile API', () => {
       expect(response.status).toBe(200);
       
       const user = await getTestUser();
-      expect(user.phone).toBe('2222222222');
+      expect(user.application_stage).toBe('Applying this cycle');
       expect(user.main_concerns).toBe('Updated concerns');
     });
 
@@ -149,7 +148,6 @@ describe('Profile API', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phone: '333-333-3333',
           applicationStage: 'applying',
           concerns: 'Original concerns',
           interviewLevel: 'advanced',
@@ -173,7 +171,6 @@ describe('Profile API', () => {
       // The field that was actually updated:
       expect(user.main_concerns).toBe('Updated concerns only');
       // Everything else must survive the partial update untouched:
-      expect(user.phone).toBe('3333333333');
       expect(user.application_stage).toBe('applying');
       expect(user.interview_level).toBe('advanced');
       expect(user.interview_style).toBe('both');

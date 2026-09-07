@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { calculateSessionCredits, getCreditsForOption } from '../utils'
+import { calculateSessionCredits, getCreditsForOption, getTotalCreditsForCategory } from '../utils'
 import { parseTimeLabel, zonedWallClockToUtc, formatTimeLabel } from '../../lib/timezone.js'
 import { slotsForBooking } from '../../lib/slots.js'
-import { getBookableServiceOptions } from '../../lib/packages.js'
+import { getBookableServiceOptions, BOOKABLE_CATEGORIES, getCategoryLabel } from '../../lib/packages.js'
 import RecentBookings from './RecentBookings'
 import Login from './Login'
 
@@ -22,6 +22,8 @@ const INTERVIEW_STYLE_OPTIONS = [
 ]
 const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024 // 5MB, matches api/upload/index.js
 const ALLOWED_ATTACHMENT_EXTENSIONS = ['.pdf', '.doc', '.docx']
+const MAX_ATTACHMENT_FILES = 3 // matches the cap enforced in api/profile/setup.js
+const MAX_NOTES_LENGTH = 1000 // matches the cap enforced in api/calendar/index.js
 
 export default function Calendar() {
   const { user } = useAuth()
@@ -52,6 +54,9 @@ export default function Calendar() {
   const [selectedAttachmentIds, setSelectedAttachmentIds] = useState([])
   const [uploadingFile, setUploadingFile] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  // Free-response notes, offered for any service category, so the client can tell the coach
+  // what they want out of the session.
+  const [bookingNotes, setBookingNotes] = useState('')
   
   // Hover-triggered preload refs
   const sectionRef = useRef(null)
@@ -190,8 +195,12 @@ export default function Calendar() {
       const response = await fetch(`/api/profile?userId=${user.id}&email=${encodeURIComponent(user.email)}`)
       if (response.ok) {
         const data = await response.json()
-        const credits = calculateSessionCredits(data.profile?.purchases)
-        setSessionCredits({ ...credits, loading: false })
+        const purchases = data.profile?.purchases || []
+        const credits = calculateSessionCredits(purchases)
+        // Simple, generic "how much have you used so far" figure - total sessions consumed
+        // across every package ever purchased, regardless of category/duration.
+        const completedCount = purchases.reduce((sum, p) => sum + (p.sessions_used || 0), 0)
+        setSessionCredits({ ...credits, completedCount, loading: false })
 
         // Pre-fill the Interview level/style booking fields with whatever's currently on the
         // profile (synced back after each Interview booking - see api/calendar/index.js), and
@@ -344,7 +353,8 @@ export default function Calendar() {
           timezone: userTimezone,
           ...(selectedCategory === 'interview' ? { interviewLevel, interviewStyle } : {}),
           ...(selectedTargetSchool ? { targetSchool: selectedTargetSchool } : {}),
-          ...(selectedAttachmentIds.length > 0 ? { attachmentIds: selectedAttachmentIds } : {})
+          ...(selectedAttachmentIds.length > 0 ? { attachmentIds: selectedAttachmentIds } : {}),
+          ...(bookingNotes.trim() ? { notes: bookingNotes.trim().slice(0, MAX_NOTES_LENGTH) } : {})
         })
       })
       
@@ -475,6 +485,7 @@ export default function Calendar() {
     setSelectedTargetSchool('')
     setSelectedAttachmentIds([])
     setUploadError('')
+    setBookingNotes('')
   }
 
   // Upload a CV & Strategy attachment. Streams directly from the browser to Vercel Blob storage
@@ -484,6 +495,11 @@ export default function Calendar() {
   // auto-selects it as an attachment for this booking.
   const handleFileUpload = async (file) => {
     setUploadError('')
+
+    if (bookingProfile.cvFiles.length >= MAX_ATTACHMENT_FILES) {
+      setUploadError(`You can attach up to ${MAX_ATTACHMENT_FILES} files. Remove one before uploading another.`)
+      return
+    }
 
     const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
     if (!ALLOWED_ATTACHMENT_EXTENSIONS.includes(extension)) {
@@ -639,21 +655,21 @@ export default function Calendar() {
       {user && (
         <div className="session-credits">
           <div className="credits-card">
-            <div className="credit-item">
-              <span className="credit-count">{sessionCredits.thirtyMin}</span>
-              <span className="credit-label">30-min Sessions</span>
-            </div>
-            <div className="credit-divider"></div>
-            <div className="credit-item">
-              <span className="credit-count">{sessionCredits.sixtyMin}</span>
-              <span className="credit-label">60-min Sessions</span>
-            </div>
-            <div className="credit-divider"></div>
-            <div className="credit-item total">
-              <span className="credit-count">{sessionCredits.total}</span>
-              <span className="credit-label">Total Available</span>
-            </div>
+            {BOOKABLE_CATEGORIES.map((category, idx) => (
+              <Fragment key={category}>
+                {idx > 0 && <div className="credit-divider"></div>}
+                <div className="credit-item">
+                  <span className="credit-count">{getTotalCreditsForCategory(sessionCredits, category)}</span>
+                  <span className="credit-label">{getCategoryLabel(category)}</span>
+                </div>
+              </Fragment>
+            ))}
           </div>
+          {sessionCredits.completedCount > 0 && (
+            <p className="credits-completed-note">
+              {sessionCredits.completedCount} session{sessionCredits.completedCount === 1 ? '' : 's'} completed so far
+            </p>
+          )}
           {totalSessions === 0 && !sessionCredits.loading && (
             <p className="no-credits-msg">
               No sessions remaining. <a href="#packages">Purchase a package</a> to book.
@@ -759,8 +775,11 @@ export default function Calendar() {
                       disabled={!enabled}
                     >
                       <span className="type-name">{label}</span>
-                      <span className="type-duration">{credits} available</span>
-                      {credits === 0 && <span className="type-note">None available</span>}
+                      {credits > 0 ? (
+                        <span className="type-duration">{credits} available</span>
+                      ) : (
+                        <span className="type-note">None available</span>
+                      )}
                       {credits > 0 && duration === 60 && !selectedSlot?.canBookHour && (
                         <span className="type-note">Not enough time in slot</span>
                       )}
@@ -825,19 +844,44 @@ export default function Calendar() {
                         ))}
                       </div>
                     )}
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx"
-                      disabled={uploadingFile}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) handleFileUpload(file)
-                        e.target.value = ''
-                      }}
+                    {bookingProfile.cvFiles.length >= MAX_ATTACHMENT_FILES ? (
+                      <p className="cv-upload-hint">Maximum of {MAX_ATTACHMENT_FILES} files reached. Remove one above to upload another.</p>
+                    ) : (
+                      <>
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx"
+                          disabled={uploadingFile}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) handleFileUpload(file)
+                            e.target.value = ''
+                          }}
+                        />
+                        {uploadingFile && <p className="cv-upload-status">Uploading...</p>}
+                        {uploadError && <p className="cv-upload-error">{uploadError}</p>}
+                        <p className="cv-upload-hint">PDF, DOC, or DOCX only. Max 5MB, up to {MAX_ATTACHMENT_FILES} files.</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Notes: offered for any service - what does the client want out of this session? */}
+              {selectedCategory && (
+                <div className="service-fields">
+                  <div className="service-field-group">
+                    <label htmlFor="booking-notes">Anything specific you'd like to focus on? (optional)</label>
+                    <textarea
+                      id="booking-notes"
+                      className="booking-notes-input"
+                      value={bookingNotes}
+                      onChange={(e) => setBookingNotes(e.target.value.slice(0, MAX_NOTES_LENGTH))}
+                      placeholder="e.g. I want to focus on ethics scenarios, or please review the intro of my personal statement"
+                      rows={3}
+                      maxLength={MAX_NOTES_LENGTH}
                     />
-                    {uploadingFile && <p className="cv-upload-status">Uploading...</p>}
-                    {uploadError && <p className="cv-upload-error">{uploadError}</p>}
-                    <p className="cv-upload-hint">PDF, DOC, or DOCX only. Max 5MB.</p>
+                    <p className="booking-notes-count">{bookingNotes.length}/{MAX_NOTES_LENGTH}</p>
                   </div>
                 </div>
               )}

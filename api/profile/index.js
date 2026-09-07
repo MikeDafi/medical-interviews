@@ -107,7 +107,6 @@ export default async function handler(req, res) {
         email: profile.email,
         name: profile.name,
         picture: profile.picture,
-        phone: profile.phone,
         application_stage: profile.application_stage,
         target_schools: profile.target_schools,
         main_concerns: profile.main_concerns,

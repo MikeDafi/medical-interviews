@@ -5,6 +5,7 @@ import { sql } from '@vercel/postgres';
 import { google } from 'googleapis';
 import { rateLimit } from '../_lib/auth.js';
 import { requireAuth } from '../_lib/session.js';
+import { sanitizeString } from '../_lib/sanitize.js';
 import { sendCustomerBookingEmail, sendAdminBookingEmail, sendCustomerCancellationEmail, sendAdminCancellationEmail, sendErrorAlertEmail } from '../_lib/email.js';
 import { getPackageName, getCategoryLabel, BOOKABLE_CATEGORIES } from '../../lib/packages.js';
 import { isOwnerUnavailableResponse } from '../../lib/calendar.js';
@@ -579,7 +580,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: authError || 'Authentication required to book' });
     }
 
-    const { date, time, duration, timezone: requestedTimezone, category, interviewLevel, interviewStyle, targetSchool, attachmentIds } = req.body;
+    const { date, time, duration, timezone: requestedTimezone, category, interviewLevel, interviewStyle, targetSchool, attachmentIds, notes } = req.body;
 
     if (!date || !time || !duration || !category) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -686,12 +687,12 @@ export default async function handler(req, res) {
       // lock) has already been released back to the pool.
       const client = await sql.connect();
 
-      let user, purchases, packageIndex, cleanTargetSchool, cleanAttachments, userProfile, bookingArrayIndex;
+      let user, purchases, packageIndex, cleanTargetSchool, cleanAttachments, cleanNotes, userProfile, bookingArrayIndex;
       try {
         await client.sql`BEGIN`;
 
         const userResult = await client.sql`
-          SELECT id, purchases, phone, application_stage, main_concerns, target_schools, cv_files FROM users 
+          SELECT id, purchases, application_stage, main_concerns, target_schools, cv_files FROM users 
           WHERE google_id = ${userId} OR email = ${userEmail}
           FOR UPDATE
         `;
@@ -704,7 +705,6 @@ export default async function handler(req, res) {
         user = userResult.rows[0];
         purchases = user.purchases || [];
         userProfile = {
-          phone: user.phone,
           application_stage: user.application_stage,
           main_concerns: user.main_concerns,
           target_schools: user.target_schools
@@ -724,6 +724,11 @@ export default async function handler(req, res) {
         cleanAttachments = Array.isArray(attachmentIds)
           ? existingCvFiles.filter(f => attachmentIds.includes(f.id))
           : [];
+
+        // Free-response notes describing what the client wants out of this session - offered for
+        // any category, capped well below the DB's practical limits and sanitized like every
+        // other client-supplied string in this codebase.
+        cleanNotes = sanitizeString(notes, 1000);
 
         // Find an active package with matching duration, category, and available sessions.
         // Purchases created before categories existed (PR #6) have no `category` field - treat
@@ -759,6 +764,7 @@ export default async function handler(req, res) {
           ...(category === 'interview' ? { interview_level: interviewLevel, interview_style: interviewStyle } : {}),
           ...(cleanTargetSchool ? { target_school: cleanTargetSchool } : {}),
           ...(cleanAttachments.length > 0 ? { attachments: cleanAttachments } : {}),
+          ...(cleanNotes ? { notes: cleanNotes } : {}),
           status: 'confirmed',
           booked_at: new Date().toISOString(),
           calendar_event_link: null,
@@ -841,7 +847,8 @@ export default async function handler(req, res) {
           cleanTargetSchool ? `Target School: ${cleanTargetSchool}` : null,
           cleanAttachments.length > 0
             ? `Attachments: ${cleanAttachments.map(f => f.filename).join(', ')}`
-            : null
+            : null,
+          cleanNotes ? `Notes: ${cleanNotes}` : null
         ].filter(Boolean).map(line => `${line}\n`).join('');
         const eventBody = {
           summary: `${sessionLabel} - ${userName || userEmail}`,
@@ -902,6 +909,7 @@ export default async function handler(req, res) {
         ...(category === 'interview' ? { interview_level: interviewLevel, interview_style: interviewStyle } : {}),
         ...(cleanTargetSchool ? { target_school: cleanTargetSchool } : {}),
         ...(cleanAttachments.length > 0 ? { attachments: cleanAttachments } : {}),
+        ...(cleanNotes ? { notes: cleanNotes } : {}),
         status: 'confirmed',
         booked_at: purchases[packageIndex].bookings[bookingArrayIndex].booked_at,
         calendar_event_link: eventLink,
@@ -954,7 +962,8 @@ export default async function handler(req, res) {
           interviewLevel: category === 'interview' ? interviewLevel : null,
           interviewStyle: category === 'interview' ? interviewStyle : null,
           targetSchool: cleanTargetSchool,
-          attachments: cleanAttachments
+          attachments: cleanAttachments,
+          notes: cleanNotes
         },
         eventLink,
         meetLink,
@@ -1135,6 +1144,101 @@ export default async function handler(req, res) {
       console.error('Cancel booking error:', error);
       sendErrorAlertEmail({
         context: 'Cancel booking (api/calendar?action=cancel)',
+        error,
+        extra: { userEmail: sessionUser?.email, bookingId, packageId }
+      }).catch(err => console.error('Error alert email failed:', err));
+      return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    }
+  }
+
+  // ==================== UPDATE BOOKING (notes / attachments) ====================
+  // Lets a client edit a booking's free-response notes and (for CV & Strategy bookings) which of
+  // their on-file cv_files are attached, after the booking was already made - e.g. from
+  // Profile.jsx's Scheduled Sessions list, in addition to setting these at booking time.
+  if (action === 'updateBooking' && req.method === 'POST') {
+    const { authenticated, user: sessionUser, error: authError } = await requireAuth(req);
+    if (!authenticated) {
+      return res.status(401).json({ error: authError || 'Authentication required' });
+    }
+
+    const { bookingId, packageId, notes, attachmentIds } = req.body;
+
+    if (!bookingId || !packageId) {
+      return res.status(400).json({ error: 'Missing booking or package information' });
+    }
+
+    try {
+      const userId = sessionUser.googleId;
+      const userResult = await sql`SELECT id, purchases, cv_files FROM users WHERE google_id = ${userId}`;
+
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const user = userResult.rows[0];
+      const purchases = user.purchases || [];
+
+      const packageIndex = purchases.findIndex(p => p.id === packageId);
+      if (packageIndex === -1) {
+        return res.status(404).json({ error: 'Package not found' });
+      }
+
+      const pkg = purchases[packageIndex];
+      const bookingIndex = pkg.bookings?.findIndex(b => b.id === bookingId);
+
+      if (bookingIndex === -1 || bookingIndex === undefined) {
+        return res.status(404).json({ error: 'Booking not found' });
+      }
+
+      const booking = pkg.bookings[bookingIndex];
+
+      if (booking.status === 'cancelled') {
+        return res.status(400).json({ error: 'Cannot edit a cancelled booking' });
+      }
+
+      // Fall back to the parent purchase's category for bookings created before booking.category
+      // existed (see PR #6).
+      const bookingCategory = booking.category || pkg.category;
+
+      if (notes !== undefined) {
+        const cleanNotes = sanitizeString(notes, 1000);
+        if (cleanNotes) {
+          booking.notes = cleanNotes;
+        } else {
+          delete booking.notes;
+        }
+      }
+
+      if (attachmentIds !== undefined) {
+        if (bookingCategory !== 'cv') {
+          return res.status(400).json({ error: 'Attachments can only be set on CV & Strategy bookings' });
+        }
+        // SECURITY: attachmentIds must reference the client's own previously-uploaded cv_files -
+        // resolve to the actual stored file metadata rather than trusting whatever the client
+        // sends, matching the same validation used at booking time.
+        const existingCvFiles = user.cv_files || [];
+        const cleanAttachments = Array.isArray(attachmentIds)
+          ? existingCvFiles.filter(f => attachmentIds.includes(f.id))
+          : [];
+        if (cleanAttachments.length > 0) {
+          booking.attachments = cleanAttachments;
+        } else {
+          delete booking.attachments;
+        }
+      }
+
+      pkg.bookings[bookingIndex] = booking;
+      purchases[packageIndex] = pkg;
+
+      await sql`
+        UPDATE users SET purchases = ${JSON.stringify(purchases)}::jsonb, updated_at = CURRENT_TIMESTAMP WHERE id = ${user.id}
+      `;
+
+      return res.status(200).json({ success: true, booking });
+    } catch (error) {
+      console.error('Update booking error:', error);
+      sendErrorAlertEmail({
+        context: 'Update booking (api/calendar?action=updateBooking)',
         error,
         extra: { userEmail: sessionUser?.email, bookingId, packageId }
       }).catch(err => console.error('Error alert email failed:', err));

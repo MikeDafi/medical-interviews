@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { calculateSessionCredits as calculateSessionCreditsReal, getCreditsForOption } from '../../src/utils/index.js';
+import { calculateSessionCredits as calculateSessionCreditsReal, getCreditsForOption, getTotalCreditsForCategory } from '../../src/utils/index.js';
 
 // Import the function directly - inline for unit tests
 function calculateSessionCredits(purchases = []) {
@@ -233,4 +233,24 @@ describe('calculateSessionCredits byCategory breakdown (real implementation)', (
     expect(getCreditsForOption(credits, 'advisory', 30)).toBe(0);
   });
 
+});
+
+describe('getTotalCreditsForCategory', () => {
+  it('sums credits across durations within one category', () => {
+    const purchases = [
+      { category: 'interview', duration_minutes: 30, sessions_total: 3, sessions_used: 0, status: 'active' },
+      { category: 'interview', duration_minutes: 60, sessions_total: 3, sessions_used: 1, status: 'active' },
+      { category: 'cv', duration_minutes: 60, sessions_total: 1, sessions_used: 0, status: 'active' }
+    ];
+    const credits = calculateSessionCreditsReal(purchases);
+
+    expect(getTotalCreditsForCategory(credits, 'interview')).toBe(5); // 3 + 2 remaining
+    expect(getTotalCreditsForCategory(credits, 'cv')).toBe(1);
+    expect(getTotalCreditsForCategory(credits, 'advisory')).toBe(0);
+  });
+
+  it('returns 0 for an empty/undefined credits object', () => {
+    expect(getTotalCreditsForCategory(undefined, 'interview')).toBe(0);
+    expect(getTotalCreditsForCategory({}, 'interview')).toBe(0);
+  });
 });
