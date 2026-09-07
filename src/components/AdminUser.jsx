@@ -1,8 +1,20 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getCategoryLabel } from '../../lib/packages.js'
+import { getCategoryLabel, getAdminGrantablePackages } from '../../lib/packages.js'
 import './AdminUser.css'
+
+// Real, purchasable packages an admin can manually grant, grouped by category for the "Add
+// Sessions" form's <optgroup>s.
+const ADMIN_PACKAGE_OPTIONS = getAdminGrantablePackages()
+const ADMIN_PACKAGE_GROUPS = [
+  { category: 'interview', label: 'Interview Prep' },
+  { category: 'cv', label: 'CV & Strategy' },
+  { category: 'advisory', label: 'Advisory' }
+].map(group => ({
+  ...group,
+  packages: ADMIN_PACKAGE_OPTIONS.filter(p => p.category === group.category)
+}))
 
 // Interview preference display labels (same values used by Profile.jsx/ProfileSetup.jsx)
 const INTERVIEW_LEVEL_LABELS = {
@@ -26,7 +38,10 @@ export default function AdminUser() {
   const [newResource, setNewResource] = useState({ title: '', url: '', description: '', type: 'article' })
   const [addingResource, setAddingResource] = useState(false)
   const [addingSession, setAddingSession] = useState(false)
-  const [newSession, setNewSession] = useState({ type: 'regular', sessions: 1 })
+  const [newSession, setNewSession] = useState({
+    packageId: ADMIN_PACKAGE_OPTIONS[0].packageId,
+    sessions: ADMIN_PACKAGE_OPTIONS[0].sessions
+  })
   const [editingUser, setEditingUser] = useState(false)
   const [editForm, setEditForm] = useState({ name: '', phone: '' })
 
@@ -139,12 +154,7 @@ export default function AdminUser() {
   }
 
   const handleAddSession = async () => {
-    if (!newSession.sessions || newSession.sessions < 1) return
-
-    // The admin picks a session "type" (trial/regular), but the API expects the actual
-    // duration in minutes — sending `type` as-is here always failed backend validation
-    // (`duration` was never present), which is why "Add" appeared to silently do nothing.
-    const duration = newSession.type === 'trial' ? 30 : 60
+    if (!newSession.packageId || !newSession.sessions || newSession.sessions < 1) return
 
     try {
       const response = await fetch(`/api/admin?action=addSession&googleId=${user?.id || ''}`, {
@@ -155,13 +165,13 @@ export default function AdminUser() {
         },
         body: JSON.stringify({
           userId: userData.id,
-          duration,
+          packageId: newSession.packageId,
           sessions: parseInt(newSession.sessions)
         })
       })
 
       if (response.ok) {
-        setNewSession({ type: 'regular', sessions: 1 })
+        setNewSession({ packageId: ADMIN_PACKAGE_OPTIONS[0].packageId, sessions: ADMIN_PACKAGE_OPTIONS[0].sessions })
         setAddingSession(false)
         fetchUser()
       } else {
@@ -537,11 +547,21 @@ export default function AdminUser() {
               {addingSession && (
                 <div className="add-form add-session-form">
                   <select
-                    value={newSession.type}
-                    onChange={e => setNewSession({ ...newSession, type: e.target.value })}
+                    value={newSession.packageId}
+                    onChange={e => {
+                      const selected = ADMIN_PACKAGE_OPTIONS.find(p => p.packageId === e.target.value)
+                      setNewSession({ packageId: e.target.value, sessions: selected ? selected.sessions : 1 })
+                    }}
                   >
-                    <option value="trial">Trial (30 min)</option>
-                    <option value="regular">Regular (1 hour)</option>
+                    {ADMIN_PACKAGE_GROUPS.map(group => (
+                      group.packages.length > 0 && (
+                        <optgroup key={group.category} label={group.label}>
+                          {group.packages.map(pkg => (
+                            <option key={pkg.packageId} value={pkg.packageId}>{pkg.label}</option>
+                          ))}
+                        </optgroup>
+                      )
+                    ))}
                   </select>
                   <input
                     type="number"
