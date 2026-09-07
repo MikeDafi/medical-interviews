@@ -89,6 +89,14 @@ img {
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 32px;
   height: calc(100vh - 40px);
+  /* 100vh on mobile browsers is the LARGEST possible viewport (as if the address bar were
+     hidden), not the currently-visible one - this made the card taller than the actual visible
+     screen, pushing it (and the Header sitting fixed-in-place above the internally-scrolling
+     content-area) past the bottom of the real viewport and forcing the whole page to scroll
+     instead, which is why the header didn't stay "locked" to the top on mobile. 100dvh (dynamic
+     viewport height) tracks the real, current viewport and is well-supported; older browsers
+     that don't understand it simply ignore this line and keep the 100vh fallback above. */
+  height: calc(100dvh - 40px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1923,10 +1931,37 @@ img {
 .cv-file-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   font-size: 13px;
   color: var(--dark-text);
   font-weight: 400 !important;
+}
+
+.cv-file-item label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cv-file-remove-btn {
+  background: none;
+  border: none;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.cv-file-remove-btn:hover {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.cv-file-remove-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .cv-upload-status {
@@ -2568,6 +2603,7 @@ img {
 
   .inner-border {
     height: calc(100vh - 24px);
+    height: calc(100dvh - 24px);
   }
 
   .header-bar {
@@ -2703,6 +2739,7 @@ img {
 
   .inner-border {
     height: calc(100vh - 16px);
+    height: calc(100dvh - 16px);
     border-radius: 24px;
   }
 

@@ -54,6 +54,7 @@ export default function Calendar() {
   const [selectedAttachmentIds, setSelectedAttachmentIds] = useState([])
   const [uploadingFile, setUploadingFile] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [deletingFileId, setDeletingFileId] = useState(null)
   // Free-response notes, offered for any service category, so the client can tell the coach
   // what they want out of the session.
   const [bookingNotes, setBookingNotes] = useState('')
@@ -556,6 +557,38 @@ export default function Calendar() {
     )
   }
 
+  // Remove a previously-uploaded file from the profile's reusable cv_files list (see
+  // api/upload/index.js's delete action) - both to clean up mistakes/duplicates and to free up a
+  // slot under the 3-file cap when it's already been reached from earlier uploads.
+  const handleDeleteFile = async (fileId) => {
+    if (!confirm('Remove this file? This cannot be undone.')) return
+
+    setDeletingFileId(fileId)
+    setUploadError('')
+    try {
+      const response = await fetch('/api/upload?action=delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ fileId })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setBookingProfile(prev => ({ ...prev, cvFiles: data.cvFiles || [] }))
+        setSelectedAttachmentIds(prev => prev.filter(id => id !== fileId))
+      } else {
+        const data = await response.json().catch(() => ({}))
+        setUploadError(data.error || 'Failed to remove file. Please try again.')
+      }
+    } catch (error) {
+      console.error('File delete error:', error)
+      setUploadError('Failed to remove file. Please try again.')
+    } finally {
+      setDeletingFileId(null)
+    }
+  }
+
   const handleSelectServiceOption = (category, duration) => {
     setSelectedCategory(category)
     setSelectedDuration(duration)
@@ -833,14 +866,26 @@ export default function Calendar() {
                     {bookingProfile.cvFiles.length > 0 && (
                       <div className="cv-files-list">
                         {bookingProfile.cvFiles.map(f => (
-                          <label key={f.id} className="cv-file-item">
-                            <input
-                              type="checkbox"
-                              checked={selectedAttachmentIds.includes(f.id)}
-                              onChange={() => toggleAttachment(f.id)}
-                            />
-                            {f.filename}
-                          </label>
+                          <div key={f.id} className="cv-file-item">
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={selectedAttachmentIds.includes(f.id)}
+                                onChange={() => toggleAttachment(f.id)}
+                              />
+                              {f.filename}
+                            </label>
+                            <button
+                              type="button"
+                              className="cv-file-remove-btn"
+                              onClick={() => handleDeleteFile(f.id)}
+                              disabled={deletingFileId === f.id}
+                              aria-label={`Remove ${f.filename}`}
+                              title="Remove this file"
+                            >
+                              {deletingFileId === f.id ? '...' : '✕'}
+                            </button>
+                          </div>
                         ))}
                       </div>
                     )}

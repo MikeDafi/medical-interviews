@@ -60,6 +60,12 @@ export default async function handler(req, res) {
     // future CV & Strategy bookings (not just the one they were originally attached to).
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS cv_files JSONB DEFAULT '[]'`;
 
+    // Migration: add upload_log - an append-only array of ISO timestamps for each upload token
+    // issued (see api/upload/index.js), used to enforce a 12-uploads-per-day cap per account.
+    // Deliberately separate from cv_files (which the client can delete entries from) so deleting
+    // a file never frees up a new daily upload slot.
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS upload_log JSONB DEFAULT '[]'`;
+
     // Create performance indexes for common query patterns
     // Index on email for login lookups
     await sql`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`;
