@@ -3,7 +3,7 @@ import '../_lib/env.js';
 
 import Stripe from 'stripe';
 import { sql } from '@vercel/postgres';
-import { sendPurchaseFollowUpEmail } from '../_lib/email.js';
+import { sendPurchaseFollowUpEmail, sendErrorAlertEmail } from '../_lib/email.js';
 
 // Initialize Stripe lazily to ensure env vars are loaded
 let stripeInstance = null;
@@ -270,6 +270,10 @@ export default async function handler(req, res) {
     return res.status(200).json({ received: true });
   } catch (error) {
     console.error('Webhook error:', error);
+    sendErrorAlertEmail({
+      context: 'Stripe webhook (api/stripe/webhook)',
+      error
+    }).catch(err => console.error('Error alert email failed:', err));
     return res.status(500).json({ error: 'Internal error' });
   }
 }

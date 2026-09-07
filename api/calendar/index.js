@@ -1,11 +1,11 @@
 // Load .env.local for local development
 import '../_lib/env.js';
 
-import { sql, createClient } from '@vercel/postgres';
+import { sql } from '@vercel/postgres';
 import { google } from 'googleapis';
 import { rateLimit } from '../_lib/auth.js';
 import { requireAuth } from '../_lib/session.js';
-import { sendCustomerBookingEmail, sendAdminBookingEmail, sendCustomerCancellationEmail, sendAdminCancellationEmail } from '../_lib/email.js';
+import { sendCustomerBookingEmail, sendAdminBookingEmail, sendCustomerCancellationEmail, sendAdminCancellationEmail, sendErrorAlertEmail } from '../_lib/email.js';
 import { getPackageName, getCategoryLabel, BOOKABLE_CATEGORIES } from '../../lib/packages.js';
 import { isOwnerUnavailableResponse } from '../../lib/calendar.js';
 import { formatSlotLabel, slotsForBooking } from '../../lib/slots.js';
@@ -672,13 +672,19 @@ export default async function handler(req, res) {
       // TOCTOU race where two concurrent booking requests for the same user could both read "1
       // credit available" before either write committed - each would pass the credit check and
       // create a real Google Calendar event, silently consuming the same single credit twice.
-      // This uses a dedicated client (not the pooled `sql` tagged template used everywhere else
-      // in this file) so BEGIN/SELECT...FOR UPDATE/UPDATE/COMMIT all run on the same connection,
-      // which is required for the row lock to actually hold across statements. The lock is held
-      // only for this quick reserve step - the slow Google Calendar API call below happens after
-      // COMMIT/end(), once the connection (and lock) has already been released.
-      const client = createClient();
-      await client.connect();
+      // This uses a dedicated client checked out from the pool via `sql.connect()` (not the
+      // pooled `sql` tagged template used directly everywhere else in this file, where every
+      // call is its own independent HTTP request with no shared session) so
+      // BEGIN/SELECT...FOR UPDATE/UPDATE/COMMIT all run on the same connection, which is required
+      // for the row lock to actually hold across statements. This is the officially documented
+      // `@vercel/postgres` pattern for "multiple queries on the same connection" and only needs
+      // `POSTGRES_URL` (already configured and used everywhere else in this app) - unlike
+      // `createClient()`, which requires a separate `POSTGRES_URL_NON_POOLING` env var that was
+      // never provisioned for this project, so every booking attempt was throwing before even
+      // reaching the query logic. The lock is held only for this quick reserve step - the slow
+      // Google Calendar API call below happens after COMMIT/release(), once the connection (and
+      // lock) has already been released back to the pool.
+      const client = await sql.connect();
 
       let user, purchases, packageIndex, cleanTargetSchool, cleanAttachments, userProfile, bookingArrayIndex;
       try {
@@ -789,7 +795,7 @@ export default async function handler(req, res) {
         await client.sql`ROLLBACK`.catch(() => {});
         throw txError;
       } finally {
-        await client.end();
+        client.release();
       }
 
       // Service metadata from the matched purchase, so the booking record, calendar event, and
@@ -969,6 +975,11 @@ export default async function handler(req, res) {
       });
     } catch (error) {
       console.error('Booking error:', error);
+      sendErrorAlertEmail({
+        context: 'Booking (api/calendar?action=book)',
+        error,
+        extra: { userEmail, date, time, duration, category }
+      }).catch(err => console.error('Error alert email failed:', err));
       return res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
   }
@@ -1122,6 +1133,11 @@ export default async function handler(req, res) {
 
     } catch (error) {
       console.error('Cancel booking error:', error);
+      sendErrorAlertEmail({
+        context: 'Cancel booking (api/calendar?action=cancel)',
+        error,
+        extra: { userEmail: sessionUser?.email, bookingId, packageId }
+      }).catch(err => console.error('Error alert email failed:', err));
       return res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
   }

@@ -4,6 +4,7 @@ import '../_lib/env.js';
 import { sql } from '@vercel/postgres';
 import { requireAuth } from '../_lib/session.js';
 import { rateLimit } from '../_lib/auth.js';
+import { sendErrorAlertEmail } from '../_lib/email.js';
 import { 
   sanitizeString, 
   sanitizeEmail, 
@@ -154,6 +155,11 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true });
   } catch (error) {
     console.error('Profile setup error:', error);
+    sendErrorAlertEmail({
+      context: 'Profile save (api/profile/setup)',
+      error,
+      extra: { userEmail: sessionUser?.email }
+    }).catch(err => console.error('Error alert email failed:', err));
     return res.status(500).json({ error: 'Failed to save profile' });
   }
 }
