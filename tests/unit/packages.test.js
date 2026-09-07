@@ -6,7 +6,7 @@
  * (e.g. CV Advice vs Interview Prep vs Advisory Check-In), instead of only ever showing duration.
  */
 import { describe, it, expect } from 'vitest';
-import { getCategoryLabel, getBookableServiceOptions, CATEGORY_DURATIONS, BOOKABLE_CATEGORIES } from '../../lib/packages.js';
+import { getCategoryLabel, getBookableServiceOptions, CATEGORY_DURATIONS, BOOKABLE_CATEGORIES, getAdminGrantablePackages, ADMIN_GRANTABLE_PACKAGES } from '../../lib/packages.js';
 
 describe('getCategoryLabel', () => {
   it('maps interview to Interview Prep', () => {
@@ -52,5 +52,39 @@ describe('getBookableServiceOptions', () => {
     const totalExpected = BOOKABLE_CATEGORIES.reduce((sum, c) => sum + CATEGORY_DURATIONS[c].length, 0);
 
     expect(options).toHaveLength(totalExpected);
+  });
+});
+
+describe('getAdminGrantablePackages', () => {
+  it('returns one entry per ADMIN_GRANTABLE_PACKAGES key with a resolved label', () => {
+    const options = getAdminGrantablePackages();
+
+    expect(options).toHaveLength(Object.keys(ADMIN_GRANTABLE_PACKAGES).length);
+    for (const opt of options) {
+      expect(opt.packageId).toBeTruthy();
+      expect(opt.label).toBeTruthy();
+      expect(ADMIN_GRANTABLE_PACKAGES[opt.packageId]).toBeDefined();
+      expect(opt.sessions).toBe(ADMIN_GRANTABLE_PACKAGES[opt.packageId].sessions);
+      expect(opt.duration_minutes).toBe(ADMIN_GRANTABLE_PACKAGES[opt.packageId].duration_minutes);
+      expect(opt.category).toBe(ADMIN_GRANTABLE_PACKAGES[opt.packageId].category);
+    }
+  });
+
+  it('excludes advisory_email (0-session, not grantable as "sessions")', () => {
+    const options = getAdminGrantablePackages();
+
+    expect(options.some(o => o.packageId === 'advisory_email')).toBe(false);
+  });
+
+  it('includes real package ids across all three categories', () => {
+    const options = getAdminGrantablePackages();
+    const byCategory = options.reduce((acc, o) => {
+      acc[o.category] = (acc[o.category] || 0) + 1;
+      return acc;
+    }, {});
+
+    expect(byCategory.interview).toBeGreaterThan(0);
+    expect(byCategory.cv).toBeGreaterThan(0);
+    expect(byCategory.advisory).toBeGreaterThan(0);
   });
 });

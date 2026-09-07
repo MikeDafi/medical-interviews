@@ -5,6 +5,7 @@ import { sql } from '@vercel/postgres';
 import { rateLimit } from '../_lib/auth.js';
 import { requireAuth } from '../_lib/session.js';
 import { sanitizeString, sanitizePhone, sanitizeUrl } from '../_lib/sanitize.js';
+import { ADMIN_GRANTABLE_PACKAGES, getPackageName } from '../../lib/packages.js';
 
 export default async function handler(req, res) {
   // SECURITY: Rate limiting
@@ -155,19 +156,22 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { userId, duration, sessions } = req.body;
+    const { userId, packageId, sessions } = req.body;
 
-    if (!userId || !duration || !sessions) {
-      return res.status(400).json({ error: 'userId, duration, and sessions required' });
+    if (!userId || !packageId) {
+      return res.status(400).json({ error: 'userId and packageId required' });
     }
 
-    const validDurations = [30, 60];
-    const durationNum = parseInt(duration);
-    if (!validDurations.includes(durationNum)) {
-      return res.status(400).json({ error: 'Invalid duration (must be 30 or 60)' });
+    // SECURITY: packageId must be one of the real, known-good packages - never trust an
+    // arbitrary client-supplied duration/category combination.
+    const packageDef = ADMIN_GRANTABLE_PACKAGES[packageId];
+    if (!packageDef) {
+      return res.status(400).json({ error: 'Invalid package' });
     }
 
-    const sessionCount = parseInt(sessions);
+    // The session count is still admin-adjustable (e.g. granting a partial/extra amount as a
+    // goodwill gesture), defaulting to the package's normal session count when not specified.
+    const sessionCount = sessions !== undefined ? parseInt(sessions) : packageDef.sessions;
     if (isNaN(sessionCount) || sessionCount < 1 || sessionCount > 10) {
       return res.status(400).json({ error: 'Sessions must be between 1 and 10' });
     }
@@ -175,14 +179,14 @@ export default async function handler(req, res) {
     try {
       const newPackage = {
         id: `admin_${Date.now()}`,
-        duration_minutes: durationNum,
+        duration_minutes: packageDef.duration_minutes,
         status: 'active',
-        package_id: `admin_${durationNum}min`,
-        name: `${durationNum}-Min Session (Admin)`,
-        // Admin-granted sessions don't have a category picker in this form yet - default to
-        // 'interview' (the most common case) so bookings drawn from this package still get a
-        // sensible service label instead of falling through to the generic "Session" fallback.
-        category: 'interview',
+        // Store the real package id (e.g. 'package3', 'cv_single') so this grant is
+        // indistinguishable from a genuine Stripe purchase everywhere else in the app - correct
+        // category-aware booking match, correct display name/label, etc.
+        package_id: packageId,
+        name: getPackageName(packageId),
+        category: packageDef.category,
         purchase_date: new Date().toISOString(),
         sessions_total: sessionCount,
         sessions_used: 0,
@@ -195,7 +199,7 @@ export default async function handler(req, res) {
         WHERE id = ${parseInt(userId)}
       `;
       
-      return res.status(201).json({ success: true, message: `Added ${sessionCount} ${durationNum}-min session(s)` });
+      return res.status(201).json({ success: true, message: `Added ${sessionCount}x ${getPackageName(packageId)}` });
     } catch {
       return res.status(500).json({ error: 'Failed to add session' });
     }
