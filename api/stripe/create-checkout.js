@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 import { sql } from '@vercel/postgres';
 import { rateLimit } from '../_lib/auth.js';
 import { requireAuth } from '../_lib/session.js';
+import { sendErrorAlertEmail } from '../_lib/email.js';
 
 // Trial package IDs that are restricted to first-time users
 const TRIAL_PACKAGES = ['trial', 'cv_trial'];
@@ -283,6 +284,11 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error('Stripe error:', error);
+    sendErrorAlertEmail({
+      context: 'Stripe checkout (api/stripe/create-checkout)',
+      error,
+      extra: { userEmail: sessionUser?.email }
+    }).catch(err => console.error('Error alert email failed:', err));
     res.status(500).json({ error: 'Payment initialization failed' });
   }
 }

@@ -2,9 +2,14 @@
 // Requires RESEND_API_KEY environment variable
 
 import { getPackageName, getCategoryLabel } from '../../lib/packages.js';
+import { rateLimit } from './auth.js';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const ADMIN_EMAIL = 'premedical1on1@gmail.com';
+// Where technical/error alerts go - separate from ADMIN_EMAIL (the business inbox used for
+// customer-facing booking/cancellation notifications) so site issues reach whoever is actually
+// watching for them, without mixing operational noise into the business inbox.
+const ERROR_ALERT_EMAIL = process.env.ERROR_ALERT_EMAIL || 'maskndafi@gmail.com';
 // On Resend free tier, must use onboarding@resend.dev or a verified domain
 const FROM_EMAIL = process.env.FROM_EMAIL || 'PreMedical 1-on-1 <onboarding@resend.dev>';
 // Use an explicit SITE_URL, else the project's production domain (NOT VERCEL_URL, which is the
@@ -972,4 +977,63 @@ This is an automated notification from PreMedical 1-on-1
 }
 
 export { sendEmail, ADMIN_EMAIL, escapeHtml };
+
+/**
+ * Alert the site owner by email whenever an unexpected server error occurs on a customer-facing
+ * flow (booking, checkout, profile save, etc.), so issues are caught immediately instead of only
+ * being visible in Vercel logs. Fire-and-forget - callers should `.catch()` this, never `await`
+ * it in a way that could delay or fail the original error response.
+ *
+ * Rate-limited per `context` (max 3 alerts per 15 minutes) to avoid flooding the inbox if the
+ * same failure repeats for many requests in a row (e.g. a sustained outage) - this only holds
+ * within a single warm serverless instance, so a burst across cold starts can still send more
+ * than 3, but it meaningfully caps the common case.
+ */
+export async function sendErrorAlertEmail({ context, error, extra = {} }) {
+  const { allowed } = rateLimit(`error_alert_${context}`, 3, 15 * 60 * 1000);
+  if (!allowed) {
+    console.log(`Error alert suppressed (rate limited) for context: ${context}`);
+    return { success: false, reason: 'rate_limited' };
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  const stack = error instanceof Error ? error.stack : undefined;
+  const timestamp = new Date().toISOString();
+
+  const extraEntries = Object.entries(extra).filter(([, v]) => v !== undefined && v !== null && v !== '');
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #dc2626; padding: 16px 24px; border-radius: 8px 8px 0 0;">
+        <h2 style="color: #ffffff; margin: 0; font-size: 18px;">⚠️ Website Error</h2>
+      </div>
+      <div style="border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; padding: 24px;">
+        <p style="margin: 0 0 8px;"><strong>Context:</strong> ${escapeHtml(context)}</p>
+        <p style="margin: 0 0 8px;"><strong>Error:</strong> ${escapeHtml(message)}</p>
+        <p style="margin: 0 0 16px;"><strong>Time:</strong> ${escapeHtml(timestamp)}</p>
+        ${extraEntries.length > 0 ? `
+          <ul style="margin: 0 0 16px; padding-left: 20px;">
+            ${extraEntries.map(([k, v]) => `<li><strong>${escapeHtml(k)}:</strong> ${escapeHtml(v)}</li>`).join('')}
+          </ul>
+        ` : ''}
+        ${stack ? `<pre style="background: #f3f4f6; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12px; white-space: pre-wrap;">${escapeHtml(stack)}</pre>` : ''}
+      </div>
+    </div>
+  `;
+
+  const text = `⚠️ Website Error
+
+Context: ${context}
+Error: ${message}
+Time: ${timestamp}
+${extraEntries.length > 0 ? extraEntries.map(([k, v]) => `${k}: ${v}`).join('\n') + '\n' : ''}
+${stack ? `\nStack:\n${stack}` : ''}`;
+
+  return sendEmail({
+    to: ERROR_ALERT_EMAIL,
+    subject: `🚨 Error on PreMedical 1-on-1: ${context}`,
+    html,
+    text
+  });
+}
 
