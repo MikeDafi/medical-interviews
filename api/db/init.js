@@ -118,21 +118,6 @@ export default async function handler(req, res) {
     
     // Index on expires_at for cleanup queries
     await sql`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`;
-
-    // Create leads table for the opt-in "free guide" email capture (see api/leads/index.js /
-    // src/components/LeadMagnet.jsx) - a legitimate, consent-based growth channel: visitors
-    // voluntarily submit their own email to receive the guide, as opposed to emailing addresses
-    // sourced from anywhere else without their opt-in.
-    await sql`
-      CREATE TABLE IF NOT EXISTS leads (
-        id SERIAL PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        source VARCHAR(100) DEFAULT 'website',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-
-    await sql`CREATE INDEX IF NOT EXISTS idx_leads_email ON leads(email)`;
     
     // Index on google_id for invalidating all user sessions
     await sql`CREATE INDEX IF NOT EXISTS idx_sessions_google_id ON sessions(google_id)`;
@@ -171,8 +156,8 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ 
       message: 'Database initialized successfully',
-      tables: ['users', 'packages', 'sessions', 'leads'],
-      indexes: ['idx_users_email', 'idx_users_google_id', 'idx_users_created_at', 'idx_users_updated_at', 'idx_users_purchases (GIN)', 'idx_packages_active', 'idx_sessions_token_hash', 'idx_sessions_expires_at', 'idx_sessions_google_id', 'idx_leads_email']
+      tables: ['users', 'packages', 'sessions'],
+      indexes: ['idx_users_email', 'idx_users_google_id', 'idx_users_created_at', 'idx_users_updated_at', 'idx_users_purchases (GIN)', 'idx_packages_active', 'idx_sessions_token_hash', 'idx_sessions_expires_at', 'idx_sessions_google_id']
     });
   } catch (error) {
     // Log error for debugging but don't expose details

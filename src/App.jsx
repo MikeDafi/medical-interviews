@@ -17,7 +17,6 @@ const About = lazy(() => import('./components/About'))
 const Features = lazy(() => import('./components/Features'))
 const FAQ = lazy(() => import('./components/FAQ'))
 const Calendar = lazy(() => import('./components/Calendar'))
-const LeadMagnet = lazy(() => import('./components/LeadMagnet'))
 const RecentBookingNotification = lazy(() => import('./components/RecentBookingNotification'))
 const ProfileSetup = lazy(() => import('./components/ProfileSetup'))
 const PaymentStatus = lazy(() => import('./components/PaymentStatus'))
@@ -49,7 +48,6 @@ function HomePage() {
                 <SampleQuestion />
                 <Packages />
                 <Features />
-                <LeadMagnet />
                 <FAQ />
                 <Calendar />
               </Suspense>
