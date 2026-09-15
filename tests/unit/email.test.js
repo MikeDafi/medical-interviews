@@ -125,3 +125,56 @@ describe('sendErrorAlertEmail', () => {
     expect(fourth).toEqual({ success: false, reason: 'rate_limited' });
   });
 });
+
+/**
+ * sendLeadMagnetEmail() Tests
+ *
+ * Sends the actual free interview-prep guide to someone who opted in via the lead-capture form
+ * (see api/leads/index.js). This is the real content behind that consent-based signup - not just
+ * a confirmation - which is what makes the exchange (email address for a genuinely useful guide)
+ * legitimate rather than unsolicited email.
+ */
+describe('sendLeadMagnetEmail', () => {
+  const originalResendKey = process.env.RESEND_API_KEY;
+
+  afterEach(() => {
+    if (originalResendKey === undefined) {
+      delete process.env.RESEND_API_KEY;
+    } else {
+      process.env.RESEND_API_KEY = originalResendKey;
+    }
+    vi.unstubAllGlobals();
+  });
+
+  it('sends real interview question content to the recipient', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    vi.resetModules();
+    const { sendLeadMagnetEmail: freshSendLeadMagnetEmail } = await import('../../api/_lib/email.js');
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'email-1' })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await freshSendLeadMagnetEmail({ recipientEmail: 'lead@example.com' });
+
+    expect(result.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, options] = fetchMock.mock.calls[0];
+    const body = JSON.parse(options.body);
+    expect(body.to).toEqual(['lead@example.com']);
+    expect(body.subject).toContain('Free Interview Prep Guide');
+    expect(body.html).toContain('MMI-style scenarios');
+    expect(body.text).toContain('Why medicine, and why now?');
+  });
+
+  it('skips sending when RESEND_API_KEY is not configured', async () => {
+    delete process.env.RESEND_API_KEY;
+    vi.resetModules();
+    const { sendLeadMagnetEmail: freshSendLeadMagnetEmail } = await import('../../api/_lib/email.js');
+
+    const result = await freshSendLeadMagnetEmail({ recipientEmail: 'lead@example.com' });
+    expect(result).toEqual({ success: false, reason: 'not_configured' });
+  });
+});
