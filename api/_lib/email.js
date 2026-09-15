@@ -980,6 +980,92 @@ This is an automated notification from PreMedical 1-on-1
 export { sendEmail, ADMIN_EMAIL, escapeHtml };
 
 /**
+ * Send the free "MMI & Traditional Interview Prep Guide" lead magnet to someone who submitted
+ * their email via the opt-in form (see api/leads/index.js / src/components/LeadMagnet.jsx).
+ * This is the actual deliverable for that opt-in - a real download with real content, not just a
+ * confirmation - so the exchange (email address for a useful guide) is genuinely worth it to the
+ * recipient, which is what makes this a legitimate, consent-based growth channel rather than
+ * unsolicited email.
+ */
+export async function sendLeadMagnetEmail({ recipientEmail }) {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0; padding:0; background:#f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px; margin:0 auto; padding:32px 24px;">
+    <tr>
+      <td>
+        <h1 style="color:#0d9488; font-size:22px; margin:0 0 8px;">Your Free Interview Prep Guide</h1>
+        <p style="color:#1e293b; font-size:15px; line-height:1.6;">Thanks for signing up! Here are 10 real MMI and traditional interview questions medical schools actually ask, with a quick framework for approaching each one.</p>
+
+        <h2 style="color:#1e293b; font-size:17px; margin:24px 0 8px;">MMI-style scenarios</h2>
+        <ol style="color:#334155; font-size:14px; line-height:1.7; padding-left:20px;">
+          <li>A close friend asks you to write a strong recommendation letter for a job they aren't qualified for. What do you do?</li>
+          <li>You witness a colleague falsifying a small part of a patient's chart. Walk me through how you respond.</li>
+          <li>Should healthcare resources be rationed during a shortage, and if so, how?</li>
+          <li>A patient refuses a treatment you believe is medically necessary. How do you proceed?</li>
+        </ol>
+
+        <h2 style="color:#1e293b; font-size:17px; margin:24px 0 8px;">Traditional interview staples</h2>
+        <ol start="5" style="color:#334155; font-size:14px; line-height:1.7; padding-left:20px;">
+          <li>Why medicine, and why now?</li>
+          <li>Tell me about a time you failed. What did you learn?</li>
+          <li>How do you handle stress and burnout?</li>
+          <li>Describe a time you worked with someone whose background was very different from yours.</li>
+          <li>What's a healthcare issue you're passionate about, and why?</li>
+          <li>Where do you see yourself in 10 years?</li>
+        </ol>
+
+        <h2 style="color:#1e293b; font-size:17px; margin:24px 0 8px;">Quick framework</h2>
+        <p style="color:#334155; font-size:14px; line-height:1.7;">For ethics scenarios: identify the core tension, name the stakeholders, state a position, then acknowledge the strongest counterargument. For behavioral questions: use a brief STAR structure (Situation, Task, Action, Result) and end with what you'd do differently.</p>
+
+        <div style="margin:28px 0; padding:20px; background:#f0fdfa; border-radius:12px; text-align:center;">
+          <p style="color:#1e293b; font-size:14px; margin:0 0 12px;">Want to practice these live with real-time feedback?</p>
+          <a href="${SITE_URL}#packages" style="display:inline-block; background:#0d9488; color:#ffffff; font-weight:600; font-size:14px; padding:12px 24px; border-radius:8px;">Book a Mock Interview</a>
+        </div>
+
+        <p style="color:#94a3b8; font-size:12px; margin-top:32px;">You're receiving this because you requested this guide at premedical1on1.com. Questions? Just reply to this email.</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `Your Free Interview Prep Guide
+
+MMI-style scenarios:
+1. A close friend asks you to write a strong recommendation letter for a job they aren't qualified for. What do you do?
+2. You witness a colleague falsifying a small part of a patient's chart. Walk me through how you respond.
+3. Should healthcare resources be rationed during a shortage, and if so, how?
+4. A patient refuses a treatment you believe is medically necessary. How do you proceed?
+
+Traditional interview staples:
+5. Why medicine, and why now?
+6. Tell me about a time you failed. What did you learn?
+7. How do you handle stress and burnout?
+8. Describe a time you worked with someone whose background was very different from yours.
+9. What's a healthcare issue you're passionate about, and why?
+10. Where do you see yourself in 10 years?
+
+Quick framework:
+For ethics scenarios: identify the core tension, name the stakeholders, state a position, then acknowledge the strongest counterargument.
+For behavioral questions: use a brief STAR structure (Situation, Task, Action, Result) and end with what you'd do differently.
+
+Want to practice these live with real-time feedback? Book a mock interview: ${SITE_URL}#packages
+
+---
+You're receiving this because you requested this guide at premedical1on1.com. Questions? Just reply to this email.`;
+
+  return sendEmail({
+    to: recipientEmail,
+    subject: '📋 Your Free Interview Prep Guide - 10 Real MMI & Traditional Questions',
+    html,
+    text
+  });
+}
+
+/**
  * Alert the site owner by email whenever an unexpected server error occurs on a customer-facing
  * flow (booking, checkout, profile save, etc.), so issues are caught immediately instead of only
  * being visible in Vercel logs. Fire-and-forget - callers should `.catch()` this, never `await`
