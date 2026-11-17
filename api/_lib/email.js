@@ -38,10 +38,15 @@ async function sendEmail({ to, subject, html, text }) {
   }
 
   const recipients = Array.isArray(to) ? to : [to];
+  const controller = new AbortController();
+  // Bound the entire provider request, including reading its response. Do not automatically
+  // retry an uncertain send: a timeout can happen after Resend has already accepted the email.
+  const timeout = setTimeout(() => controller.abort(), 10_000);
 
   try {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json'
@@ -73,6 +78,8 @@ async function sendEmail({ to, subject, html, text }) {
   } catch (error) {
     console.error('Email send error:', error);
     return { success: false, error: error.message };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

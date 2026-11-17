@@ -367,7 +367,9 @@ export default function Calendar() {
         const confirmedTimeLabel = `${selectedSlot?.localTime || selectedTime} (${formatTimezone(userTimezone)})`
         setBookingResult({
           success: true,
-          message: '✅ Booking confirmed! Your Google Meet link is below, and is also in your confirmation email and your Profile.',
+          message: data.confirmationEmailSent === false
+            ? '✅ Booking confirmed! We could not verify that your email was sent. Your Google Meet link is below and in your Profile. Your session is saved; you do not need to book again.'
+            : '✅ Booking confirmed! Your Google Meet link is below and in your Profile.',
           details: {
             date: confirmedDateLabel,
             time: confirmedTimeLabel,
