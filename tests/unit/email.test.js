@@ -125,3 +125,47 @@ describe('sendErrorAlertEmail', () => {
     expect(fourth).toEqual({ success: false, reason: 'rate_limited' });
   });
 });
+
+describe('sendEmail provider failures', () => {
+  let sendEmail;
+
+  beforeEach(async () => {
+    vi.stubEnv('RESEND_API_KEY', 'test-key');
+    vi.stubEnv('FROM_EMAIL', 'notifications@example.test');
+    vi.resetModules();
+    sendEmail = (await import('../../api/_lib/email.js')).sendEmail;
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('returns the provider message ID after an accepted send', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'accepted-email' }) }));
+    expect(await sendEmail({ to: 'customer@example.test', subject: 'Session confirmed', text: 'Details' }))
+      .toEqual({ success: true, id: 'accepted-email' });
+  });
+
+  it('returns provider rejection details instead of reporting success', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({ message: 'Unverified sender' }) }));
+    expect(await sendEmail({ to: 'customer@example.test', subject: 'Session confirmed', text: 'Details' }))
+      .toEqual({ success: false, error: { message: 'Unverified sender' } });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('aborts a stalled send after ten seconds without retrying an uncertain mutation', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn((_url, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('Send timed out')), { once: true });
+    })));
+    const pending = sendEmail({ to: 'customer@example.test', subject: 'Session confirmed', text: 'Details' });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await pending).toEqual({ success: false, error: 'Send timed out' });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});

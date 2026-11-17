@@ -41,7 +41,7 @@ const CALENDAR_IDS = BOOKINGS_CALENDAR_ID
 
 // Business hours configuration (in CDT/Chicago time)
 // Weekdays: 10 AM - 7 PM CDT
-// Weekends: 12 PM - 3 PM CDT
+// Weekends: 12 PM - 3 PM only during an explicit "Ash is free" calendar event
 const BUSINESS_HOURS = {
   weekday: {
     start: 10,  // 10 AM CDT
@@ -108,8 +108,8 @@ const IGNORED_EVENT_PATTERNS = [
 
 // Event titles that OVERRIDE busy times - "Ash is free" marks time as available
 const FREE_OVERRIDE_PATTERNS = [
-  /ash\s+is\s+free/i,  // "Ash is free", "ash is free", etc.
-  /ashley\s+is\s+free/i,  // "Ashley is free" variant
+  /^ash\s+is\s+free\b/i,  // "Ash is free", "ash is free", etc.
+  /^ashley\s+is\s+free\b/i,  // "Ashley is free" variant
 ];
 
 // Check if an event should be ignored based on its title
@@ -140,9 +140,10 @@ function resolveEventBound(bound) {
 }
 
 // Generate available 30-min slots for a date, excluding busy times
-// freeOverrides: Array of time periods where "Ash is free" - these OVERRIDE busy times
+// Free overrides can override other calendar holds, but never an existing booking.
 function generateAvailableSlots(date, busyPeriods, freeOverrides = []) {
-  const dayOfWeek = date.getDay();
+  const dateStr = date.toISOString().split('T')[0];
+  const dayOfWeek = new Date(dateStr).getUTCDay();
   
   // Check if it's an available day
   if (!AVAILABLE_DAYS.includes(dayOfWeek)) {
@@ -154,7 +155,6 @@ function generateAvailableSlots(date, busyPeriods, freeOverrides = []) {
   const hours = isWeekend ? BUSINESS_HOURS.weekend : BUSINESS_HOURS.weekday;
 
   const slots = [];
-  const dateStr = date.toISOString().split('T')[0];
 
   // Generate all possible slots during business hours (in Chicago time)
   for (let hour = hours.start; hour < hours.end; hour++) {
@@ -171,8 +171,12 @@ function generateAvailableSlots(date, busyPeriods, freeOverrides = []) {
       );
       const slotEnd = new Date(slotStart.getTime() + BUSINESS_HOURS.slotDuration * 60 * 1000);
 
-      // FIRST: Check if this slot falls within a "free override" period ("Ash is free")
-      // If so, it's available regardless of other busy times
+      // An explicit availability window must never reopen an existing session.
+      const overlapsBooking = busyPeriods.some(busy => busy.isBooking
+        && slotStart < new Date(busy.end) && slotEnd > new Date(busy.start));
+      if (overlapsBooking) continue;
+
+      // An explicit free period overrides other calendar holds after checking booked sessions.
       const hasFreeOverride = freeOverrides.some(free => {
         const freeStart = new Date(free.start);
         const freeEnd = new Date(free.end);
@@ -181,10 +185,13 @@ function generateAvailableSlots(date, busyPeriods, freeOverrides = []) {
       });
 
       if (hasFreeOverride) {
-        // "Ash is free" overrides all busy times - slot is available
+        // An explicit free window opens this slot, including on weekends.
         slots.push(formatSlotLabel(hour, minute));
         continue;
       }
+
+      // Weekends are closed by default, even when the calendar has no busy events.
+      if (isWeekend) continue;
 
       // Check if this slot overlaps with any busy period
       const isBusy = busyPeriods.some(busy => {
@@ -260,7 +267,7 @@ async function batchPreloadAvailability() {
           // Skip ignored patterns (Week #)
           if (shouldIgnoreEvent(event.summary)) continue;
 
-          busyEvents.push({ start, end, summary: event.summary });
+          busyEvents.push({ start, end, summary: event.summary, isBooking: calendarId === BOOKINGS_CALENDAR_ID });
         }
       } catch (error) {
         console.warn(`Error fetching from ${calendarId}:`, error.message);
@@ -934,9 +941,15 @@ export default async function handler(req, res) {
         `;
       }
 
-      // Send confirmation emails (fire and forget - errors logged but don't affect booking)
+      // Remove the slot from this instance's cache before waiting on email delivery requests.
+      console.log('Booking successful - invalidating availability cache');
+      batchCache.data = null;
+      batchCache.timestamp = 0;
+
+      // Await both sends before responding: untracked background requests can be stopped when
+      // the serverless invocation ends. A mail failure must not undo an already-saved booking.
       // Customer email: render the time/date in the customer's own timezone.
-      sendCustomerBookingEmail({
+      const customerEmailPromise = sendCustomerBookingEmail({
         customerEmail: userEmail,
         customerName: userName,
         date: formatDateKey(bookingStartInstant, customerTimezone),
@@ -946,11 +959,11 @@ export default async function handler(req, res) {
         eventLink,
         meetLink,
         timezone: friendlyZoneName(customerTimezone, bookingStartInstant)
-      }).catch(err => console.error('Customer email error:', err));
+      });
       
       // Admin email: render in the business timezone (plain HTML can't auto-convert like the
       // Google Calendar event does). The calendar event itself shows the admin their local time.
-      sendAdminBookingEmail({
+      const adminEmailPromise = sendAdminBookingEmail({
         customerEmail: userEmail,
         customerName: userName,
         customerId: user.id,
@@ -969,18 +982,30 @@ export default async function handler(req, res) {
         meetLink,
         userProfile,
         timezone: friendlyZoneName(BUSINESS_TIMEZONE, bookingStartInstant)
-      }).catch(err => console.error('Admin email error:', err));
+      });
 
-      // Invalidate cache so next user sees updated availability
-      console.log('Booking successful - invalidating availability cache');
-      batchCache.data = null;
-      batchCache.timestamp = 0;
+      const emailResults = await Promise.allSettled([customerEmailPromise, adminEmailPromise]);
+      emailResults.forEach((result, index) => {
+        const recipient = index === 0 ? 'customer' : 'admin';
+        if (result.status === 'fulfilled' && result.value?.success) {
+          console.log('Booking email accepted:', { bookingId: booking.id, recipient, emailId: result.value.id });
+        } else {
+          console.error('Booking email failed:', {
+            bookingId: booking.id,
+            recipient,
+            error: result.status === 'rejected' ? result.reason : result.value
+          });
+        }
+      });
+      const confirmationEmailSent = emailResults[0].status === 'fulfilled'
+        && emailResults[0].value?.success === true;
 
       return res.status(200).json({ 
         success: true, 
         message: `${duration}-minute session booked for ${date} at ${time}`,
         booking,
-        eventLink
+        eventLink,
+        confirmationEmailSent
       });
     } catch (error) {
       console.error('Booking error:', error);
