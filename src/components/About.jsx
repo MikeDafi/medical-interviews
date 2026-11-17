@@ -2,8 +2,7 @@ export default function About() {
   const credentials = [
     {
       id: 'current-m2',
-      title: "Current M2 at Rosalind Franklin",
-      description: "Part of the incoming M1 student panel for admissions review and interview feedback"
+      title: "Current M2 at Rosalind Franklin"
     },
     {
       id: 'first-cycle',
@@ -33,7 +32,7 @@ export default function About() {
               <div className="credential" key={credential.id}>
                 <div>
                   <strong>{credential.title}</strong>
-                  <p>{credential.description}</p>
+                  {credential.description && <p>{credential.description}</p>}
                 </div>
               </div>
             ))}

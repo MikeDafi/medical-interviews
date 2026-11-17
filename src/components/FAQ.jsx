@@ -27,7 +27,7 @@ export default function FAQ() {
     {
       id: 'scoring',
       question: "How are my mock interviews scored?",
-      answer: "I use the same criteria real interviewers use: communication clarity, ethical reasoning, empathy, self-awareness, and structure. You'll get detailed feedback on each area plus an overall assessment of where you stand and what to work on."
+      answer: "I score practice answers on my own PreMedical 1-on-1 coaching scorecard, the same card we use in every session. It covers five areas: communication clarity, ethical reasoning, empathy, self-awareness, and structure. At the end of the session we fill it in together, with a note on each area, your one strength, your one main issue, and your one fix to practice next. If you book more than one session, we score you on the same card each time so you can see your progress from your first session baseline. This is a coaching tool for practice and feedback only. It is not the official rubric or scoring system of any medical school, and it does not predict how a school will score you."
     },
     {
       id: 'mmi-vs-traditional',
