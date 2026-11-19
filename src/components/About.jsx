@@ -44,13 +44,13 @@ export default function About() {
         <div className="about-right">
           <div className="about-image-container">
             <img 
-              src="/ashley-kumar.webp" 
+              src="/ashley-kumar-headshot.webp"
               alt="Ashley Kumar - Interview Coach"
               className="about-image"
               loading="lazy"
               decoding="async"
               width={400}
-              height={400}
+              height={500}
             />
           </div>
         </div>
