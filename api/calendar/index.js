@@ -40,12 +40,12 @@ const CALENDAR_IDS = BOOKINGS_CALENDAR_ID
   : BASE_CALENDAR_IDS;
 
 // Business hours configuration (in CDT/Chicago time)
-// Weekdays: 10 AM - 7 PM CDT
+// Weekdays: 10 AM - 6 PM Central (latest displayed start: 5 PM)
 // Weekends: 12 PM - 3 PM only during an explicit "Ash is free" calendar event
 const BUSINESS_HOURS = {
   weekday: {
     start: 10,  // 10 AM CDT
-    end: 19,    // 7 PM CDT
+    end: 18,    // 6 PM Central; slot generation keeps the latest start at 5 PM
   },
   weekend: {
     start: 12,  // 12 PM CDT
