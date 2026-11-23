@@ -93,6 +93,31 @@ async function availability() {
   return res.json.mock.calls[0][0].availability;
 }
 
+describe('weekday latest start time', () => {
+  it('keeps 5 PM available and removes later starts', async () => {
+    const slots = (await availability())['2026-11-18'].availableSlots;
+    expect(slots).toContain('10:00 AM');
+    expect(slots.at(-1)).toBe('5:00 PM');
+    expect(slots).not.toContain('5:30 PM');
+    expect(slots).not.toContain('6:00 PM');
+  });
+
+  it('does not let an explicit free event reopen starts after 5 PM', async () => {
+    mocks.list.mockResolvedValue({ data: { items: [event('Ash is free', '2026-11-18T17:30:00-06:00', '2026-11-18T19:00:00-06:00')] } });
+    const slots = (await availability())['2026-11-18'].availableSlots;
+    expect(slots.at(-1)).toBe('5:00 PM');
+  });
+
+  it.each(['5:30 PM', '6:00 PM'])('rejects a direct booking at %s before consuming a credit', async (time) => {
+    const res = response();
+    await handler(request('book', { ...booking('2026-11-18', time), duration: 30 }), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'SLOT_UNAVAILABLE' }));
+    expect(mocks.connect).not.toHaveBeenCalled();
+    expect(mocks.customerEmail).not.toHaveBeenCalled();
+  });
+});
+
 describe('weekend availability', () => {
   it('closes Saturday and Sunday by default while keeping weekday hours', async () => {
     const days = await availability();
